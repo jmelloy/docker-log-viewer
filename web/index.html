@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Log Parser</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Docker Log Parser</h1>
+            <div class="header-controls">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search logs...">
+                    <button id="clearSearch" class="clear-btn" title="Clear search">✕</button>
+                </div>
+                <div class="trace-filter-display">
+                    <span id="filterType">No filter</span>: <span id="filterValue"></span>
+                    <button id="clearFilter" class="clear-btn" disabled title="Clear filter">✕</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="section">
+                    <h3>Containers</h3>
+                    <div id="containerList" class="container-list"></div>
+                </div>
+
+                <div class="section">
+                    <h3>Log Levels</h3>
+                    <div class="level-filters">
+                        <label class="level-filter">
+                            <input type="checkbox" value="TRC" checked> <span class="level-badge level-trc">TRC</span>
+                        </label>
+                        <label class="level-filter">
+                            <input type="checkbox" value="DBG" checked> <span class="level-badge level-dbg">DBG</span>
+                        </label>
+                        <label class="level-filter">
+                            <input type="checkbox" value="INF" checked> <span class="level-badge level-inf">INF</span>
+                        </label>
+                        <label class="level-filter">
+                            <input type="checkbox" value="WRN" checked> <span class="level-badge level-wrn">WRN</span>
+                        </label>
+                        <label class="level-filter">
+                            <input type="checkbox" value="ERR" checked> <span class="level-badge level-err">ERR</span>
+                        </label>
+                        <label class="level-filter">
+                            <input type="checkbox" value="NONE" checked> <span class="level-badge level-none">NONE</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>Actions</h3>
+                    <button id="clearLogs">Clear Logs</button>
+                </div>
+
+                <div class="sidebar-footer">
+                    <div class="status">
+                        <span id="status">Connecting...</span>
+                        <span id="logCount">0 logs</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="log-viewer">
+                <div id="logs" class="logs"></div>
+            </main>
+
+            <aside id="analyzerPanel" class="analyzer-panel hidden">
+                <div class="analyzer-header">
+                    <h3>SQL Query Analyzer</h3>
+                    <button id="closeAnalyzer">✕</button>
+                </div>
+                <div class="analyzer-content">
+                    <div class="analyzer-section">
+                        <h4>Overview</h4>
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Queries</span>
+                                <span class="stat-value" id="totalQueries">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Unique Queries</span>
+                                <span class="stat-value" id="uniqueQueries">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Avg Duration</span>
+                                <span class="stat-value" id="avgDuration">0ms</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Total Duration</span>
+                                <span class="stat-value" id="totalDuration">0ms</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analyzer-section">
+                        <h4>Slowest Queries</h4>
+                        <div id="slowestQueries" class="query-list"></div>
+                    </div>
+
+                    <div class="analyzer-section">
+                        <h4>Most Frequent Queries</h4>
+                        <div id="frequentQueries" class="query-list"></div>
+                    </div>
+
+                    <div class="analyzer-section">
+                        <h4>Potential N+1 Issues</h4>
+                        <div id="nPlusOne" class="query-list"></div>
+                    </div>
+
+                    <div class="analyzer-section">
+                        <h4>Tables Accessed</h4>
+                        <div id="tablesAccessed" class="table-list"></div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <div id="logModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Log Details</h3>
+                <button id="closeModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <h4>Raw Log</h4>
+                    <pre id="rawLogContent"></pre>
+                </div>
+                <div class="modal-section">
+                    <h4>Parsed Fields</h4>
+                    <div id="parsedFields"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
