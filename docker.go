@@ -65,43 +65,10 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		defer reader.Close()
 		buf := make([]byte, 8192)
 		var leftover []byte
-		entryBuffer := make([]*LogEntry, 0, 100)
-
-		flushEntries := func(keepLast bool) {
-			if len(entryBuffer) == 0 {
-				return
-			}
-			
-			entriesToProcess := entryBuffer
-			if keepLast && len(entryBuffer) > 0 {
-				// Keep last entry if it has no timestamp (might be incomplete multiline)
-				lastEntry := entryBuffer[len(entryBuffer)-1]
-				if lastEntry.Timestamp == "" {
-					entriesToProcess = entryBuffer[:len(entryBuffer)-1]
-					entryBuffer = []*LogEntry{lastEntry}
-				} else {
-					entryBuffer = entryBuffer[:0]
-				}
-			} else {
-				entryBuffer = entryBuffer[:0]
-			}
-			
-			if len(entriesToProcess) > 0 {
-				grouped := GroupMultilineEntries(entriesToProcess)
-				for _, entry := range grouped {
-					logChan <- LogMessage{
-						ContainerID: containerID,
-						Timestamp:   time.Now(),
-						Entry:       entry,
-					}
-				}
-			}
-		}
 
 		for {
 			select {
 			case <-ctx.Done():
-				flushEntries(false)
 				return
 			default:
 				n, err := reader.Read(buf)
@@ -130,22 +97,20 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							continue
 						}
 						if strings.TrimSpace(line) != "" {
-							entryBuffer = append(entryBuffer, ParseLogLine(line))
+							entry := ParseLogLine(line)
+							logChan <- LogMessage{
+								ContainerID: containerID,
+								Timestamp:   time.Now(),
+								Entry:       entry,
+							}
 						}
-					}
-					
-					// Flush when buffer gets large enough
-					if len(entryBuffer) >= 50 {
-						flushEntries(true)
 					}
 				}
 
 				if err == io.EOF {
-					flushEntries(false)
 					return
 				}
 				if err != nil {
-					flushEntries(false)
 					return
 				}
 			}
