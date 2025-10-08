@@ -297,58 +297,6 @@ func (e *LogEntry) FormattedString() string {
 	return sb.String()
 }
 
-func GroupMultilineEntries(entries []*LogEntry) []*LogEntry {
-	if len(entries) == 0 {
-		return entries
-	}
-
-	// Check if any entry has a timestamp
-	hasAnyTimestamp := false
-	for _, entry := range entries {
-		if entry.Timestamp != "" {
-			hasAnyTimestamp = true
-			break
-		}
-	}
-
-	// If no timestamps found, return original entries
-	if !hasAnyTimestamp {
-		return entries
-	}
-
-	result := make([]*LogEntry, 0)
-	var current *LogEntry
-
-	for _, entry := range entries {
-		hasTimestamp := entry.Timestamp != ""
-		hasFields := len(entry.Fields) > 0 || entry.Level != ""
-
-		if hasTimestamp {
-			// New log entry with timestamp - flush previous
-			if current != nil {
-				result = append(result, current)
-			}
-			current = entry
-		} else if hasFields && current != nil {
-			// Line with fields but no timestamp - could be continuation with structured data
-			// Merge with current
-			current = ParseLogLine(current.Raw + "\n" + entry.Raw)
-		} else if current != nil {
-			// Plain continuation line
-			current = ParseLogLine(current.Raw + "\n" + entry.Raw)
-		} else {
-			// First entry has no timestamp
-			current = entry
-		}
-	}
-
-	if current != nil {
-		result = append(result, current)
-	}
-
-	return result
-}
-
 func init() {
 	time.Local = time.UTC
 }
