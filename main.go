@@ -257,9 +257,34 @@ func (wa *WebApp) broadcastContainerUpdate(containers []Container) {
 	}
 }
 
+func (wa *WebApp) handleExplain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ExplainRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp := ExplainQuery(req)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
 func (wa *WebApp) Run(addr string) error {
 	if err := wa.loadContainers(); err != nil {
 		return err
+	}
+
+	// Try to initialize database connection for EXPLAIN queries
+	if err := InitDB(); err != nil {
+		log.Printf("Database connection not available (EXPLAIN feature disabled): %v", err)
+	} else {
+		log.Printf("Database connection established for EXPLAIN queries")
 	}
 
 	go wa.processLogs()
@@ -268,6 +293,7 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/containers", wa.handleContainers)
 	http.HandleFunc("/api/logs", wa.handleLogs)
 	http.HandleFunc("/api/ws", wa.handleWebSocket)
+	http.HandleFunc("/api/explain", wa.handleExplain)
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 
 	log.Printf("Server starting on http://localhost:%s", addr)
@@ -279,6 +305,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create app: %v", err)
 	}
+
+	defer CloseDB()
 
 	if err := app.Run(":9000"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
