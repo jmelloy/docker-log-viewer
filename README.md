@@ -84,21 +84,14 @@ Any text that doesn't match structured formats is displayed as-is.
 
 ## URL Comparison Tool
 
-This repository also includes a command-line tool for comparing API endpoints by analyzing their logs and SQL performance.
+Compare API endpoints by analyzing Docker logs and SQL performance.
 
 ```bash
-# Build the comparison tool
-go build -o compare-tool ./cmd/compare-tool
-
-# Compare two URLs
-./compare-tool \
-  -url1 https://api.production.com/graphql \
-  -url2 https://api.staging.com/graphql \
-  -data sample-request.json \
-  -output comparison.html
+go build -o compare-tool compare.go docker.go parser.go
+./compare-tool -url1 <url1> -url2 <url2> -data request.json
 ```
 
-See [COMPARE-TOOL.md](COMPARE-TOOL.md) for detailed documentation.
+See [COMPARE-TOOL.md](COMPARE-TOOL.md).
 
 ## Requirements
 
