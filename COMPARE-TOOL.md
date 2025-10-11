@@ -2,6 +2,34 @@
 
 A tool for comparing GraphQL/JSON API endpoints by analyzing their logs and SQL performance.
 
+## Quick Start
+
+```bash
+# 1. Build the tool
+go build -o compare-tool ./cmd/compare-tool
+
+# 2. Make sure Docker containers are running
+docker ps
+
+# 3. Create a request payload file (JSON or GraphQL)
+cat > my-request.json <<EOF
+{
+  "query": "query GetUser(\$id: ID!) { user(id: \$id) { name email } }",
+  "variables": { "id": "123" }
+}
+EOF
+
+# 4. Run the comparison
+./compare-tool \
+  -url1 https://api-production.example.com/graphql \
+  -url2 https://api-staging.example.com/graphql \
+  -data my-request.json \
+  -output comparison.html
+
+# 5. Open the report in your browser
+open comparison.html
+```
+
 ## Features
 
 - Posts the same GraphQL/JSON payload to two different URLs
