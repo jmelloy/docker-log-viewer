@@ -1,15 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/sqlexplain"
+	"docker-log-parser/pkg/store"
 	"github.com/gorilla/websocket"
 )
 
@@ -24,6 +32,7 @@ type WebApp struct {
 	ctx          context.Context
 	cancel       context.CancelFunc
 	upgrader     websocket.Upgrader
+	store        *store.Store
 }
 
 type WSMessage struct {
@@ -49,6 +58,13 @@ func NewWebApp() (*WebApp, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Open store
+	db, err := store.NewStore("graphql-requests.db")
+	if err != nil {
+		log.Printf("Warning: Failed to open database: %v", err)
+		db = nil
+	}
+
 	app := &WebApp{
 		docker:  docker,
 		logs:    make([]logs.LogMessage, 0),
@@ -61,6 +77,7 @@ func NewWebApp() (*WebApp, error) {
 				return true
 			},
 		},
+		store: db,
 	}
 
 	return app, nil
@@ -277,6 +294,361 @@ func (wa *WebApp) handleExplain(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// Request management handlers
+func (wa *WebApp) handleRequests(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		wa.listRequests(w, r)
+	case http.MethodPost:
+		wa.createRequest(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (wa *WebApp) listRequests(w http.ResponseWriter, r *http.Request) {
+	requests, err := wa.store.ListRequests()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(requests)
+}
+
+func (wa *WebApp) createRequest(w http.ResponseWriter, r *http.Request) {
+	var req store.Request
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	id, err := wa.store.CreateRequest(&req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	req.ID = id
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int64{"id": id})
+}
+
+func (wa *WebApp) handleRequestDetail(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/requests/")
+	id, err := strconv.ParseInt(path, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid request ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		req, err := wa.store.GetRequest(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if req == nil {
+			http.Error(w, "Request not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(req)
+	case http.MethodDelete:
+		if err := wa.store.DeleteRequest(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/requests/")
+	path = strings.TrimSuffix(path, "/execute")
+	id, err := strconv.ParseInt(path, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid request ID", http.StatusBadRequest)
+		return
+	}
+
+	// Execute request in background
+	go wa.executeRequest(id)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+func (wa *WebApp) handleExecutions(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract request ID from query param
+	requestIDStr := r.URL.Query().Get("request_id")
+	if requestIDStr == "" {
+		http.Error(w, "request_id parameter required", http.StatusBadRequest)
+		return
+	}
+
+	requestID, err := strconv.ParseInt(requestIDStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid request_id", http.StatusBadRequest)
+		return
+	}
+
+	executions, err := wa.store.ListExecutions(requestID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(executions)
+}
+
+func (wa *WebApp) handleExecutionDetail(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/executions/")
+	id, err := strconv.ParseInt(path, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid execution ID", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := wa.store.GetExecutionDetail(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if detail == nil {
+		http.Error(w, "Execution not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(detail)
+}
+
+func (wa *WebApp) executeRequest(requestID int64) {
+	req, err := wa.store.GetRequest(requestID)
+	if err != nil {
+		log.Printf("Failed to get request %d: %v", requestID, err)
+		return
+	}
+	if req == nil {
+		log.Printf("Request %d not found", requestID)
+		return
+	}
+
+	// Generate request ID
+	requestIDHeader := generateRequestID()
+
+	execution := &store.Execution{
+		RequestID:       requestID,
+		RequestIDHeader: requestIDHeader,
+	}
+
+	// Execute HTTP request
+	startTime := time.Now()
+	statusCode, responseBody, err := makeHTTPRequest(req.URL, []byte(req.RequestData), requestIDHeader, req.BearerToken, req.DevID)
+	execution.DurationMS = time.Since(startTime).Milliseconds()
+	execution.StatusCode = statusCode
+	execution.ResponseBody = responseBody
+
+	if err != nil {
+		execution.Error = err.Error()
+	}
+
+	// Save execution
+	execID, err := wa.store.CreateExecution(execution)
+	if err != nil {
+		log.Printf("Failed to save execution: %v", err)
+		return
+	}
+
+	log.Printf("Request %d executed: ID=%s, Status=%d, Duration=%dms", requestID, requestIDHeader, statusCode, execution.DurationMS)
+
+	// Collect logs
+	collectedLogs := wa.collectLogsForRequest(requestIDHeader, 10*time.Second)
+	log.Printf("Collected %d logs for execution %d", len(collectedLogs), execID)
+
+	// Save logs
+	if len(collectedLogs) > 0 {
+		if err := wa.store.SaveExecutionLogs(execID, collectedLogs); err != nil {
+			log.Printf("Failed to save logs: %v", err)
+		}
+	}
+
+	// Extract and save SQL queries
+	sqlQueries := extractSQLQueries(collectedLogs)
+	if len(sqlQueries) > 0 {
+		log.Printf("Found %d SQL queries for execution %d", len(sqlQueries), execID)
+		if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
+			log.Printf("Failed to save SQL queries: %v", err)
+		}
+	}
+}
+
+func generateRequestID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID string) (int, string, error) {
+	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
+	if err != nil {
+		return 0, "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-Id", requestID)
+
+	if bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+bearerToken)
+	}
+	if devID != "" {
+		req.Header.Set("X-GlueDev-UserID", devID)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, "", err
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, "", err
+	}
+
+	return resp.StatusCode, string(bodyBytes), nil
+}
+
+func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration) []logs.LogMessage {
+	collected := []logs.LogMessage{}
+	deadline := time.After(timeout)
+
+	for {
+		select {
+		case msg := <-wa.logChan:
+			if matchesRequestID(msg, requestID) {
+				collected = append(collected, msg)
+			}
+		case <-deadline:
+			return collected
+		}
+	}
+}
+
+func matchesRequestID(msg logs.LogMessage, requestID string) bool {
+	if msg.Entry == nil || msg.Entry.Fields == nil {
+		return false
+	}
+
+	for _, field := range []string{"request_id", "requestId", "requestID", "req_id"} {
+		if val, ok := msg.Entry.Fields[field]; ok && val == requestID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
+	queries := []store.SQLQuery{}
+
+	for _, msg := range logMessages {
+		if msg.Entry == nil || msg.Entry.Message == "" {
+			continue
+		}
+
+		message := msg.Entry.Message
+		if strings.Contains(message, "[sql]") {
+			sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
+			if len(sqlMatch) > 1 {
+				query := store.SQLQuery{
+					Query:           sqlMatch[1],
+					NormalizedQuery: normalizeQuery(sqlMatch[1]),
+				}
+
+				if msg.Entry.Fields != nil {
+					if duration, ok := msg.Entry.Fields["duration"]; ok {
+						var durationVal float64
+						if _, err := strconv.ParseFloat(duration, 64); err == nil {
+							durationVal, _ = strconv.ParseFloat(duration, 64)
+							query.DurationMS = durationVal
+						}
+					}
+					if table, ok := msg.Entry.Fields["db.table"]; ok {
+						query.TableName = table
+					}
+					if op, ok := msg.Entry.Fields["db.operation"]; ok {
+						query.Operation = op
+					}
+					if rows, ok := msg.Entry.Fields["db.rows"]; ok {
+						var rowsVal int
+						if _, err := strconv.Atoi(rows); err == nil {
+							rowsVal, _ = strconv.Atoi(rows)
+							query.Rows = rowsVal
+						}
+					}
+				}
+
+				queries = append(queries, query)
+			}
+		}
+	}
+
+	return queries
+}
+
+func normalizeQuery(query string) string {
+	// Replace numbers with ?
+	normalized := regexp.MustCompile(`\b\d+\b`).ReplaceAllString(query, "?")
+	// Replace $1, $2, etc. with ?
+	normalized = regexp.MustCompile(`\$\d+`).ReplaceAllString(normalized, "?")
+	// Replace quoted strings with ?
+	normalized = regexp.MustCompile(`'[^']*'`).ReplaceAllString(normalized, "?")
+	// Collapse whitespace
+	normalized = regexp.MustCompile(`\s+`).ReplaceAllString(normalized, " ")
+	return strings.TrimSpace(normalized)
+}
+
 func (wa *WebApp) Run(addr string) error {
 	if err := wa.loadContainers(); err != nil {
 		return err
@@ -296,6 +668,19 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/logs", wa.handleLogs)
 	http.HandleFunc("/api/ws", wa.handleWebSocket)
 	http.HandleFunc("/api/explain", wa.handleExplain)
+	
+	// Request management endpoints
+	http.HandleFunc("/api/requests", wa.handleRequests)
+	http.HandleFunc("/api/requests/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/execute") {
+			wa.handleExecuteRequest(w, r)
+		} else {
+			wa.handleRequestDetail(w, r)
+		}
+	})
+	http.HandleFunc("/api/executions", wa.handleExecutions)
+	http.HandleFunc("/api/executions/", wa.handleExecutionDetail)
+	
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 
 	log.Printf("Server starting on http://localhost:%s", addr)
@@ -309,6 +694,9 @@ func main() {
 	}
 
 	defer sqlexplain.Close()
+	if app.store != nil {
+		defer app.store.Close()
+	}
 
 	if err := app.Run(":9000"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
