@@ -31,3 +31,9 @@ go.work.sum
 # .idea/
 # .vscode/
 docker-log-parser
+compare-tool
+
+# Generated output files
+*.html
+!web/*.html
+!*.tmpl

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Comparison Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #58a6ff; margin-bottom: 20px; font-size: 2rem; }
+        h2 { color: #58a6ff; margin: 30px 0 15px; font-size: 1.5rem; }
+        h3 { color: #8b949e; margin: 20px 0 10px; font-size: 1.2rem; }
+        .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .result {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 20px;
+        }
+        .result.error { border-color: #f85149; }
+        .header { margin-bottom: 20px; }
+        .header .url {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #58a6ff;
+            word-break: break-all;
+        }
+        .header .request-id {
+            color: #79c0ff;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .metric {
+            background: #0d1117;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+        }
+        .metric-label {
+            font-size: 0.75rem;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #58a6ff;
+            margin-top: 5px;
+        }
+        .metric-value.error { color: #f85149; }
+        .metric-value.success { color: #3fb950; }
+        .section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #0d1117;
+            border-radius: 4px;
+            border: 1px solid #30363d;
+        }
+        .section h4 {
+            color: #8b949e;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+        .query-item {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .query-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+        }
+        .query-count { color: #58a6ff; font-weight: bold; }
+        .query-duration { color: #79c0ff; }
+        .query-slow { color: #f85149; }
+        .query-text {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #c9d1d9;
+            background: #0d1117;
+            padding: 8px;
+            border-radius: 3px;
+            overflow-x: auto;
+            margin-bottom: 8px;
+        }
+        .query-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.75rem;
+            color: #8b949e;
+        }
+        .table-badge {
+            display: inline-block;
+            background: #1f6feb;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        .table-count {
+            margin-left: 5px;
+            opacity: 0.8;
+        }
+        .log-line {
+            font-family: monospace;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-left: 2px solid #30363d;
+            margin-bottom: 2px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log-line.error { border-left-color: #f85149; }
+        .log-line.warn { border-left-color: #d29922; }
+        .log-line.info { border-left-color: #58a6ff; }
+        .error-message {
+            color: #f85149;
+            background: #1f1416;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #f85149;
+        }
+        .timestamp {
+            color: #8b949e;
+            font-size: 0.75rem;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .post-data-section {
+            margin-bottom: 20px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .post-data-header {
+            padding: 12px 15px;
+            background: #0d1117;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .post-data-header:hover {
+            background: #161b22;
+        }
+        .post-data-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #58a6ff;
+        }
+        .post-data-toggle {
+            color: #8b949e;
+            font-size: 1rem;
+        }
+        .post-data-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .post-data-content.expanded {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .post-data-code {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #c9d1d9;
+            background: #0d1117;
+            padding: 15px;
+            margin: 0;
+            white-space: pre;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>URL Comparison Report</h1>
+        <div class="timestamp">Generated: {{.Generated.Format "2006-01-02 15:04:05 MST"}}</div>
+        
+        <!-- Post Data Section -->
+        <div class="post-data-section">
+            <div class="post-data-header" onclick="togglePostData()">
+                <span class="post-data-title">Request Payload (GraphQL/JSON)</span>
+                <span class="post-data-toggle" id="postDataToggle">▼</span>
+            </div>
+            <div class="post-data-content" id="postDataContent">
+                <pre class="post-data-code">{{.PostData}}</pre>
+            </div>
+        </div>
+        
+        <div class="comparison">
+            <!-- Result 1 -->
+            <div class="result{{if .Result1.Error}} error{{end}}">
+                <div class="header">
+                    <div class="url">URL 1: {{.Result1.URL}}</div>
+                    {{if .Result1.RequestID}}
+                    <div class="request-id">Request ID: {{.Result1.RequestID}}</div>
+                    {{end}}
+                </div>
+                
+                {{if .Result1.Error}}
+                <div class="error-message">Error: {{.Result1.Error}}</div>
+                {{else}}
+                
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-label">Status Code</div>
+                        <div class="metric-value {{if eq .Result1.StatusCode 200}}success{{else}}error{{end}}">
+                            {{.Result1.StatusCode}}
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Duration</div>
+                        <div class="metric-value">{{formatDuration .Result1.Duration}}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Logs Collected</div>
+                        <div class="metric-value">{{len .Result1.Logs}}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">SQL Queries</div>
+                        <div class="metric-value">{{.Result1.SQLAnalysis.TotalQueries}}</div>
+                    </div>
+                </div>
+                
+                {{if .Result1.SQLAnalysis}}
+                {{if gt .Result1.SQLAnalysis.TotalQueries 0}}
+                <div class="section">
+                    <h4>SQL Analysis</h4>
+                    <div class="stats-grid">
+                        <div class="metric">
+                            <div class="metric-label">Total Queries</div>
+                            <div class="metric-value">{{.Result1.SQLAnalysis.TotalQueries}}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Unique Queries</div>
+                            <div class="metric-value">{{.Result1.SQLAnalysis.UniqueQueries}}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Avg Duration</div>
+                            <div class="metric-value">{{formatFloat .Result1.SQLAnalysis.AvgDuration}}ms</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Total Duration</div>
+                            <div class="metric-value">{{formatFloat .Result1.SQLAnalysis.TotalDuration}}ms</div>
+                        </div>
+                    </div>
+                </div>
+                
+                {{if .Result1.SQLAnalysis.SlowestQueries}}
+                <div class="section">
+                    <h4>Slowest Queries</h4>
+                    {{range .Result1.SQLAnalysis.SlowestQueries}}
+                    <div class="query-item">
+                        <div class="query-header">
+                            <span class="query-duration{{if gt .Duration 10.0}} query-slow{{end}}">{{formatFloat .Duration}}ms</span>
+                        </div>
+                        <div class="query-text">{{.Query}}</div>
+                        <div class="query-meta">
+                            <span>Table: {{.Table}}</span>
+                            <span>Op: {{.Operation}}</span>
+                            <span>Rows: {{.Rows}}</span>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+                
+                {{if .Result1.SQLAnalysis.NPlusOneIssues}}
+                <div class="section">
+                    <h4>Potential N+1 Issues</h4>
+                    {{range .Result1.SQLAnalysis.NPlusOneIssues}}
+                    <div class="query-item">
+                        <div class="query-header">
+                            <span class="query-count">{{.Count}}x executions</span>
+                        </div>
+                        <div class="query-text">{{.Example.Query}}</div>
+                        <div class="query-meta">
+                            <span>Table: {{.Example.Table}}</span>
+                            <span>Consider batching or eager loading</span>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+                
+                {{if .Result1.SQLAnalysis.TablesAccessed}}
+                <div class="section">
+                    <h4>Tables Accessed</h4>
+                    {{range $table, $count := .Result1.SQLAnalysis.TablesAccessed}}
+                    <span class="table-badge">{{$table}}<span class="table-count">({{$count}})</span></span>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
+                {{end}}
+                
+                {{if .Result1.Logs}}
+                <div class="section">
+                    <h4>Logs ({{len .Result1.Logs}} entries)</h4>
+                    {{range .Result1.Logs}}
+                    <div class="log-line {{if .Entry}}{{if eq .Entry.Level "ERR"}}error{{else if eq .Entry.Level "ERROR"}}error{{else if eq .Entry.Level "WRN"}}warn{{else if eq .Entry.Level "WARN"}}warn{{else}}info{{end}}{{end}}">{{if .Entry}}{{.Entry.Raw}}{{end}}</div>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+            
+            <!-- Result 2 -->
+            <div class="result{{if .Result2.Error}} error{{end}}">
+                <div class="header">
+                    <div class="url">URL 2: {{.Result2.URL}}</div>
+                    {{if .Result2.RequestID}}
+                    <div class="request-id">Request ID: {{.Result2.RequestID}}</div>
+                    {{end}}
+                </div>
+                
+                {{if .Result2.Error}}
+                <div class="error-message">Error: {{.Result2.Error}}</div>
+                {{else}}
+                
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-label">Status Code</div>
+                        <div class="metric-value {{if eq .Result2.StatusCode 200}}success{{else}}error{{end}}">
+                            {{.Result2.StatusCode}}
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Duration</div>
+                        <div class="metric-value">{{formatDuration .Result2.Duration}}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Logs Collected</div>
+                        <div class="metric-value">{{len .Result2.Logs}}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">SQL Queries</div>
+                        <div class="metric-value">{{.Result2.SQLAnalysis.TotalQueries}}</div>
+                    </div>
+                </div>
+                
+                {{if .Result2.SQLAnalysis}}
+                {{if gt .Result2.SQLAnalysis.TotalQueries 0}}
+                <div class="section">
+                    <h4>SQL Analysis</h4>
+                    <div class="stats-grid">
+                        <div class="metric">
+                            <div class="metric-label">Total Queries</div>
+                            <div class="metric-value">{{.Result2.SQLAnalysis.TotalQueries}}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Unique Queries</div>
+                            <div class="metric-value">{{.Result2.SQLAnalysis.UniqueQueries}}</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Avg Duration</div>
+                            <div class="metric-value">{{formatFloat .Result2.SQLAnalysis.AvgDuration}}ms</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Total Duration</div>
+                            <div class="metric-value">{{formatFloat .Result2.SQLAnalysis.TotalDuration}}ms</div>
+                        </div>
+                    </div>
+                </div>
+                
+                {{if .Result2.SQLAnalysis.SlowestQueries}}
+                <div class="section">
+                    <h4>Slowest Queries</h4>
+                    {{range .Result2.SQLAnalysis.SlowestQueries}}
+                    <div class="query-item">
+                        <div class="query-header">
+                            <span class="query-duration{{if gt .Duration 10.0}} query-slow{{end}}">{{formatFloat .Duration}}ms</span>
+                        </div>
+                        <div class="query-text">{{.Query}}</div>
+                        <div class="query-meta">
+                            <span>Table: {{.Table}}</span>
+                            <span>Op: {{.Operation}}</span>
+                            <span>Rows: {{.Rows}}</span>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+                
+                {{if .Result2.SQLAnalysis.NPlusOneIssues}}
+                <div class="section">
+                    <h4>Potential N+1 Issues</h4>
+                    {{range .Result2.SQLAnalysis.NPlusOneIssues}}
+                    <div class="query-item">
+                        <div class="query-header">
+                            <span class="query-count">{{.Count}}x executions</span>
+                        </div>
+                        <div class="query-text">{{.Example.Query}}</div>
+                        <div class="query-meta">
+                            <span>Table: {{.Example.Table}}</span>
+                            <span>Consider batching or eager loading</span>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+                
+                {{if .Result2.SQLAnalysis.TablesAccessed}}
+                <div class="section">
+                    <h4>Tables Accessed</h4>
+                    {{range $table, $count := .Result2.SQLAnalysis.TablesAccessed}}
+                    <span class="table-badge">{{$table}}<span class="table-count">({{$count}})</span></span>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
+                {{end}}
+                
+                {{if .Result2.Logs}}
+                <div class="section">
+                    <h4>Logs ({{len .Result2.Logs}} entries)</h4>
+                    {{range .Result2.Logs}}
+                    <div class="log-line {{if .Entry}}{{if eq .Entry.Level "ERR"}}error{{else if eq .Entry.Level "ERROR"}}error{{else if eq .Entry.Level "WRN"}}warn{{else if eq .Entry.Level "WARN"}}warn{{else}}info{{end}}{{end}}">{{if .Entry}}{{.Entry.Raw}}{{end}}</div>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function togglePostData() {
+            const content = document.getElementById('postDataContent');
+            const toggle = document.getElementById('postDataToggle');
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                toggle.textContent = '▼';
+            } else {
+                content.classList.add('expanded');
+                toggle.textContent = '▲';
+            }
+        }
+    </script>
+</body>
+</html>

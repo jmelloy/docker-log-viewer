@@ -101,6 +101,17 @@ Parsed fields:
 ### Plain Text
 Any text that doesn't match structured formats is displayed as-is.
 
+## URL Comparison Tool
+
+Compare API endpoints by analyzing Docker logs and SQL performance.
+
+```bash
+go build -o compare-tool compare.go docker.go parser.go
+./compare-tool -url1 <url1> -url2 <url2> -data request.json
+```
+
+See [COMPARE-TOOL.md](COMPARE-TOOL.md).
+
 ## Requirements
 
 - Go 1.21 or higher
@@ -109,9 +120,12 @@ Any text that doesn't match structured formats is displayed as-is.
 
 ## Architecture
 
-- `main.go`: TUI application and event handling
-- `docker.go`: Docker client integration and log streaming
-- `parser.go`: Log parsing and formatting logic
+- `main.go`: Web server, WebSocket handling, container monitoring
+- `cmd/compare-tool/`: URL comparison command-line tool
+- `pkg/logs/`: Shared log parsing and Docker integration library
+  - `docker.go`: Docker client integration and log streaming
+  - `parser.go`: Log parsing logic
+- `web/`: Frontend HTML, CSS, and JavaScript
 
 ## License
 
