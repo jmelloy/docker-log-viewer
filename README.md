@@ -82,6 +82,24 @@ Parsed fields:
 ### Plain Text
 Any text that doesn't match structured formats is displayed as-is.
 
+## URL Comparison Tool
+
+This repository also includes a command-line tool for comparing API endpoints by analyzing their logs and SQL performance.
+
+```bash
+# Build the comparison tool
+go build -o compare-tool compare.go docker.go parser.go
+
+# Compare two URLs
+./compare-tool \
+  -url1 https://api.production.com/graphql \
+  -url2 https://api.staging.com/graphql \
+  -data sample-request.json \
+  -output comparison.html
+```
+
+See [COMPARE-TOOL.md](COMPARE-TOOL.md) for detailed documentation.
+
 ## Requirements
 
 - Go 1.21 or higher
@@ -90,9 +108,11 @@ Any text that doesn't match structured formats is displayed as-is.
 
 ## Architecture
 
-- `main.go`: TUI application and event handling
+- `main.go`: Web server, WebSocket handling, container monitoring
 - `docker.go`: Docker client integration and log streaming
 - `parser.go`: Log parsing and formatting logic
+- `compare.go`: URL comparison tool for performance testing
+- `web/`: Frontend HTML, CSS, and JavaScript
 
 ## License
 

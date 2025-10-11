@@ -31,3 +31,4 @@ go.work.sum
 # .idea/
 # .vscode/
 docker-log-parser
+compare-tool
