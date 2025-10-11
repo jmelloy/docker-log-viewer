@@ -22,7 +22,6 @@ var (
 	timestampRegex = regexp.MustCompile(`(\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+(?:\.\d+)?|\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d+[-/]\d+[-/]\d+\s+\d+:\d+:\d+(?:\.\d+)?|\d{10,13})`)
 	levelRegex     = regexp.MustCompile(`(FATAL|DEBUG|INFO|WARN|ERROR|DBG|TRC|INF|WRN|ERR)`)
 	fileRegex      = regexp.MustCompile(`([\w/]+\.go:\d+)`)
-	fieldRegex     = regexp.MustCompile(`([\w.]+)=([^\s]+|"[^"]*"|\[[^\]]*\]|{[^}]*})`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
 )
 
