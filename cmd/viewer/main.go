@@ -335,7 +335,7 @@ func (wa *WebApp) createRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.ID = id
+	req.ID = uint(id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
 }
@@ -477,8 +477,9 @@ func (wa *WebApp) executeRequest(requestID int64) {
 	requestIDHeader := generateRequestID()
 
 	execution := &store.Execution{
-		RequestID:       requestID,
+		RequestID:       uint(requestID),
 		RequestIDHeader: requestIDHeader,
+		ExecutedAt:      time.Now(),
 	}
 
 	// Execute HTTP request

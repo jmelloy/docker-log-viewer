@@ -1,66 +1,82 @@
 package store
 
 import (
-	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"docker-log-parser/pkg/logs"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/pressly/goose/v3"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
+
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
 
 // Store manages the SQLite database for request tracking
 type Store struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 // Request represents a saved GraphQL/API request template
 type Request struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	URL         string    `json:"url"`
-	RequestData string    `json:"requestData"`
-	BearerToken string    `json:"bearerToken,omitempty"`
-	DevID       string    `json:"devId,omitempty"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"not null" json:"name"`
+	URL         string    `gorm:"not null" json:"url"`
+	RequestData string    `gorm:"not null;column:request_data" json:"requestData"`
+	BearerToken string    `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
+	DevID       string    `gorm:"column:dev_id" json:"devId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // Execution represents a single execution of a request
 type Execution struct {
-	ID              int64     `json:"id"`
-	RequestID       int64     `json:"requestId"`
-	RequestIDHeader string    `json:"requestIdHeader"`
-	StatusCode      int       `json:"statusCode"`
-	DurationMS      int64     `json:"durationMs"`
-	ResponseBody    string    `json:"responseBody,omitempty"`
+	ID              uint      `gorm:"primaryKey" json:"id"`
+	RequestID       uint      `gorm:"not null;column:request_id;index" json:"requestId"`
+	RequestIDHeader string    `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
+	StatusCode      int       `gorm:"column:status_code" json:"statusCode"`
+	DurationMS      int64     `gorm:"column:duration_ms" json:"durationMs"`
+	ResponseBody    string    `gorm:"column:response_body" json:"responseBody,omitempty"`
 	Error           string    `json:"error,omitempty"`
-	ExecutedAt      time.Time `json:"executedAt"`
+	ExecutedAt      time.Time `gorm:"not null;column:executed_at;index" json:"executedAt"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // ExecutionLog represents a log entry from an execution
 type ExecutionLog struct {
-	ID          int64     `json:"id"`
-	ExecutionID int64     `json:"executionId"`
-	ContainerID string    `json:"containerId"`
-	Timestamp   time.Time `json:"timestamp"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ExecutionID uint      `gorm:"not null;column:execution_id;index" json:"executionId"`
+	ContainerID string    `gorm:"not null;column:container_id" json:"containerId"`
+	Timestamp   time.Time `gorm:"not null" json:"timestamp"`
 	Level       string    `json:"level"`
 	Message     string    `json:"message"`
-	RawLog      string    `json:"rawLog"`
+	RawLog      string    `gorm:"column:raw_log" json:"rawLog"`
 	Fields      string    `json:"fields"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
-	ID              int64   `json:"id"`
-	ExecutionID     int64   `json:"executionId"`
-	Query           string  `json:"query"`
-	NormalizedQuery string  `json:"normalizedQuery"`
-	DurationMS      float64 `json:"durationMs"`
-	TableName       string  `json:"tableName"`
+	ID              uint    `gorm:"primaryKey" json:"id"`
+	ExecutionID     uint    `gorm:"not null;column:execution_id;index" json:"executionId"`
+	Query           string  `gorm:"not null" json:"query"`
+	NormalizedQuery string  `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
+	DurationMS      float64 `gorm:"column:duration_ms" json:"durationMs"`
+	TableName       string  `gorm:"column:table_name" json:"tableName"`
 	Operation       string  `json:"operation"`
 	Rows            int     `json:"rows"`
+	CreatedAt       time.Time `json:"createdAt"`
+	UpdatedAt       time.Time `json:"updatedAt"`
+	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // ExecutionDetail includes execution with related logs and SQL analysis
@@ -92,21 +108,31 @@ type QueryGroupResult struct {
 
 // NewStore creates a new store and initializes the database
 func NewStore(dbPath string) (*Store, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Get underlying SQL DB for migrations
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get SQL DB: %w", err)
+	}
+
 	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		db.Close()
+	_, err = sqlDB.Exec("PRAGMA foreign_keys = ON")
+	if err != nil {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
-	// Create schema
-	if _, err := db.Exec(schema); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create schema: %w", err)
+	// Run migrations using goose
+	goose.SetBaseFS(embedMigrations)
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		return nil, fmt.Errorf("failed to set goose dialect: %w", err)
+	}
+
+	if err := goose.Up(sqlDB, "migrations"); err != nil {
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return &Store{db: db}, nil
@@ -114,157 +140,89 @@ func NewStore(dbPath string) (*Store, error) {
 
 // Close closes the database connection
 func (s *Store) Close() error {
-	return s.db.Close()
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }
 
 // CreateRequest creates a new request template
 func (s *Store) CreateRequest(req *Request) (int64, error) {
-	result, err := s.db.Exec(
-		`INSERT INTO requests (name, url, request_data, bearer_token, dev_id) 
-		 VALUES (?, ?, ?, ?, ?)`,
-		req.Name, req.URL, req.RequestData, req.BearerToken, req.DevID,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create request: %w", err)
+	result := s.db.Create(req)
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to create request: %w", result.Error)
 	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert id: %w", err)
-	}
-
-	return id, nil
+	return int64(req.ID), nil
 }
 
 // GetRequest retrieves a request by ID
 func (s *Store) GetRequest(id int64) (*Request, error) {
-	req := &Request{}
-	err := s.db.QueryRow(
-		`SELECT id, name, url, request_data, bearer_token, dev_id, created_at 
-		 FROM requests WHERE id = ?`,
-		id,
-	).Scan(&req.ID, &req.Name, &req.URL, &req.RequestData, &req.BearerToken, &req.DevID, &req.CreatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
+	var req Request
+	result := s.db.First(&req, id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get request: %w", result.Error)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get request: %w", err)
-	}
-
-	return req, nil
+	return &req, nil
 }
 
 // ListRequests retrieves all requests
 func (s *Store) ListRequests() ([]Request, error) {
-	rows, err := s.db.Query(
-		`SELECT id, name, url, request_data, bearer_token, dev_id, created_at 
-		 FROM requests ORDER BY created_at DESC`,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list requests: %w", err)
+	var requests []Request
+	result := s.db.Order("created_at DESC").Find(&requests)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
 	}
-	defer rows.Close()
-
-	requests := []Request{}
-	for rows.Next() {
-		var req Request
-		if err := rows.Scan(&req.ID, &req.Name, &req.URL, &req.RequestData, &req.BearerToken, &req.DevID, &req.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan request: %w", err)
-		}
-		requests = append(requests, req)
-	}
-
 	return requests, nil
 }
 
 // DeleteRequest deletes a request and all its executions
 func (s *Store) DeleteRequest(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM requests WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete request: %w", err)
+	result := s.db.Delete(&Request{}, id)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete request: %w", result.Error)
 	}
 	return nil
 }
 
 // CreateExecution creates a new execution record
 func (s *Store) CreateExecution(exec *Execution) (int64, error) {
-	result, err := s.db.Exec(
-		`INSERT INTO executions (request_id, request_id_header, status_code, duration_ms, response_body, error) 
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		exec.RequestID, exec.RequestIDHeader, exec.StatusCode, exec.DurationMS, exec.ResponseBody, exec.Error,
-	)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create execution: %w", err)
+	result := s.db.Create(exec)
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to create execution: %w", result.Error)
 	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert id: %w", err)
-	}
-
-	return id, nil
+	return int64(exec.ID), nil
 }
 
 // GetExecution retrieves an execution by ID
 func (s *Store) GetExecution(id int64) (*Execution, error) {
-	exec := &Execution{}
-	err := s.db.QueryRow(
-		`SELECT id, request_id, request_id_header, status_code, duration_ms, response_body, error, executed_at 
-		 FROM executions WHERE id = ?`,
-		id,
-	).Scan(&exec.ID, &exec.RequestID, &exec.RequestIDHeader, &exec.StatusCode, &exec.DurationMS, &exec.ResponseBody, &exec.Error, &exec.ExecutedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
+	var exec Execution
+	result := s.db.First(&exec, id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get execution: %w", result.Error)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get execution: %w", err)
-	}
-
-	return exec, nil
+	return &exec, nil
 }
 
 // ListExecutions retrieves all executions for a request
 func (s *Store) ListExecutions(requestID int64) ([]Execution, error) {
-	rows, err := s.db.Query(
-		`SELECT id, request_id, request_id_header, status_code, duration_ms, response_body, error, executed_at 
-		 FROM executions WHERE request_id = ? ORDER BY executed_at DESC`,
-		requestID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list executions: %w", err)
+	var executions []Execution
+	result := s.db.Where("request_id = ?", requestID).Order("executed_at DESC").Find(&executions)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to list executions: %w", result.Error)
 	}
-	defer rows.Close()
-
-	executions := []Execution{}
-	for rows.Next() {
-		var exec Execution
-		if err := rows.Scan(&exec.ID, &exec.RequestID, &exec.RequestIDHeader, &exec.StatusCode, &exec.DurationMS, &exec.ResponseBody, &exec.Error, &exec.ExecutedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan execution: %w", err)
-		}
-		executions = append(executions, exec)
-	}
-
 	return executions, nil
 }
 
 // SaveExecutionLogs saves log entries for an execution
 func (s *Store) SaveExecutionLogs(executionID int64, logMessages []logs.LogMessage) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.Prepare(
-		`INSERT INTO execution_logs (execution_id, container_id, timestamp, level, message, raw_log, fields) 
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
+	var execLogs []ExecutionLog
 
 	for _, msg := range logMessages {
 		var level, message, rawLog string
@@ -279,103 +237,63 @@ func (s *Store) SaveExecutionLogs(executionID int64, logMessages []logs.LogMessa
 			}
 		}
 
-		_, err := stmt.Exec(
-			executionID,
-			msg.ContainerID,
-			msg.Timestamp,
-			level,
-			message,
-			rawLog,
-			string(fieldsJSON),
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert log: %w", err)
+		execLogs = append(execLogs, ExecutionLog{
+			ExecutionID: uint(executionID),
+			ContainerID: msg.ContainerID,
+			Timestamp:   msg.Timestamp,
+			Level:       level,
+			Message:     message,
+			RawLog:      rawLog,
+			Fields:      string(fieldsJSON),
+		})
+	}
+
+	if len(execLogs) > 0 {
+		result := s.db.Create(&execLogs)
+		if result.Error != nil {
+			return fmt.Errorf("failed to insert logs: %w", result.Error)
 		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // GetExecutionLogs retrieves logs for an execution
 func (s *Store) GetExecutionLogs(executionID int64) ([]ExecutionLog, error) {
-	rows, err := s.db.Query(
-		`SELECT id, execution_id, container_id, timestamp, level, message, raw_log, fields 
-		 FROM execution_logs WHERE execution_id = ? ORDER BY timestamp`,
-		executionID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get execution logs: %w", err)
+	var logs []ExecutionLog
+	result := s.db.Where("execution_id = ?", executionID).Order("timestamp").Find(&logs)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to get execution logs: %w", result.Error)
 	}
-	defer rows.Close()
-
-	logs := []ExecutionLog{}
-	for rows.Next() {
-		var log ExecutionLog
-		if err := rows.Scan(&log.ID, &log.ExecutionID, &log.ContainerID, &log.Timestamp, &log.Level, &log.Message, &log.RawLog, &log.Fields); err != nil {
-			return nil, fmt.Errorf("failed to scan log: %w", err)
-		}
-		logs = append(logs, log)
-	}
-
 	return logs, nil
 }
 
 // SaveSQLQueries saves SQL queries for an execution
 func (s *Store) SaveSQLQueries(executionID int64, queries []SQLQuery) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.Prepare(
-		`INSERT INTO sql_queries (execution_id, query, normalized_query, duration_ms, table_name, operation, rows) 
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, q := range queries {
-		_, err := stmt.Exec(
-			executionID,
-			q.Query,
-			q.NormalizedQuery,
-			q.DurationMS,
-			q.TableName,
-			q.Operation,
-			q.Rows,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to insert query: %w", err)
-		}
+	if len(queries) == 0 {
+		return nil
 	}
 
-	return tx.Commit()
+	// Set the execution ID for all queries
+	for i := range queries {
+		queries[i].ExecutionID = uint(executionID)
+	}
+
+	result := s.db.Create(&queries)
+	if result.Error != nil {
+		return fmt.Errorf("failed to insert queries: %w", result.Error)
+	}
+
+	return nil
 }
 
 // GetSQLQueries retrieves SQL queries for an execution
 func (s *Store) GetSQLQueries(executionID int64) ([]SQLQuery, error) {
-	rows, err := s.db.Query(
-		`SELECT id, execution_id, query, normalized_query, duration_ms, table_name, operation, rows 
-		 FROM sql_queries WHERE execution_id = ? ORDER BY id`,
-		executionID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get SQL queries: %w", err)
+	var queries []SQLQuery
+	result := s.db.Where("execution_id = ?", executionID).Order("id").Find(&queries)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to get SQL queries: %w", result.Error)
 	}
-	defer rows.Close()
-
-	queries := []SQLQuery{}
-	for rows.Next() {
-		var q SQLQuery
-		if err := rows.Scan(&q.ID, &q.ExecutionID, &q.Query, &q.NormalizedQuery, &q.DurationMS, &q.TableName, &q.Operation, &q.Rows); err != nil {
-			return nil, fmt.Errorf("failed to scan query: %w", err)
-		}
-		queries = append(queries, q)
-	}
-
 	return queries, nil
 }
 
@@ -389,7 +307,7 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		return nil, nil
 	}
 
-	req, err := s.GetRequest(exec.RequestID)
+	req, err := s.GetRequest(int64(exec.RequestID))
 	if err != nil {
 		return nil, err
 	}
