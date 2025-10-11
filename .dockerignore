@@ -1,0 +1,51 @@
+# Built binaries
+docker-log-viewer
+compare
+graphql-tester
+
+# Test binaries
+*.test
+
+# Code coverage profiles
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Generated output files
+*.html
+!web/*.html
+!*.tmpl
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Editor/IDE
+.idea/
+.vscode/
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Example scripts
+example-*.sh
+generate-sample-output.sh
+
+# Sample data
+*.sample.txt
+*.txt
+sample-*.json
+
+# Go workspace
+go.work
+go.work.sum
+
+# Environment
+.env
