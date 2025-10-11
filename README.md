@@ -25,7 +25,7 @@ Open [http://localhost:9000](http://localhost:9000)
 - **Smart parsing** - Structured logs (key=value), JSON, timestamps, log levels
 - **Interactive filtering** - Container selection, log level, live search, trace filtering
 - **SQL analysis** - Query statistics, N+1 detection, slowest queries
-- **EXPLAIN plans** - PostgreSQL execution plan analysis (requires DB connection)
+- **EXPLAIN plans** - PostgreSQL execution plan visualization with PEV2 (requires DB connection)
 - **Request Management** - Save, execute, and analyze GraphQL/API requests
 - **Before/After Analysis** - Track request performance over time
 
@@ -88,6 +88,8 @@ Generates HTML report with SQL statistics and performance comparison.
 
 - [Usage Guide](docs/USAGE_GUIDE.md) - Detailed feature walkthrough
 - [SQL EXPLAIN](docs/SQL_EXPLAIN.md) - Query analysis setup
+- [PEV2 Integration](docs/PEV2_INTEGRATION.md) - PostgreSQL EXPLAIN visualization
+- [GraphQL Manager](docs/GRAPHQL_MANAGER.md) - Request management guide
 - [Comparison Tool](docs/COMPARE-TOOL.md) - API comparison guide
 - [Implementation](docs/IMPLEMENTATION.md) - Technical details
 - [AGENTS.md](AGENTS.md) - Developer guide
