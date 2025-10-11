@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"docker-log-parser/pkg/logs"
+	"docker-log-parser/pkg/sqlexplain"
 	"github.com/gorilla/websocket"
 )
 
@@ -264,13 +265,13 @@ func (wa *WebApp) handleExplain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req ExplainRequest
+	var req sqlexplain.Request
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	resp := ExplainQuery(req)
+	resp := sqlexplain.Explain(req)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -282,7 +283,7 @@ func (wa *WebApp) Run(addr string) error {
 	}
 
 	// Try to initialize database connection for EXPLAIN queries
-	if err := InitDB(); err != nil {
+	if err := sqlexplain.Init(); err != nil {
 		log.Printf("Database connection not available (EXPLAIN feature disabled): %v", err)
 	} else {
 		log.Printf("Database connection established for EXPLAIN queries")
@@ -307,7 +308,7 @@ func main() {
 		log.Fatalf("Failed to create app: %v", err)
 	}
 
-	defer CloseDB()
+	defer sqlexplain.Close()
 
 	if err := app.Run(":9000"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)

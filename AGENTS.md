@@ -2,174 +2,160 @@
 
 ## Overview
 
-A web-based Docker log monitoring and analysis tool with real-time streaming, advanced filtering, and SQL query analysis capabilities.
+Real-time Docker log monitoring and analysis tool with SQL query insights.
 
 ## Quick Start
 
 ```bash
-# Build
-go build -o docker-log-parser
+# Build viewer
+go build -o docker-log-viewer cmd/viewer/main.go
 
 # Run
-./docker-log-parser
+./docker-log-viewer
 
 # Access
 http://localhost:9000
 ```
 
+## Build Commands
+
+```bash
+# Log viewer
+go build -o docker-log-viewer cmd/viewer/main.go
+
+# Comparison tool
+go build -o compare cmd/compare/main.go
+
+# Run tests
+go test ./...
+```
+
 ## Architecture
 
-### Backend (Go)
-- **main.go**: Web server, WebSocket handling, container monitoring
-- **docker.go**: Docker client integration, log streaming with multiplexing support
-- **parser.go**: Log parsing (key=value format, JSON, structured logs)
+### Commands
+- **cmd/viewer**: Web-based log viewer with WebSocket streaming
+- **cmd/compare**: CLI tool for comparing API endpoints
 
-### Frontend (Web)
-- **web/index.html**: UI structure
-- **web/style.css**: Dark GitHub-themed styling
-- **web/app.js**: Application logic, real-time updates, SQL analysis
+### Packages
+- **pkg/logs**: Docker client integration and log parsing
+  - `docker.go`: Docker API, container monitoring, log streaming
+  - `parser.go`: Log format parsing (key=value, JSON, structured)
+- **pkg/sqlexplain**: PostgreSQL EXPLAIN functionality
+  - `explain.go`: Database connection, query execution, variable substitution
+
+### Frontend
+- **web/**: HTML, CSS, JavaScript for UI
+  - Real-time WebSocket updates
+  - SQL analyzer panel
+  - EXPLAIN modal
 
 ## Key Features
 
 ### 1. Real-time Log Streaming
 - Monitors all running Docker containers
-- WebSocket-based live updates
-- Automatically detects new/stopped containers (5s polling)
-- Strips Docker stream multiplexing headers (8-byte frames)
+- WebSocket-based updates
+- Auto-detects new/stopped containers (5s polling)
+- Strips Docker stream multiplexing headers
 
 ### 2. Log Parsing
-- **Structured logs**: `key=value` format with support for:
-  - Quoted strings: `error="record not found"`
-  - Nested JSON: `event={...}`
-  - Arrays: `location=[...]`
-  - Dotted keys: `db.error`, `db.table`
+Supports multiple formats:
+- **Structured**: `key=value` with quoted strings, nested JSON, arrays
 - **Timestamps**: `Oct 3 19:57:52.076536`
-- **Log levels**: DBG, TRC, INF, WRN, ERR, FATAL (and long forms)
+- **Log levels**: DBG, TRC, INF, WRN, ERR, FATAL
 - **File locations**: `pkg/handlers/stripe.go:85`
-- **ANSI color stripping**: Removes all escape sequences
+- **ANSI stripping**: Removes color escape sequences
 
-### 3. Filtering & Search
-- **Container filtering**: Group by Docker Compose project, collapsible tree view
-- **Log level filtering**: Toggle individual levels (TRC < DBG < INF < WRN < ERR)
-- **Live search**: Real-time text search across all fields
-- **Trace filtering**: Click any field value (request_id, span_id, trace_id) to filter
+### 3. Filtering
+- Container selection (grouped by Docker Compose project)
+- Log level filtering
+- Live text search
+- Trace filtering (click request_id, span_id, trace_id)
 
 ### 4. SQL Query Analyzer
-- Automatically activates when filtering by trace/request/span ID
-- Extracts SQL from `[sql]:` log entries
-- **Overview stats**: Total queries, unique queries, avg/total duration
-- **Slowest queries**: Top 5 by duration with table/operation/rows
-- **Most frequent**: Identifies repeated queries
-- **N+1 detection**: Flags queries executed >5 times
-- **Tables accessed**: Shows all tables with query counts
+Auto-activates when filtering by trace/request/span:
+- Query stats (count, duration, slow queries)
+- N+1 detection (queries executed >5 times)
+- Tables accessed
+- PostgreSQL EXPLAIN plans (requires DATABASE_URL)
 
 ### 5. Log Details Modal
-- Click any log line to view full details
-- **Raw log**: ANSI colors converted to HTML
-- **Parsed fields**: All extracted key=value pairs
-- **JSON pretty-print**: Auto-formats nested JSON objects
-- Close with: × button, click outside, or Escape key
-
-## File Structure
-
-```
-docker-log-parser/
-├── main.go                 # Web server & WebSocket
-├── compare.go              # URL comparison CLI tool
-├── pkg/
-│   └── logs/               # Shared log parsing library (for web server)
-│       ├── docker.go       # Docker integration
-│       └── parser.go       # Log parsing logic
-├── docker.go               # Docker client (main package)
-├── parser.go               # Log parser (main package)
-├── go.mod                  # Go dependencies
-├── web/
-│   ├── index.html          # UI layout
-│   ├── style.css           # Styling
-│   └── app.js              # Frontend logic
-├── AGENTS.md               # This file
-└── COMPARE-TOOL.md         # Comparison tool docs
-```
+- Click any log to view full details
+- ANSI colors converted to HTML
+- Parsed fields
+- JSON pretty-print
 
 ## Code Conventions
 
 ### Go
 - Use context for cancellation
-- Mutex protection for shared state (logs, clients, containers)
+- Mutex protection for shared state
 - WebSocket message types: `log`, `containers`
-- Log entries limited to 100KB to prevent corruption
+- Log entries limited to 100KB
 - Container monitoring every 5 seconds
 
 ### JavaScript
 - ES6 class-based architecture
-- Set for efficient container/level selection
-- Regex normalization for SQL query grouping
-- ANSI escape code regex: `\x1b\[([0-9;]+)m`
+- Set for efficient selection
+- Regex normalization for SQL grouping
+- ANSI escape: `\x1b\[([0-9;]+)m`
 
 ### Parser Rules
-- Custom key=value parser handles:
-  - Quoted strings with escapes
-  - Nested braces/brackets with depth tracking
-  - Unquoted values stop at spaces
-- First occurrence of `key=` determines message boundary
-- Field values can contain spaces if quoted/bracketed
+- Custom key=value parser with quoted strings, nested braces, escapes
+- First `key=` occurrence determines message boundary
+- Dotted keys supported: `db.error`, `db.table`
 
-## Common Patterns
+## Common Tasks
 
-### Adding a new filter type
-1. Add state to `App` class (e.g., `this.myFilter`)
+### Add a filter type
+1. Add state to `App` class
 2. Update `shouldShowLog()` method
 3. Add UI controls in `index.html`
-4. Wire up event listeners in `setupEventListeners()`
+4. Wire event listeners in `setupEventListeners()`
 
-### Parsing a new log format
-1. Update regex patterns in `parser.go`
-2. Add field extraction logic in `ParseLogLine()`
+### Parse a new format
+1. Update regex in `pkg/logs/parser.go`
+2. Add extraction in `ParseLogLine()`
 3. Update `LogEntry` struct if needed
 
-### Adding WebSocket message type
-1. Define struct in `main.go` (e.g., `type MyMessage struct`)
-2. Add broadcast function (e.g., `broadcastMyUpdate()`)
-3. Handle in frontend `ws.onmessage` handler
-4. Add handler method in `app.js`
+### Add WebSocket message
+1. Define struct in `cmd/viewer/main.go`
+2. Add broadcast function
+3. Handle in `ws.onmessage`
+4. Add handler in `app.js`
 
 ## Testing
 
-No automated tests yet. Manual testing with:
+```bash
+# Run all tests
+go test ./...
+
+# Specific package
+go test ./pkg/logs
+go test ./pkg/sqlexplain
+```
+
+Manual testing:
 - Multiple containers (Docker Compose)
-- Log files with various formats (JSON, structured, plain text)
+- Various log formats
 - ANSI color codes
 - Container start/stop events
 
-## Known Issues
-
-- Very long log lines (>100KB) are skipped
-- Docker multiplexing assumes stdout/stderr/stdin (0/1/2)
-- Trace filter requires exact match (no partial matching)
-
-## Dependencies
-
-### Backend
-- `github.com/docker/docker`: Docker API client
-- `github.com/gorilla/websocket`: WebSocket support
-
-### Frontend
-- Vanilla JavaScript (no frameworks)
-- CSS Grid/Flexbox for layout
-
 ## Performance
 
-- Stores last 10,000 logs in memory (trimmed to 1,000 when exceeded)
-- Displays last 1,000 filtered logs in UI
-- WebSocket broadcast to all connected clients
-- Container list limited to 300px height with scroll
+- Last 10,000 logs in memory
+- UI displays last 1,000 filtered logs
+- WebSocket broadcast to all clients
+- Container list scroll at 300px
 
-## Future Enhancements
+## Environment
 
-Consider adding:
-- Log export (JSON, CSV)
-- Persistent trace filter history
-- Regex search support
-- Log aggregation/grouping by time windows
-- Metrics dashboard
-- Alert rules
+```bash
+# Optional: PostgreSQL for EXPLAIN feature
+export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
+```
+
+## Known Limitations
+
+- Log lines >100KB are skipped
+- Docker multiplexing assumes stdout/stderr/stdin (0/1/2)
+- Trace filter requires exact match

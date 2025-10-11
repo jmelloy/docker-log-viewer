@@ -1,4 +1,4 @@
-package main
+package sqlexplain
 
 import (
 	"database/sql"
@@ -11,12 +11,12 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type ExplainRequest struct {
+type Request struct {
 	Query     string            `json:"query"`
 	Variables map[string]string `json:"variables,omitempty"`
 }
 
-type ExplainResponse struct {
+type Response struct {
 	QueryPlan []map[string]interface{} `json:"queryPlan"`
 	Error     string                   `json:"error,omitempty"`
 	Query     string                   `json:"query"`
@@ -24,8 +24,8 @@ type ExplainResponse struct {
 
 var db *sql.DB
 
-// InitDB initializes the database connection for EXPLAIN queries
-func InitDB() error {
+// Init initializes the database connection for EXPLAIN queries
+func Init() error {
 	// Try to get connection string from environment
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
@@ -79,9 +79,9 @@ func substituteVariables(query string, variables map[string]string) string {
 	return result
 }
 
-// ExplainQuery runs EXPLAIN (ANALYZE, FORMAT JSON) on the given query
-func ExplainQuery(req ExplainRequest) ExplainResponse {
-	resp := ExplainResponse{
+// Explain runs EXPLAIN (ANALYZE, FORMAT JSON) on the given query
+func Explain(req Request) Response {
+	resp := Response{
 		Query: req.Query,
 	}
 
@@ -154,8 +154,8 @@ func ExplainQuery(req ExplainRequest) ExplainResponse {
 	return resp
 }
 
-// CloseDB closes the database connection
-func CloseDB() {
+// Close closes the database connection
+func Close() {
 	if db != nil {
 		db.Close()
 	}

@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
@@ -86,7 +83,7 @@ func parseFlags() CompareConfig {
 	flag.StringVar(&config.Output, "output", "comparison.html", "Output HTML file")
 	flag.DurationVar(&config.Timeout, "timeout", 10*time.Second, "Timeout for log collection")
 	flag.StringVar(&config.BearerToken, "token", os.Getenv("BEARER_TOKEN"), "Bearer token for authentication")
-	flag.StringVar(&config.DevID, "dev-id", os.Getenv("X_GLUE_DEV_ID"), "X-Glue-Dev-Id header value")
+	flag.StringVar(&config.DevID, "dev-id", os.Getenv("X_GLUE_DEV_USER_ID"), "X-GlueDev-UserID header value")
 	flag.Parse()
 
 	if config.URL1 == "" || config.URL2 == "" || config.DataFile == "" {
@@ -183,7 +180,7 @@ func testURL(url string, data []byte, logChan <-chan logs.LogMessage, timeout ti
 		req.Header.Set("Authorization", "Bearer "+config.BearerToken)
 	}
 	if config.DevID != "" {
-		req.Header.Set("X-Glue-Dev-Id", config.DevID)
+		req.Header.Set("X-GlueDev-UserID", config.DevID)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
