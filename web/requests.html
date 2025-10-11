@@ -80,20 +80,28 @@
                     <input type="text" id="newRequestName" placeholder="e.g., FetchUsers" required>
                 </div>
                 <div class="form-group">
-                    <label for="newRequestURL">URL:</label>
-                    <input type="text" id="newRequestURL" placeholder="https://api.example.com/graphql" required>
+                    <label for="newRequestServer">Server:</label>
+                    <select id="newRequestServer">
+                        <option value="">-- New Server --</option>
+                    </select>
+                </div>
+                <div id="newServerFields">
+                    <div class="form-group">
+                        <label for="newRequestURL">URL:</label>
+                        <input type="text" id="newRequestURL" placeholder="https://api.example.com/graphql" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="newRequestToken">Bearer Token (optional):</label>
+                        <input type="text" id="newRequestToken" placeholder="your-token-here">
+                    </div>
+                    <div class="form-group">
+                        <label for="newRequestDevID">Dev ID (optional):</label>
+                        <input type="text" id="newRequestDevID" placeholder="dev-user-id">
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="newRequestData">Request Data (JSON):</label>
                     <textarea id="newRequestData" rows="15" placeholder='{"query": "{ users { id name } }"}'></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="newRequestToken">Bearer Token (optional):</label>
-                    <input type="text" id="newRequestToken" placeholder="your-token-here">
-                </div>
-                <div class="form-group">
-                    <label for="newRequestDevID">Dev ID (optional):</label>
-                    <input type="text" id="newRequestDevID" placeholder="dev-user-id">
                 </div>
             </div>
             <div class="modal-footer">

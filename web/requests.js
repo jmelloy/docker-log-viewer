@@ -1,6 +1,7 @@
 class RequestManager {
   constructor() {
     this.requests = [];
+    this.servers = [];
     this.selectedRequest = null;
     this.executions = [];
     this.init();
@@ -8,6 +9,7 @@ class RequestManager {
 
   async init() {
     this.setupEventListeners();
+    await this.loadServers();
     await this.loadRequests();
   }
 
@@ -29,6 +31,11 @@ class RequestManager {
       this.saveNewRequest();
     });
 
+    // Server selection change
+    document.getElementById('newRequestServer').addEventListener('change', (e) => {
+      this.handleServerChange(e.target.value);
+    });
+
     // Execution modal
     document.getElementById('closeExecutionModal').addEventListener('click', () => {
       this.hideExecutionModal();
@@ -42,6 +49,16 @@ class RequestManager {
     document.getElementById('deleteBtn').addEventListener('click', () => {
       this.deleteRequest();
     });
+  }
+
+  async loadServers() {
+    try {
+      const response = await fetch('/api/servers');
+      this.servers = await response.json();
+    } catch (error) {
+      console.error('Failed to load servers:', error);
+      this.servers = [];
+    }
   }
 
   async loadRequests() {
@@ -66,7 +83,7 @@ class RequestManager {
       <div class="request-item ${this.selectedRequest?.id === req.id ? 'active' : ''}" 
            data-id="${req.id}">
         <div class="request-item-name">${this.escapeHtml(req.name)}</div>
-        <div class="request-item-url">${this.escapeHtml(req.url)}</div>
+        <div class="request-item-url">${this.escapeHtml(req.server ? req.server.url : '(no server)')}</div>
         <div class="request-item-meta">
           <span>${new Date(req.createdAt).toLocaleDateString()}</span>
         </div>
@@ -97,7 +114,14 @@ class RequestManager {
     document.getElementById('requestDetail').classList.remove('hidden');
 
     document.getElementById('requestName').textContent = request.name;
-    document.getElementById('requestURL').textContent = request.url;
+    
+    // Show server info if available
+    if (request.server) {
+      document.getElementById('requestURL').textContent = request.server.url;
+    } else {
+      document.getElementById('requestURL').textContent = '(no server configured)';
+    }
+    
     document.getElementById('requestCreated').textContent = new Date(request.createdAt).toLocaleString();
     
     // Pretty print JSON
@@ -245,12 +269,41 @@ class RequestManager {
   }
 
   showNewRequestModal() {
+    // Reset form
     document.getElementById('newRequestName').value = '';
     document.getElementById('newRequestURL').value = '';
     document.getElementById('newRequestData').value = '';
     document.getElementById('newRequestToken').value = '';
     document.getElementById('newRequestDevID').value = '';
+    
+    // Populate server dropdown
+    const serverSelect = document.getElementById('newRequestServer');
+    serverSelect.innerHTML = '<option value="">-- New Server --</option>';
+    this.servers.forEach(server => {
+      const option = document.createElement('option');
+      option.value = server.id;
+      option.textContent = `${server.name} (${server.url})`;
+      serverSelect.appendChild(option);
+    });
+    
+    // Reset to new server mode
+    serverSelect.value = '';
+    this.handleServerChange('');
+    
     document.getElementById('newRequestModal').classList.remove('hidden');
+  }
+
+  handleServerChange(serverId) {
+    const newServerFields = document.getElementById('newServerFields');
+    if (serverId === '') {
+      // New server mode - show URL/token/devID fields
+      newServerFields.style.display = 'block';
+      document.getElementById('newRequestURL').required = true;
+    } else {
+      // Existing server mode - hide URL/token/devID fields
+      newServerFields.style.display = 'none';
+      document.getElementById('newRequestURL').required = false;
+    }
   }
 
   hideNewRequestModal() {
@@ -259,12 +312,11 @@ class RequestManager {
 
   async saveNewRequest() {
     const name = document.getElementById('newRequestName').value.trim();
-    const url = document.getElementById('newRequestURL').value.trim();
     const requestData = document.getElementById('newRequestData').value.trim();
-    const bearerToken = document.getElementById('newRequestToken').value.trim();
-    const devId = document.getElementById('newRequestDevID').value.trim();
+    const serverSelect = document.getElementById('newRequestServer');
+    const serverId = serverSelect.value;
 
-    if (!name || !url || !requestData) {
+    if (!name || !requestData) {
       alert('Please fill in all required fields');
       return;
     }
@@ -277,19 +329,38 @@ class RequestManager {
       return;
     }
 
+    // Build request payload
+    const payload = {
+      name,
+      requestData,
+    };
+
+    if (serverId) {
+      // Use existing server
+      payload.serverId = parseInt(serverId);
+    } else {
+      // Create new server with provided details
+      const url = document.getElementById('newRequestURL').value.trim();
+      const bearerToken = document.getElementById('newRequestToken').value.trim();
+      const devId = document.getElementById('newRequestDevID').value.trim();
+
+      if (!url) {
+        alert('Please provide a URL for the new server');
+        return;
+      }
+
+      payload.url = url;
+      if (bearerToken) payload.bearerToken = bearerToken;
+      if (devId) payload.devId = devId;
+    }
+
     try {
       const response = await fetch('/api/requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name,
-          url,
-          requestData,
-          bearerToken: bearerToken || undefined,
-          devId: devId || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -297,6 +368,7 @@ class RequestManager {
       }
 
       this.hideNewRequestModal();
+      await this.loadServers(); // Reload servers in case a new one was created
       await this.loadRequests();
     } catch (error) {
       console.error('Failed to save request:', error);
