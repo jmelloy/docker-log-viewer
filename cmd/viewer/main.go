@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -323,19 +324,57 @@ func (wa *WebApp) listRequests(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wa *WebApp) createRequest(w http.ResponseWriter, r *http.Request) {
-	var req store.Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	// Parse the incoming request which may have server fields or a serverID
+	var input struct {
+		Name        string  `json:"name"`
+		ServerID    *uint   `json:"serverId,omitempty"`
+		URL         string  `json:"url,omitempty"`
+		BearerToken string  `json:"bearerToken,omitempty"`
+		DevID       string  `json:"devId,omitempty"`
+		RequestData string  `json:"requestData"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	id, err := wa.store.CreateRequest(&req)
+	// If URL is provided but no serverID, create a new server
+	var serverID *uint
+	if input.ServerID != nil {
+		// Use existing server
+		serverID = input.ServerID
+	} else if input.URL != "" {
+		// Create new server with URL and credentials
+		server := &store.Server{
+			Name:        input.URL, // Use URL as name for now
+			URL:         input.URL,
+			BearerToken: input.BearerToken,
+			DevID:       input.DevID,
+		}
+		
+		sid, err := wa.store.CreateServer(server)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create server: %v", err), http.StatusInternalServerError)
+			return
+		}
+		sidUint := uint(sid)
+		serverID = &sidUint
+	}
+
+	// Create the request
+	req := &store.Request{
+		Name:        input.Name,
+		ServerID:    serverID,
+		RequestData: input.RequestData,
+	}
+
+	id, err := wa.store.CreateRequest(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	req.ID = uint(id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
 }
@@ -460,6 +499,27 @@ func (wa *WebApp) handleExecutionDetail(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(detail)
+}
+
+func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	servers, err := wa.store.ListServers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(servers)
 }
 
 func (wa *WebApp) executeRequest(requestID int64) {
@@ -688,6 +748,7 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/explain", wa.handleExplain)
 	
 	// Request management endpoints
+	http.HandleFunc("/api/servers", wa.handleServers)
 	http.HandleFunc("/api/requests", wa.handleRequests)
 	http.HandleFunc("/api/requests/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/execute") {
