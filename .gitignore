@@ -33,7 +33,7 @@ go.work.sum
 docker-log-parser
 docker-log-viewer
 compare-tool
-compare
+/compare
 graphql-tester
 
 # Generated output files
