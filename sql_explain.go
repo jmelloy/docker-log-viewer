@@ -58,9 +58,19 @@ func substituteVariables(query string, variables map[string]string) string {
 		// Extract the number
 		num := match[1:]
 		if val, ok := variables[num]; ok {
+			// Handle NULL
+			if strings.ToUpper(val) == "NULL" || val == "" {
+				return "NULL"
+			}
+			// Handle booleans
+			if val == "true" || val == "false" || val == "TRUE" || val == "FALSE" {
+				return val
+			}
+			// Handle numbers
 			if regexp.MustCompile(`^\d+(\.\d+)?$`).MatchString(val) {
 				return val
 			}
+			// Quote strings
 			return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
 		}
 		return match
