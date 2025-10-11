@@ -28,6 +28,7 @@ Open [http://localhost:9000](http://localhost:9000)
 - **EXPLAIN plans** - PostgreSQL execution plan visualization with PEV2 (requires DB connection)
 - **Request Management** - Save, execute, and analyze GraphQL/API requests
 - **Before/After Analysis** - Track request performance over time
+- **Vue.js UI** - Fully reactive interface with automatic updates
 
 ## Tools
 

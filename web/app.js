@@ -1,820 +1,539 @@
-class DockerLogParser {
-  constructor() {
-    this.containers = [];
-    this.selectedContainers = new Set();
-    this.logs = [];
-    this.searchQuery = "";
-    this.traceFilter = null;
-    this.selectedLevels = new Set([
-      "DBG",
-      "DEBUG",
-      "TRC",
-      "TRACE",
-      "INF",
-      "INFO",
-      "WRN",
-      "WARN",
-      "ERR",
-      "ERROR",
-      "FATAL",
-      "NONE",
-    ]);
-    this.ws = null;
-    this.pev2App = null;
+const { createApp } = Vue;
 
-    this.init();
-  }
-
-  async init() {
-    this.setupEventListeners();
-    this.initPEV2();
-    await this.loadContainers();
-    this.connectWebSocket();
-    await this.loadInitialLogs();
-  }
-
-  initPEV2() {
-    // Initialize PEV2 Vue app
-    const { createApp } = Vue;
-    this.pev2App = createApp({
-      data() {
-        return {
-          planSource: '',
-          planQuery: ''
-        }
+createApp({
+  data() {
+    return {
+      containers: [],
+      selectedContainers: new Set(),
+      logs: [],
+      searchQuery: "",
+      traceFilter: null,
+      selectedLevels: new Set(["DBG", "DEBUG", "TRC", "TRACE", "INF", "INFO", "WRN", "WARN", "ERR", "ERROR", "FATAL", "NONE"]),
+      ws: null,
+      wsConnected: false,
+      showLogModal: false,
+      showExplainModal: false,
+      showAnalyzer: false,
+      selectedLog: null,
+      explainData: {
+        planSource: '',
+        planQuery: '',
+        error: null
       },
-      methods: {
-        updatePlan(plan, query) {
-          this.planSource = plan;
-          this.planQuery = query;
+      sqlAnalysis: null,
+      pev2App: null,
+      collapsedProjects: new Set()
+    };
+  },
+
+  computed: {
+    filteredLogs() {
+      const startIdx = Math.max(0, this.logs.length - 1000);
+      return this.logs.slice(startIdx).filter(log => this.shouldShowLog(log));
+    },
+
+    containersByProject() {
+      const groups = {};
+      this.containers.forEach(container => {
+        const project = this.getProjectName(container.Name);
+        if (!groups[project]) {
+          groups[project] = [];
         }
-      }
-    });
-    this.pev2App.component('pev2', pev2.Plan);
-    this.pev2App.mount('#pev2App');
-  }
+        groups[project].push(container);
+      });
+      return groups;
+    },
 
-  setupEventListeners() {
-    document.getElementById("searchInput").addEventListener("input", (e) => {
-      this.searchQuery = e.target.value.toLowerCase();
-      this.renderLogs();
-    });
+    projectNames() {
+      return Object.keys(this.containersByProject).sort();
+    },
 
-    document
-      .querySelectorAll('.level-filter input[type="checkbox"]')
-      .forEach((checkbox) => {
-        checkbox.addEventListener("change", (e) => {
-          const level = e.target.value;
-          const levelVariants = this.getLevelVariants(level);
+    statusText() {
+      return this.wsConnected ? "Connected" : "Connecting...";
+    },
 
-          if (e.target.checked) {
-            levelVariants.forEach((v) => this.selectedLevels.add(v));
-          } else {
-            levelVariants.forEach((v) => this.selectedLevels.delete(v));
+    statusColor() {
+      return this.wsConnected ? "#7ee787" : "#f85149";
+    }
+  },
+
+  mounted() {
+    this.init();
+    this.initPEV2();
+  },
+
+  methods: {
+    async init() {
+      await this.loadContainers();
+      this.connectWebSocket();
+      await this.loadInitialLogs();
+    },
+
+    initPEV2() {
+      // Initialize PEV2 Vue app in the modal
+      this.pev2App = createApp({
+        data() {
+          return {
+            planSource: '',
+            planQuery: ''
           }
-          this.renderLogs();
-        });
-      });
-
-    document.getElementById("clearSearch").addEventListener("click", () => {
-      document.getElementById("searchInput").value = "";
-      this.searchQuery = "";
-      this.renderLogs();
-    });
-
-    document.getElementById("clearFilter").addEventListener("click", () => {
-      this.clearTraceFilter();
-    });
-
-    document.getElementById("clearLogs").addEventListener("click", () => {
-      this.logs = [];
-      this.renderLogs();
-    });
-
-    document.getElementById("closeAnalyzer").addEventListener("click", () => {
-      this.closeAnalyzer();
-    });
-
-    document.getElementById("closeModal").addEventListener("click", () => {
-      this.closeModal();
-    });
-
-    document
-      .getElementById("closeExplainModal")
-      .addEventListener("click", () => {
-        this.closeExplainModal();
-      });
-
-    document.getElementById("logModal").addEventListener("click", (e) => {
-      if (e.target.id === "logModal") {
-        this.closeModal();
-      }
-    });
-
-    document.getElementById("explainModal").addEventListener("click", (e) => {
-      if (e.target.id === "explainModal") {
-        this.closeExplainModal();
-      }
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        this.closeModal();
-        this.closeExplainModal();
-      }
-    });
-  }
-
-  getLevelVariants(level) {
-    const variants = {
-      TRC: ["TRC", "TRACE"],
-      DBG: ["DBG", "DEBUG"],
-      INF: ["INF", "INFO"],
-      WRN: ["WRN", "WARN"],
-      ERR: ["ERR", "ERROR", "FATAL"],
-      NONE: ["NONE"],
-    };
-    return variants[level] || [level];
-  }
-
-  async loadContainers() {
-    try {
-      const response = await fetch("/api/containers");
-      this.containers = await response.json();
-      this.containers.forEach((c) => this.selectedContainers.add(c.ID));
-      this.renderContainers();
-    } catch (error) {
-      console.error("Failed to load containers:", error);
-    }
-  }
-
-  async loadInitialLogs() {
-    try {
-      const response = await fetch("/api/logs");
-      const logs = await response.json();
-      this.logs = logs;
-      this.renderLogs();
-    } catch (error) {
-      console.error("Failed to load logs:", error);
-    }
-  }
-
-  connectWebSocket() {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`;
-
-    this.ws = new WebSocket(wsUrl);
-
-    this.ws.onopen = () => {
-      this.updateStatus("Connected", true);
-    };
-
-    this.ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === "log") {
-        this.handleNewLog(message.data);
-      } else if (message.type === "containers") {
-        this.handleContainerUpdate(message.data);
-      }
-    };
-
-    this.ws.onclose = () => {
-      this.updateStatus("Disconnected", false);
-      setTimeout(() => this.connectWebSocket(), 5000);
-    };
-
-    this.ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
-  }
-
-  handleNewLog(log) {
-    this.logs.push(log);
-    if (this.logs.length > 10000) {
-      this.logs = this.logs.slice(-1000);
-    }
-
-    if (this.shouldShowLog(log)) {
-      this.appendLog(log);
-    }
-
-    this.updateLogCount();
-  }
-
-  handleContainerUpdate(data) {
-    const newContainers = data.containers;
-    const oldIDs = new Set(this.containers.map((c) => c.ID));
-    const newIDs = new Set(newContainers.map((c) => c.ID));
-
-    const added = newContainers.filter((c) => !oldIDs.has(c.ID));
-    const removed = this.containers.filter((c) => !newIDs.has(c.ID));
-
-    if (added.length > 0) {
-      added.forEach((c) => {
-        this.selectedContainers.add(c.ID);
-        console.log(`Container started: ${c.Name} (${c.ID})`);
-      });
-    }
-
-    if (removed.length > 0) {
-      removed.forEach((c) => {
-        this.selectedContainers.delete(c.ID);
-        console.log(`Container stopped: ${c.Name} (${c.ID})`);
-      });
-    }
-
-    this.containers = newContainers;
-    this.renderContainers();
-
-    if (this.traceFilter) {
-      this.analyzeTrace();
-    }
-  }
-
-  shouldShowLog(log) {
-    if (!this.selectedContainers.has(log.containerId)) {
-      return false;
-    }
-
-    const logLevel = log.entry?.level ? log.entry.level.toUpperCase() : "NONE";
-    if (!this.selectedLevels.has(logLevel)) {
-      return false;
-    }
-
-    if (this.searchQuery && !this.matchesSearch(log)) {
-      return false;
-    }
-
-    if (this.traceFilter) {
-      const val = log.entry?.fields?.[this.traceFilter.type];
-      if (val !== this.traceFilter.value) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  matchesSearch(log) {
-    const searchable = [
-      log.entry?.raw,
-      log.entry?.message,
-      log.entry?.level,
-      ...Object.values(log.entry?.fields || {}),
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    return searchable.includes(this.searchQuery);
-  }
-
-  getProjectName(containerName) {
-    const parts = containerName.split(/-/);
-    if (parts.length <= 1) {
-      return containerName;
-    }
-
-    if (parts[parts.length - 1].match(/^\d+$/)) {
-      parts.pop();
-      if (parts.length <= 2) {
-        return parts[0];
-      }
-
-      return parts.slice(0, 2).join("-");
-    }
-
-    return containerName;
-  }
-
-  groupContainersByProject() {
-    const groups = {};
-    this.containers.forEach((container) => {
-      const project = this.getProjectName(container.Name);
-      if (!groups[project]) {
-        groups[project] = [];
-      }
-      groups[project].push(container);
-    });
-    return groups;
-  }
-
-  renderContainers() {
-    const list = document.getElementById("containerList");
-    list.innerHTML = "";
-
-    const groups = this.groupContainersByProject();
-    const projectNames = Object.keys(groups).sort();
-
-    projectNames.forEach((projectName) => {
-      const projectContainers = groups[projectName];
-
-      const projectSection = document.createElement("div");
-      projectSection.className = "project-section";
-
-      const projectHeader = document.createElement("div");
-      projectHeader.className = "project-header";
-
-      const allSelected = projectContainers.every((c) =>
-        this.selectedContainers.has(c.ID)
-      );
-      const someSelected = projectContainers.some((c) =>
-        this.selectedContainers.has(c.ID)
-      );
-
-      projectHeader.innerHTML = `
-                <span class="disclosure-arrow">▼</span>
-                <div class="checkbox ${
-                  someSelected && !allSelected ? "indeterminate" : ""
-                }"></div>
-                <span class="project-name">${projectName}</span>
-                <span class="project-count">(${projectContainers.length})</span>
-            `;
-
-      if (allSelected) {
-        projectHeader.querySelector(".checkbox").classList.add("checked");
-      }
-
-      const containersList = document.createElement("div");
-      containersList.className = "project-containers";
-
-      projectContainers.forEach((container) => {
-        const item = document.createElement("div");
-        item.className = "container-item";
-        if (this.selectedContainers.has(container.ID)) {
-          item.classList.add("selected");
-        }
-
-        item.innerHTML = `
-                    <div class="checkbox"></div>
-                    <div class="container-info">
-                        <div class="container-name">${container.Name}</div>
-                        <div class="container-id">${container.ID}</div>
-                    </div>
-                `;
-
-        item.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (this.selectedContainers.has(container.ID)) {
-            this.selectedContainers.delete(container.ID);
-          } else {
-            this.selectedContainers.add(container.ID);
+        },
+        methods: {
+          updatePlan(plan, query) {
+            this.planSource = plan;
+            this.planQuery = query;
           }
-          this.renderContainers();
-          this.renderLogs();
-        });
-
-        containersList.appendChild(item);
-      });
-
-      projectHeader.addEventListener("click", (e) => {
-        if (e.target.closest(".checkbox")) {
-          const allSelected = projectContainers.every((c) =>
-            this.selectedContainers.has(c.ID)
-          );
-          projectContainers.forEach((c) => {
-            if (allSelected) {
-              this.selectedContainers.delete(c.ID);
-            } else {
-              this.selectedContainers.add(c.ID);
-            }
-          });
-          this.renderContainers();
-          this.renderLogs();
-        } else {
-          containersList.classList.toggle("collapsed");
-          projectHeader
-            .querySelector(".disclosure-arrow")
-            .classList.toggle("collapsed");
         }
       });
+      this.pev2App.component('pev2', pev2.Plan);
+      this.pev2App.mount('#pev2App');
+    },
 
-      projectSection.appendChild(projectHeader);
-      projectSection.appendChild(containersList);
-      list.appendChild(projectSection);
-    });
-  }
+    getLevelVariants(level) {
+      const variants = {
+        TRC: ["TRC", "TRACE"],
+        DBG: ["DBG", "DEBUG"],
+        INF: ["INF", "INFO"],
+        WRN: ["WRN", "WARN"],
+        ERR: ["ERR", "ERROR", "FATAL"],
+        NONE: ["NONE"],
+      };
+      return variants[level] || [level];
+    },
 
-  renderLogs() {
-    const logsEl = document.getElementById("logs");
-    logsEl.innerHTML = "";
-
-    const startIdx = Math.max(0, this.logs.length - 1000);
-
-    for (let i = startIdx; i < this.logs.length; i++) {
-      const log = this.logs[i];
-      if (this.shouldShowLog(log)) {
-        this.appendLog(log, logsEl);
+    toggleLevel(level) {
+      const levelVariants = this.getLevelVariants(level);
+      const hasAll = levelVariants.every(v => this.selectedLevels.has(v));
+      
+      if (hasAll) {
+        levelVariants.forEach(v => this.selectedLevels.delete(v));
+      } else {
+        levelVariants.forEach(v => this.selectedLevels.add(v));
       }
-    }
+    },
 
-    this.scrollToBottom();
-    this.updateLogCount();
-  }
+    isLevelSelected(level) {
+      const levelVariants = this.getLevelVariants(level);
+      return levelVariants.every(v => this.selectedLevels.has(v));
+    },
 
-  appendLog(log, container = null) {
-    const logsEl = container || document.getElementById("logs");
-    const line = document.createElement("div");
-    line.className = "log-line";
-    line.style.cursor = "pointer";
-    line.title = "Click to view details";
-
-    const parts = [];
-
-    const containerName =
-      this.containers.find((c) => c.ID === log.containerId)?.Name ||
-      log.containerId;
-    parts.push(`<span class="log-container">${containerName}</span>`);
-
-    if (log.entry?.timestamp) {
-      parts.push(`<span class="log-timestamp">${log.entry.timestamp}</span>`);
-    }
-
-    if (log.entry?.level) {
-      parts.push(
-        `<span class="log-level ${log.entry.level}">${log.entry.level}</span>`
-      );
-    }
-
-    if (log.entry?.file) {
-      parts.push(`<span class="log-file">${log.entry.file}</span>`);
-    }
-
-    if (log.entry?.message) {
-      parts.push(
-        `<span class="log-message">${this.escapeHtml(log.entry.message)}</span>`
-      );
-    }
-
-    if (log.entry?.fields) {
-      for (const [key, value] of Object.entries(log.entry.fields)) {
-        const shortValue =
-          value.length > 100 ? value.substring(0, 100) + "..." : value;
-        const isJson =
-          value.trim().startsWith("{") || value.trim().startsWith("[");
-        const clickableClass = isJson ? "" : "log-field-value";
-        const dataAttrs = isJson
-          ? ""
-          : `data-field-type="${key}" data-field-value="${this.escapeHtml(
-              value
-            )}"`;
-        parts.push(
-          `<span class="log-field"><span class="log-field-key">${key}</span>=<span class="${clickableClass}" ${dataAttrs}>${this.escapeHtml(
-            shortValue
-          )}</span></span>`
-        );
+    async loadContainers() {
+      try {
+        const response = await fetch("/api/containers");
+        this.containers = await response.json();
+        this.containers.forEach(c => this.selectedContainers.add(c.ID));
+      } catch (error) {
+        console.error("Failed to load containers:", error);
       }
-    }
+    },
 
-    line.innerHTML = parts.join(" ");
+    async loadInitialLogs() {
+      try {
+        const response = await fetch("/api/logs");
+        const logs = await response.json();
+        this.logs = logs;
+        this.$nextTick(() => this.scrollToBottom());
+      } catch (error) {
+        console.error("Failed to load logs:", error);
+      }
+    },
 
-    line.querySelectorAll(".log-field-value").forEach((el) => {
-      el.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const fieldType = el.getAttribute("data-field-type");
-        const fieldValue = el.getAttribute("data-field-value");
-        this.setTraceFilter(fieldType, fieldValue);
-      });
-    });
+    connectWebSocket() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
 
-    line.addEventListener("click", () => {
-      this.showLogDetails(log);
-    });
+      this.ws = new WebSocket(wsUrl);
 
-    logsEl.appendChild(line);
+      this.ws.onopen = () => {
+        this.wsConnected = true;
+      };
 
-    if (!container) {
-      this.scrollToBottom();
-    }
-  }
+      this.ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === "log") {
+          this.handleNewLog(message.data);
+        } else if (message.type === "containers") {
+          this.handleContainerUpdate(message.data);
+        }
+      };
 
-  setTraceFilter(type, value) {
-    this.traceFilter = { type, value };
-    document.getElementById("filterType").textContent = type;
-    document.getElementById("filterValue").textContent = value;
-    document.getElementById("clearFilter").disabled = false;
-    this.renderLogs();
-    this.analyzeTrace();
-  }
+      this.ws.onclose = () => {
+        this.wsConnected = false;
+        setTimeout(() => this.connectWebSocket(), 5000);
+      };
 
-  clearTraceFilter() {
-    this.traceFilter = null;
-    document.getElementById("filterType").textContent = "No filter";
-    document.getElementById("filterValue").textContent = "";
-    document.getElementById("clearFilter").disabled = true;
-    this.renderLogs();
-    this.closeAnalyzer();
-  }
+      this.ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+    },
 
-  analyzeTrace() {
-    if (!this.traceFilter) {
-      this.closeAnalyzer();
-      return;
-    }
+    handleNewLog(log) {
+      this.logs.push(log);
+      if (this.logs.length > 10000) {
+        this.logs = this.logs.slice(-1000);
+      }
+      this.$nextTick(() => this.scrollToBottom());
+    },
 
-    const traceLogs = this.logs.filter((log) => {
+    handleContainerUpdate(data) {
+      const newContainers = data.containers;
+      const oldIDs = new Set(this.containers.map(c => c.ID));
+      const newIDs = new Set(newContainers.map(c => c.ID));
+
+      const added = newContainers.filter(c => !oldIDs.has(c.ID));
+      const removed = this.containers.filter(c => !newIDs.has(c.ID));
+
+      if (added.length > 0) {
+        added.forEach(c => {
+          this.selectedContainers.add(c.ID);
+          console.log(`Container started: ${c.Name} (${c.ID})`);
+        });
+      }
+
+      if (removed.length > 0) {
+        removed.forEach(c => {
+          this.selectedContainers.delete(c.ID);
+          console.log(`Container stopped: ${c.Name} (${c.ID})`);
+        });
+      }
+
+      this.containers = newContainers;
+
+      if (this.traceFilter) {
+        this.analyzeTrace();
+      }
+    },
+
+    shouldShowLog(log) {
       if (!this.selectedContainers.has(log.containerId)) {
         return false;
       }
-      const val = log.entry?.fields?.[this.traceFilter.type];
-      return val === this.traceFilter.value;
-    });
 
-    const sqlQueries = this.extractSQLQueries(traceLogs);
-    this.renderAnalysis(sqlQueries);
-    this.showAnalyzer();
-  }
+      const logLevel = log.entry?.level ? log.entry.level.toUpperCase() : "NONE";
+      if (!this.selectedLevels.has(logLevel)) {
+        return false;
+      }
 
-  extractSQLQueries(logs) {
-    const queries = [];
+      if (this.searchQuery && !this.matchesSearch(log)) {
+        return false;
+      }
 
-    logs.forEach((log) => {
-      const message = log.entry?.message || "";
-      if (message.includes("[sql]")) {
-        const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
-        if (sqlMatch) {
-          const query = sqlMatch[1].trim();
-          const duration = parseFloat(log.entry?.fields?.duration || 0);
-          const table = log.entry?.fields?.["db.table"] || "unknown";
-          const operation = log.entry?.fields?.["db.operation"] || "unknown";
-          const rows = parseInt(log.entry?.fields?.["db.rows"] || 0);
+      if (this.traceFilter) {
+        const val = log.entry?.fields?.[this.traceFilter.type];
+        if (val !== this.traceFilter.value) {
+          return false;
+        }
+      }
 
-          // Extract variables from db.vars field if present
-          let variables = {};
-          const dbVars = log.entry?.fields?.["db.vars"];
-          if (dbVars) {
-            try {
-              // db.vars can be a JSON array or string
-              const varsArray =
-                typeof dbVars === "string" ? JSON.parse(dbVars) : dbVars;
-              if (Array.isArray(varsArray)) {
-                // Convert array to indexed map: {"1": value1, "2": value2, ...}
-                varsArray.forEach((val, idx) => {
-                  variables[String(idx + 1)] = String(val);
-                });
+      return true;
+    },
+
+    matchesSearch(log) {
+      const searchable = [
+        log.entry?.raw,
+        log.entry?.message,
+        log.entry?.level,
+        ...Object.values(log.entry?.fields || {}),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(this.searchQuery.toLowerCase());
+    },
+
+    getProjectName(containerName) {
+      const parts = containerName.split(/-/);
+      if (parts.length <= 1) {
+        return containerName;
+      }
+
+      if (parts[parts.length - 1].match(/^\d+$/)) {
+        parts.pop();
+        if (parts.length <= 2) {
+          return parts[0];
+        }
+        return parts.slice(0, 2).join("-");
+      }
+
+      return containerName;
+    },
+
+    toggleContainer(containerId) {
+      if (this.selectedContainers.has(containerId)) {
+        this.selectedContainers.delete(containerId);
+      } else {
+        this.selectedContainers.add(containerId);
+      }
+    },
+
+    isContainerSelected(containerId) {
+      return this.selectedContainers.has(containerId);
+    },
+
+    toggleProject(project) {
+      const projectContainers = this.containersByProject[project];
+      const allSelected = projectContainers.every(c => this.selectedContainers.has(c.ID));
+      
+      projectContainers.forEach(c => {
+        if (allSelected) {
+          this.selectedContainers.delete(c.ID);
+        } else {
+          this.selectedContainers.add(c.ID);
+        }
+      });
+    },
+
+    isProjectSelected(project) {
+      const projectContainers = this.containersByProject[project];
+      return projectContainers.every(c => this.selectedContainers.has(c.ID));
+    },
+
+    isProjectIndeterminate(project) {
+      const projectContainers = this.containersByProject[project];
+      const someSelected = projectContainers.some(c => this.selectedContainers.has(c.ID));
+      const allSelected = projectContainers.every(c => this.selectedContainers.has(c.ID));
+      return someSelected && !allSelected;
+    },
+
+    toggleProjectCollapse(project) {
+      if (this.collapsedProjects.has(project)) {
+        this.collapsedProjects.delete(project);
+      } else {
+        this.collapsedProjects.add(project);
+      }
+    },
+
+    isProjectCollapsed(project) {
+      return this.collapsedProjects.has(project);
+    },
+
+    getContainerName(containerId) {
+      return this.containers.find(c => c.ID === containerId)?.Name || containerId;
+    },
+
+    setTraceFilter(type, value, event) {
+      if (event) event.stopPropagation();
+      this.traceFilter = { type, value };
+      this.analyzeTrace();
+    },
+
+    clearTraceFilter() {
+      this.traceFilter = null;
+      this.showAnalyzer = false;
+    },
+
+    clearLogs() {
+      this.logs = [];
+    },
+
+    analyzeTrace() {
+      if (!this.traceFilter) {
+        this.showAnalyzer = false;
+        return;
+      }
+
+      const traceLogs = this.logs.filter((log) => {
+        if (!this.selectedContainers.has(log.containerId)) {
+          return false;
+        }
+        const val = log.entry?.fields?.[this.traceFilter.type];
+        return val === this.traceFilter.value;
+      });
+
+      const sqlQueries = this.extractSQLQueries(traceLogs);
+      this.renderAnalysis(sqlQueries);
+      this.showAnalyzer = true;
+    },
+
+    extractSQLQueries(logs) {
+      const queries = [];
+
+      logs.forEach((log) => {
+        const message = log.entry?.message || "";
+        if (message.includes("[sql]")) {
+          const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
+          if (sqlMatch) {
+            const query = sqlMatch[1].trim();
+            const duration = parseFloat(log.entry?.fields?.duration || 0);
+            const table = log.entry?.fields?.["db.table"] || "unknown";
+            const operation = log.entry?.fields?.["db.operation"] || "unknown";
+            const rows = parseInt(log.entry?.fields?.["db.rows"] || 0);
+
+            let variables = {};
+            const dbVars = log.entry?.fields?.["db.vars"];
+            if (dbVars) {
+              try {
+                const varsArray =
+                  typeof dbVars === "string" ? JSON.parse(dbVars) : dbVars;
+                if (Array.isArray(varsArray)) {
+                  varsArray.forEach((val, idx) => {
+                    variables[String(idx + 1)] = String(val);
+                  });
+                }
+              } catch (e) {
+                console.warn("Failed to parse db.vars:", dbVars, e);
               }
-            } catch (e) {
-              console.warn("Failed to parse db.vars:", dbVars, e);
             }
+
+            queries.push({
+              query,
+              duration,
+              table,
+              operation,
+              rows,
+              variables,
+              normalized: this.normalizeQuery(query),
+            });
           }
-
-          queries.push({
-            query,
-            duration,
-            table,
-            operation,
-            rows,
-            variables,
-            normalized: this.normalizeQuery(query),
-          });
         }
-      }
-    });
+      });
 
-    return queries;
-  }
+      return queries;
+    },
 
-  normalizeQuery(query) {
-    return query
-      .replace(/\$\d+/g, "$N")
-      .replace(/'[^']*'/g, "'?'")
-      .replace(/\d+/g, "N")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+    normalizeQuery(query) {
+      return query
+        .replace(/\$\d+/g, "$N")
+        .replace(/'[^']*'/g, "'?'")
+        .replace(/\d+/g, "N")
+        .replace(/\s+/g, " ")
+        .trim();
+    },
 
-  renderAnalysis(queries) {
-    if (queries.length === 0) {
-      document.getElementById("totalQueries").textContent = "0";
-      document.getElementById("uniqueQueries").textContent = "0";
-      document.getElementById("avgDuration").textContent = "0ms";
-      document.getElementById("totalDuration").textContent = "0ms";
-      document.getElementById("slowestQueries").innerHTML =
-        '<div class="query-item">No SQL queries found</div>';
-      document.getElementById("frequentQueries").innerHTML = "";
-      document.getElementById("nPlusOne").innerHTML = "";
-      document.getElementById("tablesAccessed").innerHTML = "";
-      return;
-    }
-
-    const totalQueries = queries.length;
-    const totalDuration = queries.reduce((sum, q) => sum + q.duration, 0);
-    const avgDuration = totalDuration / totalQueries;
-
-    const queryGroups = {};
-    queries.forEach((q) => {
-      if (!queryGroups[q.normalized]) {
-        queryGroups[q.normalized] = {
-          queries: [],
-          count: 0,
+    renderAnalysis(queries) {
+      if (queries.length === 0) {
+        this.sqlAnalysis = {
+          totalQueries: 0,
+          uniqueQueries: 0,
+          avgDuration: 0,
+          totalDuration: 0,
+          slowestQueries: [],
+          frequentQueries: [],
+          nPlusOne: [],
+          tables: []
         };
+        return;
       }
-      queryGroups[q.normalized].queries.push(q);
-      queryGroups[q.normalized].count++;
-    });
 
-    const uniqueQueries = Object.keys(queryGroups).length;
+      const totalQueries = queries.length;
+      const totalDuration = queries.reduce((sum, q) => sum + q.duration, 0);
+      const avgDuration = totalDuration / totalQueries;
 
-    document.getElementById("totalQueries").textContent = totalQueries;
-    document.getElementById("uniqueQueries").textContent = uniqueQueries;
-    document.getElementById("avgDuration").textContent =
-      avgDuration.toFixed(2) + "ms";
-    document.getElementById("totalDuration").textContent =
-      totalDuration.toFixed(2) + "ms";
-
-    const sortedBySlowest = [...queries]
-      .sort((a, b) => b.duration - a.duration)
-      .slice(0, 5);
-    document.getElementById("slowestQueries").innerHTML = sortedBySlowest
-      .map(
-        (q, index) => `
-            <div class="query-item" data-query-index="${index}">
-                <div class="query-header">
-                    <span class="query-duration ${
-                      q.duration > 10 ? "query-slow" : ""
-                    }">${q.duration.toFixed(2)}ms</span>
-                </div>
-                <div class="query-text">${this.escapeHtml(q.query)}</div>
-                <div class="query-meta">
-                    <span>Table: ${q.table}</span>
-                    <span>Op: ${q.operation}</span>
-                    <span>Rows: ${q.rows}</span>
-                </div>
-                <div class="query-actions">
-                    <button class="btn-explain" data-query="${encodeURIComponent(
-                      q.query
-                    )}" data-variables="${encodeURIComponent(
-          JSON.stringify(q.variables || {})
-        )}">Run EXPLAIN</button>
-                </div>
-            </div>
-        `
-      )
-      .join("");
-
-    // Add event listeners to EXPLAIN buttons
-    document.querySelectorAll(".btn-explain").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const query = decodeURIComponent(btn.getAttribute("data-query"));
-        const variablesStr = decodeURIComponent(
-          btn.getAttribute("data-variables")
-        );
-        let variables = {};
-        try {
-          variables = JSON.parse(variablesStr || "{}");
-        } catch (e) {
-          console.warn("Failed to parse variables:", variablesStr);
+      const queryGroups = {};
+      queries.forEach((q) => {
+        if (!queryGroups[q.normalized]) {
+          queryGroups[q.normalized] = {
+            queries: [],
+            count: 0,
+          };
         }
-        this.runExplain(query, variables);
+        queryGroups[q.normalized].queries.push(q);
+        queryGroups[q.normalized].count++;
       });
-    });
 
-    const sortedByFrequency = Object.entries(queryGroups)
-      .map(([normalized, data]) => ({
-        normalized,
-        count: data.count,
-        example: data.queries[0],
-        avgDuration:
-          data.queries.reduce((sum, q) => sum + q.duration, 0) / data.count,
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+      const uniqueQueries = Object.keys(queryGroups).length;
 
-    document.getElementById("frequentQueries").innerHTML = sortedByFrequency
-      .map(
-        (item) => `
-            <div class="query-item">
-                <div class="query-header">
-                    <span class="query-count">${item.count}x</span>
-                    <span class="query-duration">${item.avgDuration.toFixed(
-                      2
-                    )}ms avg</span>
-                </div>
-                <div class="query-text">${this.escapeHtml(
-                  item.example.query
-                )}</div>
-                <div class="query-meta">
-                    <span>Table: ${item.example.table}</span>
-                    <span>Op: ${item.example.operation}</span>
-                </div>
-                <div class="query-actions">
-                    <button class="btn-explain" data-query="${encodeURIComponent(
-                      item.example.query
-                    )}" data-variables="${encodeURIComponent(
-          JSON.stringify(item.example.variables || {})
-        )}">Run EXPLAIN</button>
-                </div>
-            </div>
-        `
-      )
-      .join("");
+      const slowestQueries = [...queries]
+        .sort((a, b) => b.duration - a.duration)
+        .slice(0, 5);
 
-    // Add event listeners to frequent queries EXPLAIN buttons
-    document
-      .querySelectorAll("#frequentQueries .btn-explain")
-      .forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const query = decodeURIComponent(btn.getAttribute("data-query"));
-          const variablesStr = decodeURIComponent(
-            btn.getAttribute("data-variables")
-          );
-          let variables = {};
-          try {
-            variables = JSON.parse(variablesStr || "{}");
-          } catch (e) {
-            console.warn("Failed to parse variables:", variablesStr);
+      const frequentQueries = Object.entries(queryGroups)
+        .map(([normalized, data]) => ({
+          normalized,
+          count: data.count,
+          example: data.queries[0],
+          avgDuration:
+            data.queries.reduce((sum, q) => sum + q.duration, 0) / data.count,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      const nPlusOne = frequentQueries.filter((item) => item.count > 5);
+
+      const tables = {};
+      queries.forEach((q) => {
+        if (!tables[q.table]) {
+          tables[q.table] = 0;
+        }
+        tables[q.table]++;
+      });
+
+      const tablesList = Object.entries(tables)
+        .sort((a, b) => b[1] - a[1])
+        .map(([table, count]) => ({ table, count }));
+
+      this.sqlAnalysis = {
+        totalQueries,
+        uniqueQueries,
+        avgDuration,
+        totalDuration,
+        slowestQueries,
+        frequentQueries,
+        nPlusOne,
+        tables: tablesList
+      };
+    },
+
+    openLogDetails(log) {
+      this.selectedLog = log;
+      this.showLogModal = true;
+    },
+
+    convertAnsiToHtml(text) {
+      const ansiMap = {
+        0: "",
+        1: "ansi-bold",
+        30: "ansi-gray",
+        31: "ansi-red",
+        32: "ansi-green",
+        33: "ansi-yellow",
+        34: "ansi-blue",
+        35: "ansi-magenta",
+        36: "ansi-cyan",
+        37: "ansi-white",
+        90: "ansi-gray",
+        91: "ansi-bright-red",
+        92: "ansi-bright-green",
+        93: "ansi-bright-yellow",
+        94: "ansi-bright-blue",
+        95: "ansi-bright-magenta",
+        96: "ansi-bright-cyan",
+        97: "ansi-bright-white",
+      };
+
+      const parts = [];
+      const regex = /\x1b\[([0-9;]+)m/g;
+      let lastIndex = 0;
+      let currentClasses = [];
+      let match;
+
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          const content = text.substring(lastIndex, match.index);
+          if (currentClasses.length > 0) {
+            parts.push(
+              `<span class="${currentClasses.join(" ")}">${this.escapeHtml(
+                content
+              )}</span>`
+            );
+          } else {
+            parts.push(this.escapeHtml(content));
           }
-          this.runExplain(query, variables);
+        }
+
+        const codes = match[1].split(";");
+        currentClasses = [];
+        codes.forEach((code) => {
+          if (ansiMap[code]) {
+            currentClasses.push(ansiMap[code]);
+          }
         });
-      });
 
-    const nPlusOne = sortedByFrequency.filter((item) => item.count > 5);
-    if (nPlusOne.length > 0) {
-      document.getElementById("nPlusOne").innerHTML = nPlusOne
-        .map(
-          (item) => `
-                <div class="query-item">
-                    <div class="query-header">
-                        <span class="query-count">${
-                          item.count
-                        }x executions</span>
-                    </div>
-                    <div class="query-text">${this.escapeHtml(
-                      item.example.query
-                    )}</div>
-                    <div class="query-meta">
-                        <span>Table: ${item.example.table}</span>
-                        <span>Consider batching or eager loading</span>
-                    </div>
-                </div>
-            `
-        )
-        .join("");
-    } else {
-      document.getElementById("nPlusOne").innerHTML =
-        '<div class="query-item">No potential N+1 issues detected</div>';
-    }
-
-    const tables = {};
-    queries.forEach((q) => {
-      if (!tables[q.table]) {
-        tables[q.table] = 0;
+        lastIndex = regex.lastIndex;
       }
-      tables[q.table]++;
-    });
 
-    document.getElementById("tablesAccessed").innerHTML = Object.entries(tables)
-      .sort((a, b) => b[1] - a[1])
-      .map(
-        ([table, count]) => `
-                <span class="table-badge">${table}<span class="table-count">(${count})</span></span>
-            `
-      )
-      .join("");
-  }
-
-  showAnalyzer() {
-    document.getElementById("analyzerPanel").classList.remove("hidden");
-    document.querySelector(".log-viewer").classList.add("with-analyzer");
-  }
-
-  closeAnalyzer() {
-    document.getElementById("analyzerPanel").classList.add("hidden");
-    document.querySelector(".log-viewer").classList.remove("with-analyzer");
-  }
-
-  convertAnsiToHtml(text) {
-    const ansiMap = {
-      0: "",
-      1: "ansi-bold",
-      30: "ansi-gray",
-      31: "ansi-red",
-      32: "ansi-green",
-      33: "ansi-yellow",
-      34: "ansi-blue",
-      35: "ansi-magenta",
-      36: "ansi-cyan",
-      37: "ansi-white",
-      90: "ansi-gray",
-      91: "ansi-bright-red",
-      92: "ansi-bright-green",
-      93: "ansi-bright-yellow",
-      94: "ansi-bright-blue",
-      95: "ansi-bright-magenta",
-      96: "ansi-bright-cyan",
-      97: "ansi-bright-white",
-    };
-
-    const parts = [];
-    const regex = /\x1b\[([0-9;]+)m/g;
-    let lastIndex = 0;
-    let currentClasses = [];
-    let match;
-
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        const content = text.substring(lastIndex, match.index);
+      if (lastIndex < text.length) {
+        const content = text.substring(lastIndex);
         if (currentClasses.length > 0) {
           parts.push(
             `<span class="${currentClasses.join(" ")}">${this.escapeHtml(
@@ -826,172 +545,359 @@ class DockerLogParser {
         }
       }
 
-      const codes = match[1].split(";");
-      currentClasses = [];
-      codes.forEach((code) => {
-        if (ansiMap[code]) {
-          currentClasses.push(ansiMap[code]);
-        }
-      });
+      return parts.join("");
+    },
 
-      lastIndex = regex.lastIndex;
-    }
+    async runExplain(query, variables = {}) {
+      try {
+        const payload = {
+          query: query,
+          variables: variables,
+        };
 
-    if (lastIndex < text.length) {
-      const content = text.substring(lastIndex);
-      if (currentClasses.length > 0) {
-        parts.push(
-          `<span class="${currentClasses.join(" ")}">${this.escapeHtml(
-            content
-          )}</span>`
-        );
-      } else {
-        parts.push(this.escapeHtml(content));
-      }
-    }
+        const response = await fetch("/api/explain", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
 
-    return parts.join("");
-  }
-
-  showLogDetails(log) {
-    const rawContent = log.entry?.raw || "No raw log available";
-    document.getElementById("rawLogContent").innerHTML =
-      this.convertAnsiToHtml(rawContent);
-
-    const parsedFieldsEl = document.getElementById("parsedFields");
-    parsedFieldsEl.innerHTML = "";
-
-    const fields = [
-      { key: "Timestamp", value: log.entry?.timestamp },
-      { key: "Level", value: log.entry?.level },
-      { key: "File", value: log.entry?.file },
-      { key: "Message", value: log.entry?.message },
-    ];
-
-    fields.forEach(({ key, value }) => {
-      if (value) {
-        const fieldEl = document.createElement("div");
-        fieldEl.className = "parsed-field";
-        fieldEl.innerHTML = `
-                    <div class="parsed-field-key">${key}</div>
-                    <div class="parsed-field-value">${this.escapeHtml(
-                      value
-                    )}</div>
-                `;
-        parsedFieldsEl.appendChild(fieldEl);
-      }
-    });
-
-    if (log.entry?.fields) {
-      Object.entries(log.entry.fields).forEach(([key, value]) => {
-        const fieldEl = document.createElement("div");
-        fieldEl.className = "parsed-field";
-
-        let displayValue = value;
-        const isJson =
-          value.trim().startsWith("{") || value.trim().startsWith("[");
-
-        if (isJson) {
-          try {
-            const parsed = JSON.parse(value);
-            displayValue = `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
-          } catch (e) {
-            displayValue = this.escapeHtml(value);
-          }
+        const result = await response.json();
+        
+        if (result.error) {
+          this.explainData.error = result.error;
+          this.explainData.planSource = '';
+          this.explainData.planQuery = result.query || '';
         } else {
-          displayValue = this.escapeHtml(value);
+          let planText = '';
+          if (result.queryPlan && result.queryPlan.length > 0) {
+            planText = JSON.stringify(result.queryPlan, null, 2);
+          }
+          
+          this.explainData.error = null;
+          this.explainData.planSource = planText;
+          this.explainData.planQuery = result.query || '';
+
+          if (this.pev2App && this.pev2App._instance) {
+            this.pev2App._instance.proxy.updatePlan(planText, result.query || '');
+          }
         }
-
-        fieldEl.innerHTML = `
-                    <div class="parsed-field-key">${this.escapeHtml(key)}</div>
-                    <div class="parsed-field-value">${displayValue}</div>
-                `;
-        parsedFieldsEl.appendChild(fieldEl);
-      });
-    }
-
-    document.getElementById("logModal").classList.remove("hidden");
-  }
-
-  closeModal() {
-    document.getElementById("logModal").classList.add("hidden");
-  }
-
-  async runExplain(query, variables = {}) {
-    // Fix unquoted values before sending
-    try {
-      const payload = {
-        query: query,
-        variables: variables,
-      };
-
-      const response = await fetch("/api/explain", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const result = await response.json();
-      this.showExplainResult(result);
-    } catch (error) {
-      this.showExplainResult({
-        error: `Failed to run EXPLAIN: ${error.message}`,
-        query: query,
-      });
-    }
-  }
-
-  closeExplainModal() {
-    if (result.error) {
-      // Show error message
-      const pev2El = document.getElementById('pev2App');
-      pev2El.innerHTML = `<div class="alert alert-danger m-3">${this.escapeHtml(result.error)}</div>`;
-    } else {
-      // Convert the PostgreSQL EXPLAIN JSON format to the format PEV2 expects
-      // PEV2 expects the plan as a JSON string
-      let planText = '';
-      if (result.queryPlan && result.queryPlan.length > 0) {
-        // PostgreSQL EXPLAIN (FORMAT JSON) returns an array with one element containing the plan
-        planText = JSON.stringify(result.queryPlan, null, 2);
+        
+        this.showExplainModal = true;
+      } catch (error) {
+        this.explainData.error = `Failed to run EXPLAIN: ${error.message}`;
+        this.explainData.planSource = '';
+        this.explainData.planQuery = query;
+        this.showExplainModal = true;
       }
-      
-      // Update the PEV2 component
-      if (this.pev2App && this.pev2App._instance) {
-        this.pev2App._instance.proxy.updatePlan(planText, result.query || '');
+    },
+
+    scrollToBottom() {
+      const logsEl = this.$refs.logsContainer;
+      if (logsEl) {
+        logsEl.scrollTop = logsEl.scrollHeight;
+      }
+    },
+
+    escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    },
+
+    formatFieldValue(value) {
+      const shortValue = value.length > 100 ? value.substring(0, 100) + "..." : value;
+      return shortValue;
+    },
+
+    isJsonField(value) {
+      return value.trim().startsWith("{") || value.trim().startsWith("[");
+    },
+
+    formatJsonField(value) {
+      try {
+        const parsed = JSON.parse(value);
+        return JSON.stringify(parsed, null, 2);
+      } catch (e) {
+        return value;
       }
     }
+  },
 
-    document.getElementById("explainModal").classList.remove("hidden");
-  }
+  template: `
+    <div class="container">
+      <header>
+        <h1>Docker Log Parser</h1>
+        <div class="header-controls">
+          <nav style="display: flex; gap: 1rem; align-items: center; margin-right: 1rem;">
+            <a href="/" style="color: white; text-decoration: none; font-weight: 500;">Log Viewer</a>
+            <a href="/requests.html" style="color: rgba(255,255,255,0.8); text-decoration: none;">Request Manager</a>
+          </nav>
+          <div class="search-box">
+            <input type="text" v-model="searchQuery" placeholder="Search logs...">
+            <button @click="searchQuery = ''" class="clear-btn" title="Clear search">✕</button>
+          </div>
+          <div class="trace-filter-display">
+            <span>{{ filterDisplayType }}</span>: <span>{{ filterDisplayValue }}</span>
+            <button @click="clearTraceFilter" class="clear-btn" :disabled="!traceFilter" title="Clear filter">✕</button>
+          </div>
+        </div>
+      </header>
 
-  closeExplainModal() {
-    document.getElementById("explainModal").classList.add("hidden");
-  }
+      <div class="main-content">
+        <aside class="sidebar">
+          <div class="section">
+            <h3>Containers</h3>
+            <div class="container-list">
+              <div v-for="project in projectNames" :key="project" class="project-section">
+                <div class="project-header" @click="toggleProjectCollapse(project)">
+                  <span class="disclosure-arrow" :class="{ collapsed: isProjectCollapsed(project) }">▼</span>
+                  <div class="checkbox" 
+                       :class="{ checked: isProjectSelected(project), indeterminate: isProjectIndeterminate(project) }"
+                       @click.stop="toggleProject(project)"></div>
+                  <span class="project-name">{{ project }}</span>
+                  <span class="project-count">({{ containersByProject[project].length }})</span>
+                </div>
+                <div class="project-containers" :class="{ collapsed: isProjectCollapsed(project) }">
+                  <div v-for="container in containersByProject[project]" 
+                       :key="container.ID"
+                       class="container-item"
+                       :class="{ selected: isContainerSelected(container.ID) }"
+                       @click="toggleContainer(container.ID)">
+                    <div class="checkbox" :class="{ checked: isContainerSelected(container.ID) }"></div>
+                    <div class="container-info">
+                      <div class="container-name">{{ container.Name }}</div>
+                      <div class="container-id">{{ container.ID }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-  scrollToBottom() {
-    const logsEl = document.getElementById("logs");
-    logsEl.scrollTop = logsEl.scrollHeight;
-  }
+          <div class="section">
+            <h3>Log Levels</h3>
+            <div class="level-filters">
+              <label class="level-filter">
+                <input type="checkbox" value="TRC" :checked="isLevelSelected('TRC')" @change="toggleLevel('TRC')">
+                <span class="level-badge level-trc">TRC</span>
+              </label>
+              <label class="level-filter">
+                <input type="checkbox" value="DBG" :checked="isLevelSelected('DBG')" @change="toggleLevel('DBG')">
+                <span class="level-badge level-dbg">DBG</span>
+              </label>
+              <label class="level-filter">
+                <input type="checkbox" value="INF" :checked="isLevelSelected('INF')" @change="toggleLevel('INF')">
+                <span class="level-badge level-inf">INF</span>
+              </label>
+              <label class="level-filter">
+                <input type="checkbox" value="WRN" :checked="isLevelSelected('WRN')" @change="toggleLevel('WRN')">
+                <span class="level-badge level-wrn">WRN</span>
+              </label>
+              <label class="level-filter">
+                <input type="checkbox" value="ERR" :checked="isLevelSelected('ERR')" @change="toggleLevel('ERR')">
+                <span class="level-badge level-err">ERR</span>
+              </label>
+              <label class="level-filter">
+                <input type="checkbox" value="NONE" :checked="isLevelSelected('NONE')" @change="toggleLevel('NONE')">
+                <span class="level-badge level-none">NONE</span>
+              </label>
+            </div>
+          </div>
 
-  updateStatus(text, connected) {
-    const statusEl = document.getElementById("status");
-    statusEl.textContent = text;
-    statusEl.style.color = connected ? "#7ee787" : "#f85149";
-  }
+          <div class="section">
+            <h3>Actions</h3>
+            <button @click="clearLogs">Clear Logs</button>
+          </div>
 
-  updateLogCount() {
-    document.getElementById(
-      "logCount"
-    ).textContent = `${this.logs.length} logs`;
-  }
+          <div class="sidebar-footer">
+            <div class="status">
+              <span :style="{ color: statusColor }">{{ statusText }}</span>
+              <span>{{ logCountText }}</span>
+            </div>
+          </div>
+        </aside>
 
-  escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
-}
+        <main class="log-viewer" :class="{ 'with-analyzer': showAnalyzer }">
+          <div ref="logsContainer" class="logs">
+            <div v-for="(log, index) in filteredLogs" 
+                 :key="index"
+                 class="log-line"
+                 @click="openLogDetails(log)">
+              <span class="log-container">{{ getContainerName(log.containerId) }}</span>
+              <span v-if="log.entry?.timestamp" class="log-timestamp">{{ log.entry.timestamp }}</span>
+              <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
+              <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
+              <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
+              <span v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})" 
+                    :key="idx"
+                    class="log-field">
+                <span class="log-field-key">{{ key }}</span>=<span 
+                  :class="{ 'log-field-value': !isJsonField(value) }"
+                  @click.stop="!isJsonField(value) && setTraceFilter(key, value, $event)">{{ formatFieldValue(value) }}</span>
+              </span>
+            </div>
+          </div>
+        </main>
 
-const app = new DockerLogParser();
+        <aside v-if="showAnalyzer" class="analyzer-panel">
+          <div class="analyzer-header">
+            <h3>SQL Query Analyzer</h3>
+            <button @click="showAnalyzer = false">✕</button>
+          </div>
+          <div v-if="sqlAnalysis" class="analyzer-content">
+            <div class="analyzer-section">
+              <h4>Overview</h4>
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-label">Total Queries</span>
+                  <span class="stat-value">{{ sqlAnalysis.totalQueries }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Unique Queries</span>
+                  <span class="stat-value">{{ sqlAnalysis.uniqueQueries }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Avg Duration</span>
+                  <span class="stat-value">{{ sqlAnalysis.avgDuration.toFixed(2) }}ms</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Total Duration</span>
+                  <span class="stat-value">{{ sqlAnalysis.totalDuration.toFixed(2) }}ms</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="analyzer-section">
+              <h4>Slowest Queries</h4>
+              <div class="query-list">
+                <div v-if="sqlAnalysis.slowestQueries.length === 0" class="query-item">No SQL queries found</div>
+                <div v-for="(q, index) in sqlAnalysis.slowestQueries" :key="index" class="query-item">
+                  <div class="query-header">
+                    <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }">{{ q.duration.toFixed(2) }}ms</span>
+                  </div>
+                  <div class="query-text">{{ q.query }}</div>
+                  <div class="query-meta">
+                    <span>Table: {{ q.table }}</span>
+                    <span>Op: {{ q.operation }}</span>
+                    <span>Rows: {{ q.rows }}</span>
+                  </div>
+                  <div class="query-actions">
+                    <button class="btn-explain" @click="runExplain(q.query, q.variables)">Run EXPLAIN</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="analyzer-section">
+              <h4>Most Frequent Queries</h4>
+              <div class="query-list">
+                <div v-for="(item, index) in sqlAnalysis.frequentQueries" :key="index" class="query-item">
+                  <div class="query-header">
+                    <span class="query-count">{{ item.count }}x</span>
+                    <span class="query-duration">{{ item.avgDuration.toFixed(2) }}ms avg</span>
+                  </div>
+                  <div class="query-text">{{ item.example.query }}</div>
+                  <div class="query-meta">
+                    <span>Table: {{ item.example.table }}</span>
+                    <span>Op: {{ item.example.operation }}</span>
+                  </div>
+                  <div class="query-actions">
+                    <button class="btn-explain" @click="runExplain(item.example.query, item.example.variables)">Run EXPLAIN</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="analyzer-section">
+              <h4>Potential N+1 Issues</h4>
+              <div class="query-list">
+                <div v-if="sqlAnalysis.nPlusOne.length === 0" class="query-item">No potential N+1 issues detected</div>
+                <div v-for="(item, index) in sqlAnalysis.nPlusOne" :key="index" class="query-item">
+                  <div class="query-header">
+                    <span class="query-count">{{ item.count }}x executions</span>
+                  </div>
+                  <div class="query-text">{{ item.example.query }}</div>
+                  <div class="query-meta">
+                    <span>Table: {{ item.example.table }}</span>
+                    <span>Consider batching or eager loading</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="analyzer-section">
+              <h4>Tables Accessed</h4>
+              <div class="table-list">
+                <span v-for="(item, index) in sqlAnalysis.tables" :key="index" class="table-badge">
+                  {{ item.table }}<span class="table-count">({{ item.count }})</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- Log Details Modal -->
+    <div v-if="showLogModal" class="modal" @click="showLogModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Log Details</h3>
+          <button @click="showLogModal = false">✕</button>
+        </div>
+        <div v-if="selectedLog" class="modal-body">
+          <div class="modal-section">
+            <h4>Raw Log</h4>
+            <pre v-html="convertAnsiToHtml(selectedLog.entry?.raw || 'No raw log available')"></pre>
+          </div>
+          <div class="modal-section">
+            <h4>Parsed Fields</h4>
+            <div>
+              <div v-if="selectedLog.entry?.timestamp" class="parsed-field">
+                <div class="parsed-field-key">Timestamp</div>
+                <div class="parsed-field-value">{{ selectedLog.entry.timestamp }}</div>
+              </div>
+              <div v-if="selectedLog.entry?.level" class="parsed-field">
+                <div class="parsed-field-key">Level</div>
+                <div class="parsed-field-value">{{ selectedLog.entry.level }}</div>
+              </div>
+              <div v-if="selectedLog.entry?.file" class="parsed-field">
+                <div class="parsed-field-key">File</div>
+                <div class="parsed-field-value">{{ selectedLog.entry.file }}</div>
+              </div>
+              <div v-if="selectedLog.entry?.message" class="parsed-field">
+                <div class="parsed-field-key">Message</div>
+                <div class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+              </div>
+              <div v-for="([key, value], idx) in Object.entries(selectedLog.entry?.fields || {})" :key="idx" class="parsed-field">
+                <div class="parsed-field-key">{{ key }}</div>
+                <div v-if="isJsonField(value)" class="parsed-field-value">
+                  <pre>{{ formatJsonField(value) }}</pre>
+                </div>
+                <div v-else class="parsed-field-value">{{ value }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPLAIN Modal -->
+    <div v-if="showExplainModal" class="modal" @click="showExplainModal = false">
+      <div class="modal-content explain-modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>SQL Query Explain Plan (PEV2)</h3>
+          <button @click="showExplainModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="explainData.error" class="alert alert-danger m-3">{{ explainData.error }}</div>
+          <div id="pev2App" class="d-flex flex-column" style="height: 70vh;">
+            <pev2 :plan-source="explainData.planSource" :plan-query="explainData.planQuery"></pev2>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}).mount('#app');

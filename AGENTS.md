@@ -44,11 +44,12 @@ go test ./...
   - `explain.go`: Database connection, query execution, variable substitution
 
 ### Frontend
-- **web/**: HTML, CSS, JavaScript for UI
+- **web/**: Vue 3 single-page application
+  - Fully reactive data binding with Vue's composition
   - Real-time WebSocket updates
   - SQL analyzer panel
   - PEV2-powered EXPLAIN visualization
-  - Vue 3 integration for interactive components
+  - Template-based rendering (no manual DOM manipulation)
 
 ## Key Features
 
@@ -95,11 +96,14 @@ Auto-activates when filtering by trace/request/span:
 - Log entries limited to 100KB
 - Container monitoring every 5 seconds
 
-### JavaScript
-- ES6 class-based architecture
-- Set for efficient selection
-- Regex normalization for SQL grouping
-- ANSI escape: `\x1b\[([0-9;]+)m`
+### Vue.js (Frontend)
+- Single Vue 3 application with reactive data
+- Computed properties for derived state
+- v-model for two-way data binding
+- Template-based rendering with v-for and v-if
+- Methods for event handlers
+- Separate PEV2 Vue app for EXPLAIN modal
+- No manual DOM manipulation
 
 ### Parser Rules
 - Custom key=value parser with quoted strings, nested braces, escapes
@@ -109,10 +113,10 @@ Auto-activates when filtering by trace/request/span:
 ## Common Tasks
 
 ### Add a filter type
-1. Add state to `App` class
-2. Update `shouldShowLog()` method
-3. Add UI controls in `index.html`
-4. Wire event listeners in `setupEventListeners()`
+1. Add reactive state to Vue app's `data()` 
+2. Update `shouldShowLog()` computed property or method
+3. Add UI controls in template with v-model
+4. Event handlers automatically wired via Vue directives
 
 ### Parse a new format
 1. Update regex in `pkg/logs/parser.go`
@@ -122,8 +126,8 @@ Auto-activates when filtering by trace/request/span:
 ### Add WebSocket message
 1. Define struct in `cmd/viewer/main.go`
 2. Add broadcast function
-3. Handle in `ws.onmessage`
-4. Add handler in `app.js`
+3. Handle in `ws.onmessage` in Vue app
+4. Update reactive data in the handler
 
 ## Testing
 
@@ -145,9 +149,10 @@ Manual testing:
 ## Performance
 
 - Last 10,000 logs in memory
-- UI displays last 1,000 filtered logs
+- UI displays last 1,000 filtered logs via computed property
 - WebSocket broadcast to all clients
-- Container list scroll at 300px
+- Vue's virtual DOM for efficient rendering
+- Reactive updates only re-render affected components
 
 ## Environment
 
