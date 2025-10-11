@@ -104,7 +104,7 @@ func listRequests(db *store.Store) {
 		fmt.Printf("Created: %s\n", req.CreatedAt.Format(time.RFC3339))
 
 		// Count executions
-		executions, _ := db.ListExecutions(req.ID)
+		executions, _ := db.ListExecutions(int64(req.ID))
 		fmt.Printf("Executions: %d\n", len(executions))
 		fmt.Println("---")
 	}
@@ -196,8 +196,9 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 
 	// Execute request
 	execution := &store.Execution{
-		RequestID:       requestID,
+		RequestID:       uint(requestID),
 		RequestIDHeader: requestIDHeader,
+		ExecutedAt:      time.Now(),
 	}
 
 	startTime := time.Now()

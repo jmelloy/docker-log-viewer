@@ -53,11 +53,12 @@ func TestStore(t *testing.T) {
 
 	// Test creating execution
 	exec := &Execution{
-		RequestID:       reqID,
+		RequestID:       uint(reqID),
 		RequestIDHeader: "test-req-id",
 		StatusCode:      200,
 		DurationMS:      150,
 		ResponseBody:    `{"data": {}}`,
+		ExecutedAt:      time.Now(),
 	}
 
 	execID, err := store.CreateExecution(exec)
@@ -133,7 +134,7 @@ func TestStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get execution detail: %v", err)
 	}
-	if detail.Execution.ID != execID {
+	if detail.Execution.ID != uint(execID) {
 		t.Errorf("Expected execution ID %d, got %d", execID, detail.Execution.ID)
 	}
 	if len(detail.Logs) != 1 {
