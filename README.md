@@ -1,16 +1,17 @@
 # Docker Log Parser
 
-Real-time Docker container log viewer with SQL query analysis.
+Real-time Docker container log viewer with SQL query analysis and GraphQL request management.
 
 ## Quick Start
 
 ```bash
-# Build both tools
+# Build all tools
 ./build.sh
 
 # Or build individually
 go build -o docker-log-viewer cmd/viewer/main.go
 go build -o compare cmd/compare/main.go
+go build -o graphql-tester cmd/graphql-tester/main.go
 
 # Run viewer
 ./docker-log-viewer
@@ -25,6 +26,8 @@ Open [http://localhost:9000](http://localhost:9000)
 - **Interactive filtering** - Container selection, log level, live search, trace filtering
 - **SQL analysis** - Query statistics, N+1 detection, slowest queries
 - **EXPLAIN plans** - PostgreSQL execution plan analysis (requires DB connection)
+- **Request Management** - Save, execute, and analyze GraphQL/API requests
+- **Before/After Analysis** - Track request performance over time
 
 ## Tools
 
@@ -40,6 +43,29 @@ go build -o docker-log-viewer cmd/viewer/main.go
 export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 ./docker-log-viewer
 ```
+
+### GraphQL Request Manager
+
+Save and execute GraphQL/API requests with full log capture and SQL analysis.
+
+**Web UI**: [http://localhost:9000/requests.html](http://localhost:9000/requests.html)
+
+**CLI**:
+```bash
+# Save a request
+./graphql-tester -url "https://api.example.com/graphql" \
+                 -data graphql-operations-unique/AuthConfig.json
+
+# Execute immediately
+./graphql-tester -url "https://api.example.com/graphql" \
+                 -data operations/query.json \
+                 -execute
+
+# List saved requests
+./graphql-tester -list
+```
+
+See [docs/GRAPHQL_MANAGER.md](docs/GRAPHQL_MANAGER.md) for full documentation.
 
 ### Comparison Tool
 

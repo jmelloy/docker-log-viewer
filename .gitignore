@@ -37,3 +37,8 @@ compare-tool
 *.html
 !web/*.html
 !*.tmpl
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
