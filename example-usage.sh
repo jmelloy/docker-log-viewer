@@ -1,18 +1,18 @@
 #!/bin/bash
 
-# Example script showing how to use the compare-tool
+# Example script showing how to use the compare tool
 # This demonstrates comparing two API endpoints with the same GraphQL query
 
 echo "Docker Log Viewer - URL Comparison Tool Example"
 echo "================================================"
 echo ""
 
-# Check if compare-tool exists
-if [ ! -f "./compare-tool" ]; then
-    echo "Building compare-tool..."
-    go build -o compare-tool compare.go docker.go parser.go
+# Check if compare exists
+if [ ! -f "./compare" ]; then
+    echo "Building compare..."
+    go build -o compare cmd/compare/main.go
     if [ $? -ne 0 ]; then
-        echo "Failed to build compare-tool"
+        echo "Failed to build compare"
         exit 1
     fi
 fi
@@ -28,7 +28,7 @@ echo "Example 1: Comparing production vs staging"
 echo "-------------------------------------------"
 echo ""
 echo "Command:"
-echo "./compare-tool \\"
+echo "./compare \\"
 echo "  -url1 https://api.production.example.com/graphql \\"
 echo "  -url2 https://api.staging.example.com/graphql \\"
 echo "  -data sample-request.json \\"
@@ -40,7 +40,7 @@ echo "Example 2: Comparing different GraphQL operations"
 echo "-------------------------------------------------"
 echo ""
 echo "Command:"
-echo "./compare-tool \\"
+echo "./compare \\"
 echo "  -url1 https://api.example.com/graphql \\"
 echo "  -url2 https://api.example.com/graphql \\"
 echo "  -data query1.json \\"
@@ -54,7 +54,7 @@ echo "Command:"
 cat <<'EOF'
 export URL1="https://api.prod.example.com/graphql"
 export URL2="https://api.dev.example.com/graphql"
-./compare-tool \
+./compare \
   -url1 "$URL1" \
   -url2 "$URL2" \
   -data sample-request.json \
