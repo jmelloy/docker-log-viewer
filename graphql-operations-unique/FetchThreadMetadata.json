@@ -1,0 +1,7 @@
+{
+  "operationName": "FetchThreadMetadata",
+  "query": "query FetchThreadMetadata($threadID: ID!) {\n  threadMetadata(threadID: $threadID) {\n    ...ThreadMetadataFields\n    __typename\n  }\n}\n\nfragment ThreadMetadataFields on ThreadMetadata {\n  id\n  threadID\n  aiSettings {\n    chatModel\n    __typename\n  }\n  __typename\n}",
+  "variables": {
+    "threadID": "thr_32YiSsVTjV9s4AwUW9kcZXLwfSe"
+  }
+}

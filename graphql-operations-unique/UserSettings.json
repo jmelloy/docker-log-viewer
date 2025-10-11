@@ -1,0 +1,5 @@
+{
+  "operationName": "UserSettings",
+  "query": "query UserSettings {\n  settings {\n    ...SettingsFields\n    __typename\n  }\n}\n\nfragment SettingsFields on UserSettings {\n  ...SettingsSimpleFields\n  workSchedule {\n    ...WorkScheduleFields\n    __typename\n  }\n  __typename\n}\n\nfragment SettingsSimpleFields on UserSettings {\n  id\n  enterToSend\n  llmSettings {\n    chatModel\n    __typename\n  }\n  location\n  notifyMessages\n  notifyMessagesSound\n  timezone {\n    auto\n    name\n    __typename\n  }\n  __typename\n}\n\nfragment WorkScheduleFields on WorkSchedule {\n  enabled\n  sun {\n    end\n    start\n    __typename\n  }\n  mon {\n    end\n    start\n    __typename\n  }\n  tue {\n    end\n    start\n    __typename\n  }\n  wed {\n    end\n    start\n    __typename\n  }\n  thu {\n    end\n    start\n    __typename\n  }\n  fri {\n    end\n    start\n    __typename\n  }\n  sat {\n    end\n    start\n    __typename\n  }\n  __typename\n}",
+  "variables": {}
+}

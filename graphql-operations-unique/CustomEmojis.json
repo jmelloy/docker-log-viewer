@@ -1,0 +1,7 @@
+{
+  "operationName": "CustomEmojis",
+  "query": "query CustomEmojis($after: String, $first: Int = 200) {\n  customEmojis(after: $after, first: $first) {\n    edges {\n      node {\n        ...CustomEmojiFields\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment CustomEmojiFields on CustomEmoji {\n  id\n  createdAt\n  imageURL\n  name\n  workspaceID\n  createdBy {\n    ...UserFields\n    __typename\n  }\n  __typename\n}\n\nfragment UserFields on User {\n  ...UserCommonFields\n  workspaceProfiles {\n    ...WorkspaceProfileFields\n    __typename\n  }\n  __typename\n}\n\nfragment UserCommonFields on User {\n  id\n  addressDomains\n  avatarURL\n  bio\n  isRegistered\n  name\n  workspaceIDs\n  __typename\n}\n\nfragment WorkspaceProfileFields on WorkspaceProfile {\n  id\n  workspace {\n    ... on WorkspacePreview {\n      ...WorkspacePreviewSimpleFields\n      __typename\n    }\n    __typename\n  }\n  slackUser {\n    ...SlackUserFields\n    __typename\n  }\n  __typename\n}\n\nfragment WorkspacePreviewSimpleFields on WorkspacePreview {\n  ...WorkspacePreviewCommonFields\n  __typename\n}\n\nfragment WorkspacePreviewCommonFields on WorkspacePreview {\n  id\n  name\n  domains\n  avatarURL\n  joinableBy\n  memberCount\n  __typename\n}\n\nfragment SlackUserFields on SlackUser {\n  id\n  profileURL\n  teamID\n  __typename\n}",
+  "variables": {
+    "first": 300
+  }
+}
