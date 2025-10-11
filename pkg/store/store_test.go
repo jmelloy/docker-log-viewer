@@ -19,13 +19,43 @@ func TestStore(t *testing.T) {
 	}
 	defer store.Close()
 
-	// Test creating a request
-	req := &Request{
-		Name:        "Test Request",
+	// Test creating a server
+	server := &Server{
+		Name:        "Test Server",
 		URL:         "https://api.example.com/graphql",
-		RequestData: `{"query": "{ test }"}`,
 		BearerToken: "test-token",
 		DevID:       "test-dev-id",
+	}
+
+	serverID, err := store.CreateServer(server)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Test retrieving server
+	retrievedServer, err := store.GetServer(serverID)
+	if err != nil {
+		t.Fatalf("Failed to get server: %v", err)
+	}
+	if retrievedServer.Name != server.Name {
+		t.Errorf("Expected server name %s, got %s", server.Name, retrievedServer.Name)
+	}
+
+	// Test listing servers
+	servers, err := store.ListServers()
+	if err != nil {
+		t.Fatalf("Failed to list servers: %v", err)
+	}
+	if len(servers) != 1 {
+		t.Errorf("Expected 1 server, got %d", len(servers))
+	}
+
+	// Test creating a request
+	serverIDUint := uint(serverID)
+	req := &Request{
+		Name:        "Test Request",
+		ServerID:    &serverIDUint,
+		RequestData: `{"query": "{ test }"}`,
 	}
 
 	reqID, err := store.CreateRequest(req)
@@ -41,6 +71,11 @@ func TestStore(t *testing.T) {
 	if retrieved.Name != req.Name {
 		t.Errorf("Expected name %s, got %s", req.Name, retrieved.Name)
 	}
+	if retrieved.Server == nil {
+		t.Error("Expected server to be preloaded")
+	} else if retrieved.Server.URL != server.URL {
+		t.Errorf("Expected server URL %s, got %s", server.URL, retrieved.Server.URL)
+	}
 
 	// Test listing requests
 	requests, err := store.ListRequests()
@@ -54,10 +89,12 @@ func TestStore(t *testing.T) {
 	// Test creating execution
 	exec := &Execution{
 		RequestID:       uint(reqID),
+		ServerID:        &serverIDUint,
 		RequestIDHeader: "test-req-id",
 		StatusCode:      200,
 		DurationMS:      150,
 		ResponseBody:    `{"data": {}}`,
+		ResponseHeaders: `{"content-type": "application/json"}`,
 		ExecutedAt:      time.Now(),
 	}
 
@@ -104,10 +141,12 @@ func TestStore(t *testing.T) {
 	}
 
 	// Test saving SQL queries
+	normalizedQuery := "SELECT * FROM users WHERE id = ?"
 	sqlQueries := []SQLQuery{
 		{
 			Query:           "SELECT * FROM users WHERE id = $1",
-			NormalizedQuery: "SELECT * FROM users WHERE id = ?",
+			NormalizedQuery: normalizedQuery,
+			QueryHash:       ComputeQueryHash(normalizedQuery),
 			DurationMS:      15.5,
 			TableName:       "users",
 			Operation:       "SELECT",
