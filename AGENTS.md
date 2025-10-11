@@ -47,7 +47,8 @@ go test ./...
 - **web/**: HTML, CSS, JavaScript for UI
   - Real-time WebSocket updates
   - SQL analyzer panel
-  - EXPLAIN modal
+  - PEV2-powered EXPLAIN visualization
+  - Vue 3 integration for interactive components
 
 ## Key Features
 
@@ -76,7 +77,8 @@ Auto-activates when filtering by trace/request/span:
 - Query stats (count, duration, slow queries)
 - N+1 detection (queries executed >5 times)
 - Tables accessed
-- PostgreSQL EXPLAIN plans (requires DATABASE_URL)
+- PostgreSQL EXPLAIN plans with PEV2 visualization (requires DATABASE_URL)
+- Interactive execution plan tree with cost analysis
 
 ### 5. Log Details Modal
 - Click any log to view full details
