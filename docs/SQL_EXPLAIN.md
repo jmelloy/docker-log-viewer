@@ -18,13 +18,13 @@ Or use the default connection string (localhost PostgreSQL with user/pass `postg
 
 ```bash
 # Build the application
-go build -o docker-log-parser
+go build -o docker-log-viewer cmd/viewer/main.go
 
 # Set database connection (optional)
 export DATABASE_URL="postgresql://user:password@localhost:5432/database?sslmode=disable"
 
 # Run the application
-./docker-log-parser
+./docker-log-viewer
 ```
 
 The application will start on `http://localhost:9000`. If the database connection fails, the EXPLAIN feature will be disabled but the log viewer will continue to work normally.

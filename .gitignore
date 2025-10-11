@@ -30,8 +30,11 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
-docker-log-parser
-compare-tool
+
+# Built binaries
+docker-log-viewer
+compare
+graphql-tester
 
 # Generated output files
 *.html
