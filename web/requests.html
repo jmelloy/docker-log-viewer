@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphQL Request Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="requests.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>GraphQL Request Manager</h1>
+            <nav>
+                <a href="/">Log Viewer</a>
+                <a href="/requests.html" class="active">Request Manager</a>
+            </nav>
+        </header>
+
+        <div class="main-layout">
+            <aside class="sidebar">
+                <div class="section">
+                    <h3>Saved Requests</h3>
+                    <button id="newRequestBtn" class="btn-primary">+ New Request</button>
+                    <div id="requestsList" class="requests-list"></div>
+                </div>
+            </aside>
+
+            <main class="content">
+                <div id="emptyState" class="empty-state">
+                    <h2>No Request Selected</h2>
+                    <p>Select a request from the sidebar or create a new one to get started.</p>
+                </div>
+
+                <div id="requestDetail" class="request-detail hidden">
+                    <div class="detail-header">
+                        <h2 id="requestName"></h2>
+                        <div class="detail-actions">
+                            <button id="executeBtn" class="btn-primary">Execute Request</button>
+                            <button id="deleteBtn" class="btn-danger">Delete</button>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3>Request Details</h3>
+                        <div class="form-row">
+                            <label>URL:</label>
+                            <div id="requestURL" class="value"></div>
+                        </div>
+                        <div class="form-row">
+                            <label>Created:</label>
+                            <div id="requestCreated" class="value"></div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3>Request Data</h3>
+                        <pre id="requestData" class="json-display"></pre>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3>Executions</h3>
+                        <div id="executionsList" class="executions-list"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- New Request Modal -->
+    <div id="newRequestModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>New Request</h3>
+                <button id="closeNewRequestModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="newRequestName">Name:</label>
+                    <input type="text" id="newRequestName" placeholder="e.g., FetchUsers" required>
+                </div>
+                <div class="form-group">
+                    <label for="newRequestURL">URL:</label>
+                    <input type="text" id="newRequestURL" placeholder="https://api.example.com/graphql" required>
+                </div>
+                <div class="form-group">
+                    <label for="newRequestData">Request Data (JSON):</label>
+                    <textarea id="newRequestData" rows="15" placeholder='{"query": "{ users { id name } }"}'></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="newRequestToken">Bearer Token (optional):</label>
+                    <input type="text" id="newRequestToken" placeholder="your-token-here">
+                </div>
+                <div class="form-group">
+                    <label for="newRequestDevID">Dev ID (optional):</label>
+                    <input type="text" id="newRequestDevID" placeholder="dev-user-id">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveRequestBtn" class="btn-primary">Save Request</button>
+                <button id="cancelNewRequestBtn" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Detail Modal -->
+    <div id="executionModal" class="modal hidden">
+        <div class="modal-content execution-modal-content">
+            <div class="modal-header">
+                <h3>Execution Details</h3>
+                <button id="closeExecutionModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="execution-overview">
+                    <div class="stat-item">
+                        <span class="stat-label">Status Code</span>
+                        <span class="stat-value" id="execStatusCode"></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Duration</span>
+                        <span class="stat-value" id="execDuration"></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Request ID</span>
+                        <span class="stat-value" id="execRequestID"></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Executed At</span>
+                        <span class="stat-value" id="execTime"></span>
+                    </div>
+                </div>
+
+                <div class="modal-section">
+                    <h4>Response</h4>
+                    <pre id="execResponse" class="json-display"></pre>
+                </div>
+
+                <div class="modal-section" id="execErrorSection" style="display: none;">
+                    <h4>Error</h4>
+                    <pre id="execError" class="error-display"></pre>
+                </div>
+
+                <div class="modal-section" id="execSQLSection" style="display: none;">
+                    <h4>SQL Analysis</h4>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Queries</span>
+                            <span class="stat-value" id="sqlTotalQueries"></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Unique Queries</span>
+                            <span class="stat-value" id="sqlUniqueQueries"></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Avg Duration</span>
+                            <span class="stat-value" id="sqlAvgDuration"></span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Duration</span>
+                            <span class="stat-value" id="sqlTotalDuration"></span>
+                        </div>
+                    </div>
+
+                    <div id="sqlQueriesList" class="sql-queries-list"></div>
+                </div>
+
+                <div class="modal-section">
+                    <h4>Logs (<span id="logsCount">0</span>)</h4>
+                    <div id="execLogs" class="logs-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="requests.js"></script>
+</body>
+</html>
