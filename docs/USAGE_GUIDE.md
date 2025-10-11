@@ -117,7 +117,7 @@ docker-compose -f docker-compose.example.yml up -d
 2. Start the log viewer with database connection:
 ```bash
 export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/testdb"
-./docker-log-parser
+./docker-log-viewer
 ```
 
 3. Open browser to http://localhost:9000

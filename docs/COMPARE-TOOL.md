@@ -5,8 +5,8 @@ Posts GraphQL/JSON to two URLs, collects Docker logs, analyzes SQL performance.
 ## Quick Start
 
 ```bash
-go build -o compare-tool compare.go docker.go parser.go
-./compare-tool -url1 <url1> -url2 <url2> -data request.json
+go build -o compare cmd/compare/main.go
+./compare -url1 <url1> -url2 <url2> -data request.json
 ```
 
 ## Flags
