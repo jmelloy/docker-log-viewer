@@ -41,6 +41,13 @@ type RequestResult struct {
 	Error       error
 }
 
+type MultiRunResult struct {
+	URL           string
+	Runs          []*RequestResult
+	AvgDuration   time.Duration
+	QueryAnalysis *MultiRunQueryAnalysis
+}
+
 type SQLQuery struct {
 	Query      string
 	Duration   float64
@@ -102,6 +109,22 @@ type QueryGroup struct {
 	AvgDuration float64
 }
 
+type MultiRunQueryAnalysis struct {
+	// Query matching across runs
+	MatchedQueries    []MatchedQuery
+	ConsistencyScore  float64  // 0-100, how consistent queries are across runs
+	AvgQueryCount     float64
+	QueryCountStdDev  float64
+}
+
+type MatchedQuery struct {
+	NormalizedQuery string
+	Occurrences     []int      // Count per run
+	AvgDurations    []float64  // Avg duration per run
+	Example         SQLQuery
+	IsConsistent    bool       // Same count in all runs
+}
+
 func main() {
 	config := parseFlags()
 
@@ -159,19 +182,19 @@ func runComparison(config CompareConfig) error {
 		}
 	}
 
-	// Test URL1
-	log.Printf("Testing URL1: %s", config.URL1)
-	result1 := testURL(config.URL1, data, logChan, config.Timeout, &config)
+	// Test URL1 multiple times
+	log.Printf("Testing URL1: %s (5 runs)", config.URL1)
+	multiResult1 := testURLMultipleTimes(config.URL1, data, logChan, config.Timeout, &config, 5)
 
-	// Wait a bit between requests
+	// Wait a bit between endpoint tests
 	time.Sleep(2 * time.Second)
 
-	// Test URL2
-	log.Printf("Testing URL2: %s", config.URL2)
-	result2 := testURL(config.URL2, data, logChan, config.Timeout, &config)
+	// Test URL2 multiple times
+	log.Printf("Testing URL2: %s (5 runs)", config.URL2)
+	multiResult2 := testURLMultipleTimes(config.URL2, data, logChan, config.Timeout, &config, 5)
 
 	// Generate HTML report
-	if err := generateHTML(config.Output, result1, result2, string(data)); err != nil {
+	if err := generateHTMLMultiRun(config.Output, multiResult1, multiResult2, string(data)); err != nil {
 		return fmt.Errorf("failed to generate HTML: %w", err)
 	}
 
@@ -183,6 +206,32 @@ func generateRequestID() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+func testURLMultipleTimes(url string, data []byte, logChan <-chan logs.LogMessage, timeout time.Duration, config *CompareConfig, numRuns int) *MultiRunResult {
+	result := &MultiRunResult{
+		URL:  url,
+		Runs: make([]*RequestResult, 0, numRuns),
+	}
+
+	var totalDuration time.Duration
+
+	for i := 0; i < numRuns; i++ {
+		log.Printf("  Run %d/%d for %s", i+1, numRuns, url)
+		run := testURL(url, data, logChan, timeout, config)
+		result.Runs = append(result.Runs, run)
+		totalDuration += run.Duration
+
+		// Small delay between runs
+		if i < numRuns-1 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	result.AvgDuration = totalDuration / time.Duration(numRuns)
+	result.QueryAnalysis = analyzeMultiRunQueries(result.Runs)
+
+	return result
 }
 
 func testURL(url string, data []byte, logChan <-chan logs.LogMessage, timeout time.Duration, config *CompareConfig) *RequestResult {
@@ -426,6 +475,118 @@ func normalizeQuery(query string) string {
 	// Normalize whitespace
 	normalized = regexp.MustCompile(`\s+`).ReplaceAllString(normalized, " ")
 	return strings.TrimSpace(normalized)
+}
+
+func analyzeMultiRunQueries(runs []*RequestResult) *MultiRunQueryAnalysis {
+	if len(runs) == 0 {
+		return &MultiRunQueryAnalysis{}
+	}
+
+	// Group queries across all runs by normalized form
+	queryMap := make(map[string]*MatchedQuery)
+	var totalQueryCount int
+
+	for runIdx, run := range runs {
+		if run.SQLAnalysis == nil {
+			continue
+		}
+
+		totalQueryCount += run.SQLAnalysis.TotalQueries
+
+		// Track each query in this run
+		runQueries := make(map[string][]SQLQuery)
+		for _, q := range run.SQLAnalysis.AllQueries {
+			runQueries[q.Normalized] = append(runQueries[q.Normalized], q)
+		}
+
+		// Update matched queries
+		for norm, queries := range runQueries {
+			if _, exists := queryMap[norm]; !exists {
+				queryMap[norm] = &MatchedQuery{
+					NormalizedQuery: norm,
+					Occurrences:     make([]int, len(runs)),
+					AvgDurations:    make([]float64, len(runs)),
+					Example:         queries[0],
+				}
+			}
+
+			mq := queryMap[norm]
+			mq.Occurrences[runIdx] = len(queries)
+
+			// Calculate average duration for this query in this run
+			var totalDur float64
+			for _, q := range queries {
+				totalDur += q.Duration
+			}
+			mq.AvgDurations[runIdx] = totalDur / float64(len(queries))
+		}
+	}
+
+	// Convert map to slice and check consistency
+	matchedQueries := make([]MatchedQuery, 0, len(queryMap))
+	var consistentCount int
+
+	for _, mq := range queryMap {
+		// Check if query count is consistent across runs
+		firstCount := -1
+		isConsistent := true
+		for _, count := range mq.Occurrences {
+			if count > 0 {
+				if firstCount == -1 {
+					firstCount = count
+				} else if count != firstCount {
+					isConsistent = false
+					break
+				}
+			}
+		}
+		mq.IsConsistent = isConsistent
+		if isConsistent {
+			consistentCount++
+		}
+		matchedQueries = append(matchedQueries, *mq)
+	}
+
+	// Sort by total occurrences (most common first)
+	sort.Slice(matchedQueries, func(i, j int) bool {
+		sumI, sumJ := 0, 0
+		for _, c := range matchedQueries[i].Occurrences {
+			sumI += c
+		}
+		for _, c := range matchedQueries[j].Occurrences {
+			sumJ += c
+		}
+		return sumI > sumJ
+	})
+
+	// Calculate statistics
+	avgQueryCount := float64(totalQueryCount) / float64(len(runs))
+	
+	// Calculate standard deviation
+	var variance float64
+	for _, run := range runs {
+		if run.SQLAnalysis != nil {
+			diff := float64(run.SQLAnalysis.TotalQueries) - avgQueryCount
+			variance += diff * diff
+		}
+	}
+	stdDev := 0.0
+	if len(runs) > 0 {
+		stdDev = variance / float64(len(runs))
+		stdDev = float64(int(stdDev * 100)) / 100 // Round to 2 decimal places
+	}
+
+	consistencyScore := 0.0
+	if len(queryMap) > 0 {
+		consistencyScore = (float64(consistentCount) / float64(len(queryMap))) * 100
+	}
+
+	return &MultiRunQueryAnalysis{
+		MatchedQueries:   matchedQueries,
+		ConsistencyScore: consistencyScore,
+		AvgQueryCount:    avgQueryCount,
+		QueryCountStdDev: stdDev,
+	}
 }
 
 func ansiToHTML(text string) template.HTML {
@@ -779,6 +940,78 @@ func generateHTML(filename string, result1, result2 *RequestResult, postData str
 		PostData:   postData,
 		Generated:  time.Now(),
 		Comparison: comparison,
+	}
+
+	return tmpl.Execute(f, data)
+}
+
+func generateHTMLMultiRun(filename string, result1, result2 *MultiRunResult, postData string) error {
+	// Find template file relative to executable or in common locations
+	templatePath := "comparison-report.tmpl"
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		templatePath = "cmd/compare/comparison-report.tmpl"
+	}
+	
+	tmpl := template.Must(template.New("comparison-report.tmpl").Funcs(template.FuncMap{
+		"escapeHTML": template.HTMLEscapeString,
+		"ansiToHTML": ansiToHTML,
+		"formatDuration": func(d time.Duration) string {
+			return d.Round(time.Millisecond).String()
+		},
+		"formatFloat": func(f float64) string {
+			return fmt.Sprintf("%.2f", f)
+		},
+		"formatPercent": func(f float64) string {
+			if f > 0 {
+				return fmt.Sprintf("+%.1f%%", f)
+			}
+			return fmt.Sprintf("%.1f%%", f)
+		},
+		"shortenQuery": func(q string) string {
+			if len(q) > 100 {
+				return q[:97] + "..."
+			}
+			return q
+		},
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"sum": func(nums []int) int {
+			total := 0
+			for _, n := range nums {
+				total += n
+			}
+			return total
+		},
+		"avg": func(nums []float64) float64 {
+			if len(nums) == 0 {
+				return 0
+			}
+			total := 0.0
+			for _, n := range nums {
+				total += n
+			}
+			return total / float64(len(nums))
+		},
+		"formatSQL": formatAndHighlightSQL,
+	}).ParseFiles(templatePath))
+
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	data := struct {
+		Result1   *MultiRunResult
+		Result2   *MultiRunResult
+		PostData  string
+		Generated time.Time
+	}{
+		Result1:   result1,
+		Result2:   result2,
+		PostData:  postData,
+		Generated: time.Now(),
 	}
 
 	return tmpl.Execute(f, data)
