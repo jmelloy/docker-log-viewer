@@ -10,7 +10,7 @@ echo ""
 # Check if compare-tool exists
 if [ ! -f "./compare-tool" ]; then
     echo "Building compare-tool..."
-    go build -o compare-tool ./cmd/compare-tool
+    go build -o compare-tool compare.go docker.go parser.go
     if [ $? -ne 0 ]; then
         echo "Failed to build compare-tool"
         exit 1
