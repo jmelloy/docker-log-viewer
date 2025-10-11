@@ -76,9 +76,11 @@ class DockerLogParser {
       this.closeModal();
     });
 
-    document.getElementById("closeExplainModal").addEventListener("click", () => {
-      this.closeExplainModal();
-    });
+    document
+      .getElementById("closeExplainModal")
+      .addEventListener("click", () => {
+        this.closeExplainModal();
+      });
 
     document.getElementById("logModal").addEventListener("click", (e) => {
       if (e.target.id === "logModal") {
@@ -395,7 +397,9 @@ class DockerLogParser {
 
     const parts = [];
 
-    const containerName = this.containers.find(c => c.ID === log.containerId)?.Name || log.containerId;
+    const containerName =
+      this.containers.find((c) => c.ID === log.containerId)?.Name ||
+      log.containerId;
     parts.push(`<span class="log-container">${containerName}</span>`);
 
     if (log.entry?.timestamp) {
@@ -510,14 +514,15 @@ class DockerLogParser {
           const table = log.entry?.fields?.["db.table"] || "unknown";
           const operation = log.entry?.fields?.["db.operation"] || "unknown";
           const rows = parseInt(log.entry?.fields?.["db.rows"] || 0);
-          
+
           // Extract variables from db.vars field if present
           let variables = {};
           const dbVars = log.entry?.fields?.["db.vars"];
           if (dbVars) {
             try {
               // db.vars can be a JSON array or string
-              const varsArray = typeof dbVars === 'string' ? JSON.parse(dbVars) : dbVars;
+              const varsArray =
+                typeof dbVars === "string" ? JSON.parse(dbVars) : dbVars;
               if (Array.isArray(varsArray)) {
                 // Convert array to indexed map: {"1": value1, "2": value2, ...}
                 varsArray.forEach((val, idx) => {
@@ -525,7 +530,7 @@ class DockerLogParser {
                 });
               }
             } catch (e) {
-              console.warn('Failed to parse db.vars:', dbVars, e);
+              console.warn("Failed to parse db.vars:", dbVars, e);
             }
           }
 
@@ -612,7 +617,11 @@ class DockerLogParser {
                     <span>Rows: ${q.rows}</span>
                 </div>
                 <div class="query-actions">
-                    <button class="btn-explain" data-query="${this.escapeHtml(q.query)}" data-variables="${this.escapeHtml(JSON.stringify(q.variables || {}))}">Run EXPLAIN</button>
+                    <button class="btn-explain" data-query="${encodeURIComponent(
+                      q.query
+                    )}" data-variables="${encodeURIComponent(
+          JSON.stringify(q.variables || {})
+        )}">Run EXPLAIN</button>
                 </div>
             </div>
         `
@@ -620,16 +629,18 @@ class DockerLogParser {
       .join("");
 
     // Add event listeners to EXPLAIN buttons
-    document.querySelectorAll('.btn-explain').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    document.querySelectorAll(".btn-explain").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const query = btn.getAttribute('data-query');
-        const variablesStr = btn.getAttribute('data-variables');
+        const query = decodeURIComponent(btn.getAttribute("data-query"));
+        const variablesStr = decodeURIComponent(
+          btn.getAttribute("data-variables")
+        );
         let variables = {};
         try {
-          variables = JSON.parse(variablesStr || '{}');
+          variables = JSON.parse(variablesStr || "{}");
         } catch (e) {
-          console.warn('Failed to parse variables:', variablesStr);
+          console.warn("Failed to parse variables:", variablesStr);
         }
         this.runExplain(query, variables);
       });
@@ -664,7 +675,11 @@ class DockerLogParser {
                     <span>Op: ${item.example.operation}</span>
                 </div>
                 <div class="query-actions">
-                    <button class="btn-explain" data-query="${this.escapeHtml(item.example.query)}" data-variables="${this.escapeHtml(JSON.stringify(item.example.variables || {}))}">Run EXPLAIN</button>
+                    <button class="btn-explain" data-query="${encodeURIComponent(
+                      item.example.query
+                    )}" data-variables="${encodeURIComponent(
+          JSON.stringify(item.example.variables || {})
+        )}">Run EXPLAIN</button>
                 </div>
             </div>
         `
@@ -672,21 +687,24 @@ class DockerLogParser {
       .join("");
 
     // Add event listeners to frequent queries EXPLAIN buttons
-    document.querySelectorAll('#frequentQueries .btn-explain').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const query = btn.getAttribute('data-query');
-        const variablesStr = btn.getAttribute('data-variables');
-        let variables = {};
-        try {
-          variables = JSON.parse(variablesStr || '{}');
-        } catch (e) {
-          console.warn('Failed to parse variables:', variablesStr);
-        }
-        this.runExplain(query, variables);
+    document
+      .querySelectorAll("#frequentQueries .btn-explain")
+      .forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const query = decodeURIComponent(btn.getAttribute("data-query"));
+          const variablesStr = decodeURIComponent(
+            btn.getAttribute("data-variables")
+          );
+          let variables = {};
+          try {
+            variables = JSON.parse(variablesStr || "{}");
+          } catch (e) {
+            console.warn("Failed to parse variables:", variablesStr);
+          }
+          this.runExplain(query, variables);
+        });
       });
-    });
-    });
 
     const nPlusOne = sortedByFrequency.filter((item) => item.count > 5);
     if (nPlusOne.length > 0) {
@@ -877,16 +895,19 @@ class DockerLogParser {
   }
 
   async runExplain(query, variables = {}) {
+    // Fix unquoted values before sending
     try {
-      const response = await fetch('/api/explain', {
-        method: 'POST',
+      const payload = {
+        query: query,
+        variables: variables,
+      };
+
+      const response = await fetch("/api/explain", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          query: query,
-          variables: variables
-        })
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();
@@ -894,23 +915,74 @@ class DockerLogParser {
     } catch (error) {
       this.showExplainResult({
         error: `Failed to run EXPLAIN: ${error.message}`,
-        query: query
+        query: query,
       });
     }
   }
 
+  formatSQL(sql) {
+    let depth = 0;
+    return sql
+      .replace(/\bSELECT\b/g, "\nSELECT")
+      .replace(/\bFROM\b/g, "\nFROM")
+      .replace(/\bWHERE\b/g, "\nWHERE")
+      .replace(/\bAND\b/g, "\nAND")
+      .replace(/\bLEFT JOIN\b/g, "\nLEFT JOIN")
+      .replace(/\bGROUP BY\b/g, "\nGROUP BY")
+      .replace(/\(/g, "\n(\n")
+      .replace(/\)/g, "\n)\n")
+      .split("\n")
+      .map((line) => {
+        line = line.trim();
+        if (line === ")") depth--;
+        const indent = "  ".repeat(depth);
+        if (line === "(") depth++;
+        return indent + line;
+      })
+      .join("\n")
+      .replace(/\n\s*\n/g, "\n")
+      .trim();
+  }
+
+  highlightSQL(sql) {
+    const keywords =
+      /\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AND|OR|NOT|IN|EXISTS|LIKE|IS|NULL|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|SET|VALUES|INTO|DISTINCT|UNION|CASE|WHEN|THEN|ELSE|END)\b/gi;
+    const strings = /(\'[^\']*\')/g;
+    const numbers = /\b(\d+(\.\d+)?)\b/g;
+
+    let highlighted = this.escapeHtml(sql);
+    highlighted = highlighted.replace(
+      keywords,
+      '<span class="sql-keyword">$1</span>'
+    );
+    highlighted = highlighted.replace(
+      strings,
+      '<span class="sql-string">$1</span>'
+    );
+    highlighted = highlighted.replace(
+      numbers,
+      '<span class="sql-number">$1</span>'
+    );
+
+    return highlighted;
+  }
+
   showExplainResult(result) {
-    document.getElementById('explainQuery').textContent = result.query;
-    
-    const planEl = document.getElementById('explainPlan');
-    
+    document.getElementById("explainQuery").innerHTML = this.highlightSQL(
+      this.formatSQL(result.query)
+    );
+
+    const planEl = document.getElementById("explainPlan");
+
     if (result.error) {
-      planEl.innerHTML = `<div class="explain-error">${this.escapeHtml(result.error)}</div>`;
+      planEl.innerHTML = `<div class="explain-error">${this.escapeHtml(
+        result.error
+      )}</div>`;
     } else {
       planEl.innerHTML = this.formatExplainPlan(result.queryPlan);
     }
-    
-    document.getElementById('explainModal').classList.remove('hidden');
+
+    document.getElementById("explainModal").classList.remove("hidden");
   }
 
   formatExplainPlan(plan) {
@@ -919,42 +991,50 @@ class DockerLogParser {
     }
 
     const formatNode = (node, level = 0) => {
-      if (!node) return '';
+      if (!node) return "";
 
-      let html = '<div class="explain-node" style="margin-left: ' + (level * 1.5) + 'rem">';
-      
+      let html =
+        '<div class="explain-node" style="margin-left: ' +
+        level * 1.5 +
+        'rem">';
+
       // Node Type
-      if (node['Node Type']) {
-        html += `<div><span class="explain-node-type">${node['Node Type']}</span>`;
-        
+      if (node["Node Type"]) {
+        html += `<div><span class="explain-node-type">${node["Node Type"]}</span>`;
+
         // Cost and rows
-        if (node['Total Cost']) {
-          html += `<span class="explain-cost">cost=${node['Startup Cost']?.toFixed(2) || 0}..${node['Total Cost'].toFixed(2)}</span>`;
+        if (node["Total Cost"]) {
+          html += `<span class="explain-cost">cost=${
+            node["Startup Cost"]?.toFixed(2) || 0
+          }..${node["Total Cost"].toFixed(2)}</span>`;
         }
-        if (node['Plan Rows']) {
-          html += `<span class="explain-rows">rows=${node['Plan Rows']}</span>`;
+        if (node["Plan Rows"]) {
+          html += `<span class="explain-rows">rows=${node["Plan Rows"]}</span>`;
         }
-        html += '</div>';
+        html += "</div>";
       }
 
       // Additional details
       const details = [];
-      if (node['Relation Name']) details.push(`Table: ${node['Relation Name']}`);
-      if (node['Index Name']) details.push(`Index: ${node['Index Name']}`);
-      if (node['Index Cond']) details.push(`Index Cond: ${node['Index Cond']}`);
-      if (node['Filter']) details.push(`Filter: ${node['Filter']}`);
-      if (node['Join Type']) details.push(`Join Type: ${node['Join Type']}`);
-      if (node['Hash Cond']) details.push(`Hash Cond: ${node['Hash Cond']}`);
-      
+      if (node["Relation Name"])
+        details.push(`Table: ${node["Relation Name"]}`);
+      if (node["Index Name"]) details.push(`Index: ${node["Index Name"]}`);
+      if (node["Index Cond"]) details.push(`Index Cond: ${node["Index Cond"]}`);
+      if (node["Filter"]) details.push(`Filter: ${node["Filter"]}`);
+      if (node["Join Type"]) details.push(`Join Type: ${node["Join Type"]}`);
+      if (node["Hash Cond"]) details.push(`Hash Cond: ${node["Hash Cond"]}`);
+
       if (details.length > 0) {
-        html += `<div class="explain-details">${this.escapeHtml(details.join(' | '))}</div>`;
+        html += `<div class="explain-details">${this.escapeHtml(
+          details.join(" | ")
+        )}</div>`;
       }
 
-      html += '</div>';
+      html += "</div>";
 
       // Process child plans
       if (node.Plans && node.Plans.length > 0) {
-        node.Plans.forEach(childPlan => {
+        node.Plans.forEach((childPlan) => {
           html += formatNode(childPlan, level + 1);
         });
       }
@@ -962,8 +1042,8 @@ class DockerLogParser {
       return html;
     };
 
-    let html = '';
-    plan.forEach(p => {
+    let html = "";
+    plan.forEach((p) => {
       if (p.Plan) {
         html += formatNode(p.Plan);
       }
@@ -973,7 +1053,7 @@ class DockerLogParser {
   }
 
   closeExplainModal() {
-    document.getElementById('explainModal').classList.add('hidden');
+    document.getElementById("explainModal").classList.add("hidden");
   }
 
   scrollToBottom() {

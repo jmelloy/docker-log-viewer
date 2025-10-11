@@ -53,21 +53,19 @@ func InitDB() error {
 func substituteVariables(query string, variables map[string]string) string {
 	// Match $1, $2, $3, etc.
 	re := regexp.MustCompile(`\$(\d+)`)
-	
+
 	result := re.ReplaceAllStringFunc(query, func(match string) string {
 		// Extract the number
 		num := match[1:]
 		if val, ok := variables[num]; ok {
-			// Quote string values if they're not already numbers
-			if _, err := fmt.Sscanf(val, "%f", new(float64)); err != nil {
-				// Not a number, quote it
-				return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
+			if regexp.MustCompile(`^\d+(\.\d+)?$`).MatchString(val) {
+				return val
 			}
-			return val
+			return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
 		}
 		return match
 	})
-	
+
 	return result
 }
 
@@ -83,17 +81,36 @@ func ExplainQuery(req ExplainRequest) ExplainResponse {
 	}
 
 	query := req.Query
-	
-	// Substitute variables if provided
+	displayQuery := query
+
+	// If we have variables, show substituted query for display
 	if len(req.Variables) > 0 {
-		query = substituteVariables(query, req.Variables)
-		resp.Query = query
+		displayQuery = substituteVariables(query, req.Variables)
 	}
+	resp.Query = displayQuery
 
 	// Run EXPLAIN ANALYZE (FORMAT JSON)
 	explainQuery := fmt.Sprintf("EXPLAIN (ANALYZE, FORMAT JSON) %s", query)
-	
-	rows, err := db.Query(explainQuery)
+
+	var rows *sql.Rows
+	var err error
+
+	// If we have variables, use them as bind parameters
+	if len(req.Variables) > 0 {
+		// Convert variables map to ordered slice based on $1, $2, $3...
+		args := make([]interface{}, 0)
+		for i := 1; ; i++ {
+			val, ok := req.Variables[fmt.Sprintf("%d", i)]
+			if !ok {
+				break
+			}
+			args = append(args, val)
+		}
+		rows, err = db.Query(explainQuery, args...)
+	} else {
+		rows, err = db.Query(explainQuery)
+	}
+
 	if err != nil {
 		resp.Error = fmt.Sprintf("Error running EXPLAIN: %v", err)
 		return resp
