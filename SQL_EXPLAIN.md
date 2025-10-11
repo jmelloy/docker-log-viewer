@@ -54,11 +54,11 @@ The EXPLAIN modal shows:
 
 ### Variable Substitution
 
-The tool automatically substitutes PostgreSQL placeholders ($1, $2, etc.) with actual values when available. Currently, it extracts these from the query context, but you can extend this to use the `db.vars` field if your logs include it.
+The tool automatically substitutes PostgreSQL placeholders ($1, $2, etc.) with actual values from the `db.vars` field in your logs. If a log entry includes `db.vars=["value1", "value2"]`, these values will be used to replace $1, $2, etc. in the query before running EXPLAIN.
 
 ## Features
 
-- **Safe EXPLAIN**: Uses `EXPLAIN (FORMAT JSON)` without `ANALYZE` to avoid executing the query
+- **EXPLAIN ANALYZE**: Uses `EXPLAIN (ANALYZE, FORMAT JSON)` to get actual execution metrics including real timing data
 - **Visual Plan**: Hierarchical display of the query execution plan
 - **Cost Analysis**: Shows startup and total cost estimates
 - **Row Estimates**: Displays expected row counts at each node
@@ -74,7 +74,7 @@ db.operation=select db.rows=1 db.table=users duration=1.23
 
 Clicking "Run EXPLAIN" will:
 1. Connect to the database
-2. Run `EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE id = $1 AND active = $2`
+2. Run `EXPLAIN (ANALYZE, FORMAT JSON) SELECT * FROM users WHERE id = $1 AND active = $2`
 3. Display the execution plan with cost and row estimates
 
 ## Troubleshooting
@@ -94,27 +94,6 @@ Clicking "Run EXPLAIN" will:
 - Check the application logs for detailed error messages
 
 ## Development
-
-### Adding db.vars Support
-
-To extract variables from `db.vars` field in logs, update `extractSQLQueries` in `web/app.js`:
-
-```javascript
-const dbVars = log.entry?.fields?.['db.vars'];
-if (dbVars) {
-  queries.push({
-    query,
-    duration,
-    table,
-    operation,
-    rows,
-    variables: JSON.parse(dbVars), // Parse db.vars
-    normalized: this.normalizeQuery(query),
-  });
-}
-```
-
-Then pass these to the EXPLAIN endpoint in the `runExplain` method.
 
 ### Testing
 

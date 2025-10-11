@@ -510,6 +510,24 @@ class DockerLogParser {
           const table = log.entry?.fields?.["db.table"] || "unknown";
           const operation = log.entry?.fields?.["db.operation"] || "unknown";
           const rows = parseInt(log.entry?.fields?.["db.rows"] || 0);
+          
+          // Extract variables from db.vars field if present
+          let variables = {};
+          const dbVars = log.entry?.fields?.["db.vars"];
+          if (dbVars) {
+            try {
+              // db.vars can be a JSON array or string
+              const varsArray = typeof dbVars === 'string' ? JSON.parse(dbVars) : dbVars;
+              if (Array.isArray(varsArray)) {
+                // Convert array to indexed map: {"1": value1, "2": value2, ...}
+                varsArray.forEach((val, idx) => {
+                  variables[String(idx + 1)] = String(val);
+                });
+              }
+            } catch (e) {
+              console.warn('Failed to parse db.vars:', dbVars, e);
+            }
+          }
 
           queries.push({
             query,
@@ -517,6 +535,7 @@ class DockerLogParser {
             table,
             operation,
             rows,
+            variables,
             normalized: this.normalizeQuery(query),
           });
         }
@@ -593,7 +612,7 @@ class DockerLogParser {
                     <span>Rows: ${q.rows}</span>
                 </div>
                 <div class="query-actions">
-                    <button class="btn-explain" data-query="${this.escapeHtml(q.query)}">Run EXPLAIN</button>
+                    <button class="btn-explain" data-query="${this.escapeHtml(q.query)}" data-variables="${this.escapeHtml(JSON.stringify(q.variables || {}))}">Run EXPLAIN</button>
                 </div>
             </div>
         `
@@ -605,7 +624,14 @@ class DockerLogParser {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const query = btn.getAttribute('data-query');
-        this.runExplain(query);
+        const variablesStr = btn.getAttribute('data-variables');
+        let variables = {};
+        try {
+          variables = JSON.parse(variablesStr || '{}');
+        } catch (e) {
+          console.warn('Failed to parse variables:', variablesStr);
+        }
+        this.runExplain(query, variables);
       });
     });
 
@@ -638,7 +664,7 @@ class DockerLogParser {
                     <span>Op: ${item.example.operation}</span>
                 </div>
                 <div class="query-actions">
-                    <button class="btn-explain" data-query="${this.escapeHtml(item.example.query)}">Run EXPLAIN</button>
+                    <button class="btn-explain" data-query="${this.escapeHtml(item.example.query)}" data-variables="${this.escapeHtml(JSON.stringify(item.example.variables || {}))}">Run EXPLAIN</button>
                 </div>
             </div>
         `
@@ -650,8 +676,16 @@ class DockerLogParser {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const query = btn.getAttribute('data-query');
-        this.runExplain(query);
+        const variablesStr = btn.getAttribute('data-variables');
+        let variables = {};
+        try {
+          variables = JSON.parse(variablesStr || '{}');
+        } catch (e) {
+          console.warn('Failed to parse variables:', variablesStr);
+        }
+        this.runExplain(query, variables);
       });
+    });
     });
 
     const nPlusOne = sortedByFrequency.filter((item) => item.count > 5);
@@ -842,7 +876,7 @@ class DockerLogParser {
     document.getElementById("logModal").classList.add("hidden");
   }
 
-  async runExplain(query) {
+  async runExplain(query, variables = {}) {
     try {
       const response = await fetch('/api/explain', {
         method: 'POST',
@@ -851,7 +885,7 @@ class DockerLogParser {
         },
         body: JSON.stringify({
           query: query,
-          variables: {}
+          variables: variables
         })
       });
 

@@ -18,7 +18,7 @@ Implemented a comprehensive SQL EXPLAIN feature that:
 ```
 sql_explain.go
 ├── InitDB()              - Initializes PostgreSQL connection
-├── ExplainQuery()        - Executes EXPLAIN (FORMAT JSON)
+├── ExplainQuery()        - Executes EXPLAIN (ANALYZE, FORMAT JSON)
 ├── substituteVariables() - Replaces $1, $2, etc. with values
 └── CloseDB()             - Cleanup
 ```
@@ -53,14 +53,15 @@ index.html
 - Connection pooling via database/sql
 
 ### 2. Variable Substitution
-- Automatically replaces PostgreSQL placeholders ($1, $2, etc.)
+- Automatically extracts variables from `db.vars` field in logs
+- Replaces PostgreSQL placeholders ($1, $2, etc.) with actual values
 - Proper escaping for SQL injection prevention
 - Handles both numeric and string values
 
 ### 3. EXPLAIN Execution
-- Uses `EXPLAIN (FORMAT JSON)` for structured output
-- Does NOT use ANALYZE to prevent query execution
-- Safe for production databases
+- Uses `EXPLAIN (ANALYZE, FORMAT JSON)` for actual execution metrics
+- Provides real timing data and actual row counts
+- Returns structured output for easy parsing
 
 ### 4. Result Display
 - Hierarchical execution plan tree
@@ -136,7 +137,7 @@ host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode
 
 ## Security Measures
 
-1. **No Query Execution**: Uses EXPLAIN without ANALYZE
+1. **Query Execution with Metrics**: Uses EXPLAIN ANALYZE to get actual execution metrics
 2. **SQL Injection Prevention**: Proper variable escaping
 3. **Credential Security**: Environment variables only
 4. **Read-Only Support**: Works with read-only database users
@@ -153,27 +154,18 @@ host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode
 
 While the current implementation satisfies the requirements, potential improvements include:
 
-1. **db.vars Support**: Extract variables from log field
-   - Currently: Manual variable substitution
-   - Future: Automatic extraction from `db.vars` field
-
-2. **Comparison Tool**: Side-by-side EXPLAIN comparison
+1. **Comparison Tool**: Side-by-side EXPLAIN comparison
    - Compare before/after optimization
    - Track performance over time
 
-3. **Export Results**: Save EXPLAIN plans
+2. **Export Results**: Save EXPLAIN plans
    - JSON export
    - CSV format
    - PDF reports
 
-4. **Multi-Database Support**: MySQL, SQLite, etc.
+3. **Multi-Database Support**: MySQL, SQLite, etc.
    - Different EXPLAIN formats
    - Database-specific optimizations
-
-5. **EXPLAIN ANALYZE**: Optional query execution
-   - Actual vs. estimated costs
-   - Real timing data
-   - User confirmation required
 
 ## Metrics
 
@@ -213,8 +205,8 @@ Comprehensive documentation provided:
 The SQL EXPLAIN tool successfully implements the requested functionality:
 
 ✅ Takes SQL statements from logs
-✅ Runs EXPLAIN plans on them
-✅ Supports variable substitution
+✅ Runs EXPLAIN ANALYZE plans on them
+✅ Supports variable extraction from db.vars field
 ✅ Uses PostgreSQL library (lib/pq)
 ✅ Provides analysis and visualization
 ✅ Includes comparison capability (via UI display)
