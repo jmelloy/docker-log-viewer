@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"docker-log-parser/pkg/logs"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -19,6 +20,9 @@ import (
 	"strings"
 	"time"
 )
+
+//go:embed comparison-report.tmpl
+var templateFS embed.FS
 
 type CompareConfig struct {
 	URL1        string
@@ -726,12 +730,6 @@ func computeQueryDiff(q1, q2 string) ([]string, []string, []string) {
 }
 
 func generateHTML(filename string, result1, result2 *RequestResult, postData string) error {
-	// Find template file relative to executable or in common locations
-	templatePath := "comparison-report.tmpl"
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		templatePath = "cmd/compare/comparison-report.tmpl"
-	}
-	
 	comparison := compareQuerySequences(result1, result2)
 	
 	tmpl := template.Must(template.New("comparison-report.tmpl").Funcs(template.FuncMap{
@@ -759,7 +757,7 @@ func generateHTML(filename string, result1, result2 *RequestResult, postData str
 			return a + b
 		},
 		"formatSQL": formatAndHighlightSQL,
-	}).ParseFiles(templatePath))
+	}).ParseFS(templateFS, "comparison-report.tmpl"))
 
 	f, err := os.Create(filename)
 	if err != nil {
