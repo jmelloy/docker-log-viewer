@@ -207,12 +207,373 @@
             white-space: pre;
             overflow-x: auto;
         }
+        .diff-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+        }
+        .diff-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .diff-item {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.75rem;
+        }
+        .diff-item.same {
+            grid-column: 1 / -1;
+            background: #0d1117;
+        }
+        .diff-item.added {
+            border-left: 3px solid #3fb950;
+        }
+        .diff-item.removed {
+            border-left: 3px solid #f85149;
+        }
+        .diff-label {
+            font-size: 0.7rem;
+            color: #8b949e;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .diff-highlight {
+            background: #1f6feb33;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        .diff-added {
+            background: #3fb95033;
+            color: #7ee787;
+        }
+        .diff-removed {
+            background: #f8514933;
+            color: #ff7b72;
+        }
+        .perf-section {
+            margin: 20px 0;
+        }
+        .perf-item {
+            display: grid;
+            grid-template-columns: 80px 80px 100px 80px 1fr;
+            gap: 10px;
+            padding: 10px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+        .perf-improvement {
+            border-left: 3px solid #3fb950;
+        }
+        .perf-regression {
+            border-left: 3px solid #f85149;
+        }
+        .perf-duration {
+            font-family: monospace;
+            font-size: 0.75rem;
+        }
+        .perf-change {
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        .perf-change.positive {
+            color: #3fb950;
+        }
+        .perf-change.negative {
+            color: #f85149;
+        }
+        .perf-query {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #8b949e;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .compact-query {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #c9d1d9;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: pointer;
+            padding: 6px 8px;
+            background: #0d1117;
+            border-radius: 3px;
+            position: relative;
+        }
+        .compact-query:hover {
+            overflow: visible;
+            z-index: 10;
+        }
+        .compact-query:hover .query-popup {
+            display: block;
+        }
+        .query-popup {
+            display: none;
+            position: fixed;
+            background: #161b22;
+            border: 1px solid #58a6ff;
+            border-radius: 4px;
+            padding: 12px;
+            white-space: pre;
+            z-index: 1000;
+            max-height: 80vh;
+            width: auto;
+            min-width: 500px;
+            max-width: 90vw;
+            overflow: auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .summary-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+        }
+        .summary-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #58a6ff;
+            margin: 10px 0;
+        }
+        .summary-value.improvement {
+            color: #3fb950;
+        }
+        .summary-value.regression {
+            color: #f85149;
+        }
+        .summary-label {
+            font-size: 0.8rem;
+            color: #8b949e;
+            text-transform: uppercase;
+        }
+        .sql-keyword {
+            color: #ff7b72;
+            font-weight: bold;
+        }
+        .sql-string {
+            color: #a5d6ff;
+        }
+        .sql-number {
+            color: #79c0ff;
+        }
+        .formatted-sql {
+            white-space: pre;
+            font-family: monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>URL Comparison Report</h1>
         <div class="timestamp">Generated: {{.Generated.Format "2006-01-02 15:04:05 MST"}}</div>
+        
+        <!-- Comparison Summary -->
+        {{if .Comparison}}
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-label">Performance Improvements</div>
+                <div class="summary-value improvement">{{len .Comparison.PerfImprovements}}</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Performance Regressions</div>
+                <div class="summary-value regression">{{len .Comparison.PerfRegressions}}</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Queries Only in URL1</div>
+                <div class="summary-value">{{len .Comparison.QueriesOnlyIn1}}</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Queries Only in URL2</div>
+                <div class="summary-value">{{len .Comparison.QueriesOnlyIn2}}</div>
+            </div>
+        </div>
+        
+        <!-- Performance Improvements -->
+        {{if .Comparison.PerfImprovements}}
+        <div class="diff-section">
+            <h2>🚀 Performance Improvements</h2>
+            <div style="display: grid; grid-template-columns: 80px 80px 100px 80px 1fr; gap: 10px; padding: 10px; font-size: 0.75rem; color: #8b949e; border-bottom: 1px solid #30363d;">
+                <div>URL1 Time</div>
+                <div>URL2 Time</div>
+                <div>Change</div>
+                <div>Rows</div>
+                <div>Query ({{.Table}} • {{.Operation}})</div>
+            </div>
+            <div class="perf-section">
+                {{range .Comparison.PerfImprovements}}
+                <div class="perf-item perf-improvement">
+                    <div class="perf-duration">{{formatFloat .Duration1}}ms</div>
+                    <div class="perf-duration">{{formatFloat .Duration2}}ms</div>
+                    <div class="perf-change positive">{{formatPercent .DiffPercent}}</div>
+                    <div class="perf-duration" style="color: #8b949e;">{{.Rows1}} → {{.Rows2}}</div>
+                    <div class="compact-query">
+                        <span style="color: #8b949e; font-size: 0.7rem;">{{.Table}} • {{.Operation}} • {{.Count1}}x → {{.Count2}}x</span><br>
+                        {{shortenQuery .Query}}
+                        <div class="query-popup">
+                            <div class="formatted-sql">{{formatSQL .Query}}</div>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+        
+        <!-- Performance Regressions -->
+        {{if .Comparison.PerfRegressions}}
+        <div class="diff-section">
+            <h2>⚠️ Performance Regressions</h2>
+            <div style="display: grid; grid-template-columns: 80px 80px 100px 80px 1fr; gap: 10px; padding: 10px; font-size: 0.75rem; color: #8b949e; border-bottom: 1px solid #30363d;">
+                <div>URL1 Time</div>
+                <div>URL2 Time</div>
+                <div>Change</div>
+                <div>Rows</div>
+                <div>Query</div>
+            </div>
+            <div class="perf-section">
+                {{range .Comparison.PerfRegressions}}
+                <div class="perf-item perf-regression">
+                    <div class="perf-duration">{{formatFloat .Duration1}}ms</div>
+                    <div class="perf-duration">{{formatFloat .Duration2}}ms</div>
+                    <div class="perf-change negative">{{formatPercent .DiffPercent}}</div>
+                    <div class="perf-duration" style="color: #8b949e;">{{.Rows1}} → {{.Rows2}}</div>
+                    <div class="compact-query">
+                        <span style="color: #8b949e; font-size: 0.7rem;">{{.Table}} • {{.Operation}} • {{.Count1}}x → {{.Count2}}x</span><br>
+                        {{shortenQuery .Query}}
+                        <div class="query-popup">
+                            <div class="formatted-sql">{{formatSQL .Query}}</div>
+                        </div>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+        
+        <!-- Query Order Comparison -->
+        <div class="diff-section">
+            <h2>Query Execution Order Comparison</h2>
+            <p style="color: #8b949e; font-size: 0.85rem; margin-bottom: 15px;">
+                Queries are shown in execution order. Hover over queries to see full text.
+            </p>
+            <div class="diff-grid">
+                {{range $index, $diff := .Comparison.QueryDiffs}}
+                    {{if $diff.IsSame}}
+                        <div class="diff-item same">
+                            <div class="diff-label">Query {{add $index 1}} (Same)</div>
+                            <div class="compact-query">
+                                {{shortenQuery $diff.Query1}}
+                                <div class="query-popup">
+                                    <div class="formatted-sql">{{formatSQL $diff.Query1}}</div>
+                                </div>
+                            </div>
+                        </div>
+                    {{else}}
+                        {{if $diff.Query1}}
+                        <div class="diff-item removed">
+                            <div class="diff-label">URL1 - Query {{add $index 1}}</div>
+                            <div class="compact-query">
+                                {{shortenQuery $diff.Query1}}
+                                <div class="query-popup">
+                                    <div class="formatted-sql">{{formatSQL $diff.Query1}}</div>
+                                </div>
+                            </div>
+                            {{if $diff.Removed}}
+                            <div style="margin-top: 8px; font-size: 0.7rem;">
+                                <span style="color: #8b949e;">Removed:</span>
+                                {{range $diff.Removed}}<span class="diff-removed">{{.}}</span> {{end}}
+                            </div>
+                            {{end}}
+                        </div>
+                        {{end}}
+                        {{if $diff.Query2}}
+                        <div class="diff-item added">
+                            <div class="diff-label">URL2 - Query {{add $index 1}}</div>
+                            <div class="compact-query">
+                                {{shortenQuery $diff.Query2}}
+                                <div class="query-popup">
+                                    <div class="formatted-sql">{{formatSQL $diff.Query2}}</div>
+                                </div>
+                            </div>
+                            {{if $diff.Added}}
+                            <div style="margin-top: 8px; font-size: 0.7rem;">
+                                <span style="color: #8b949e;">Added:</span>
+                                {{range $diff.Added}}<span class="diff-added">{{.}}</span> {{end}}
+                            </div>
+                            {{end}}
+                        </div>
+                        {{end}}
+                    {{end}}
+                {{end}}
+            </div>
+        </div>
+        
+        <!-- Queries Only in URL1 -->
+        {{if .Comparison.QueriesOnlyIn1}}
+        <div class="diff-section">
+            <h2>Queries Only in URL1</h2>
+            {{range .Comparison.QueriesOnlyIn1}}
+            <div class="query-item">
+                <div class="query-header">
+                    <span style="color: #8b949e; font-size: 0.75rem;">{{.Table}} • {{formatFloat .Duration}}ms</span>
+                </div>
+                <div class="compact-query">
+                    {{shortenQuery .Query}}
+                    <div class="query-popup">
+                        <div class="formatted-sql">{{formatSQL .Query}}</div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+        
+        <!-- Queries Only in URL2 -->
+        {{if .Comparison.QueriesOnlyIn2}}
+        <div class="diff-section">
+            <h2>Queries Only in URL2</h2>
+            {{range .Comparison.QueriesOnlyIn2}}
+            <div class="query-item">
+                <div class="query-header">
+                    <span style="color: #8b949e; font-size: 0.75rem;">{{.Table}} • {{formatFloat .Duration}}ms</span>
+                </div>
+                <div class="compact-query">
+                    {{shortenQuery .Query}}
+                    <div class="query-popup">
+                        <div class="formatted-sql">{{formatSQL .Query}}</div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+        {{end}}
         
         <!-- Post Data Section -->
         <div class="post-data-section">
@@ -286,17 +647,18 @@
                 
                 {{if .Result1.SQLAnalysis.SlowestQueries}}
                 <div class="section">
-                    <h4>Slowest Queries</h4>
+                    <h4>Slowest Queries (Top 5)</h4>
                     {{range .Result1.SQLAnalysis.SlowestQueries}}
                     <div class="query-item">
                         <div class="query-header">
                             <span class="query-duration{{if gt .Duration 10.0}} query-slow{{end}}">{{formatFloat .Duration}}ms</span>
+                            <span style="color: #8b949e; font-size: 0.75rem;">{{.Table}} • {{.Operation}} • {{.Rows}} rows</span>
                         </div>
-                        <div class="query-text">{{.Query}}</div>
-                        <div class="query-meta">
-                            <span>Table: {{.Table}}</span>
-                            <span>Op: {{.Operation}}</span>
-                            <span>Rows: {{.Rows}}</span>
+                        <div class="compact-query">
+                            {{shortenQuery .Query}}
+                            <div class="query-popup">
+                                <div class="formatted-sql">{{formatSQL .Query}}</div>
+                            </div>
                         </div>
                     </div>
                     {{end}}
@@ -309,12 +671,13 @@
                     {{range .Result1.SQLAnalysis.NPlusOneIssues}}
                     <div class="query-item">
                         <div class="query-header">
-                            <span class="query-count">{{.Count}}x executions</span>
+                            <span class="query-count">{{.Count}}x executions • {{.Example.Table}}</span>
                         </div>
-                        <div class="query-text">{{.Example.Query}}</div>
-                        <div class="query-meta">
-                            <span>Table: {{.Example.Table}}</span>
-                            <span>Consider batching or eager loading</span>
+                        <div class="compact-query">
+                            {{shortenQuery .Example.Query}}
+                            <div class="query-popup">
+                                <div class="formatted-sql">{{formatSQL .Example.Query}}</div>
+                            </div>
                         </div>
                     </div>
                     {{end}}
@@ -403,17 +766,18 @@
                 
                 {{if .Result2.SQLAnalysis.SlowestQueries}}
                 <div class="section">
-                    <h4>Slowest Queries</h4>
+                    <h4>Slowest Queries (Top 5)</h4>
                     {{range .Result2.SQLAnalysis.SlowestQueries}}
                     <div class="query-item">
                         <div class="query-header">
                             <span class="query-duration{{if gt .Duration 10.0}} query-slow{{end}}">{{formatFloat .Duration}}ms</span>
+                            <span style="color: #8b949e; font-size: 0.75rem;">{{.Table}} • {{.Operation}} • {{.Rows}} rows</span>
                         </div>
-                        <div class="query-text">{{.Query}}</div>
-                        <div class="query-meta">
-                            <span>Table: {{.Table}}</span>
-                            <span>Op: {{.Operation}}</span>
-                            <span>Rows: {{.Rows}}</span>
+                        <div class="compact-query">
+                            {{shortenQuery .Query}}
+                            <div class="query-popup">
+                                <div class="formatted-sql">{{formatSQL .Query}}</div>
+                            </div>
                         </div>
                     </div>
                     {{end}}
@@ -426,12 +790,13 @@
                     {{range .Result2.SQLAnalysis.NPlusOneIssues}}
                     <div class="query-item">
                         <div class="query-header">
-                            <span class="query-count">{{.Count}}x executions</span>
+                            <span class="query-count">{{.Count}}x executions • {{.Example.Table}}</span>
                         </div>
-                        <div class="query-text">{{.Example.Query}}</div>
-                        <div class="query-meta">
-                            <span>Table: {{.Example.Table}}</span>
-                            <span>Consider batching or eager loading</span>
+                        <div class="compact-query">
+                            {{shortenQuery .Example.Query}}
+                            <div class="query-popup">
+                                <div class="formatted-sql">{{formatSQL .Example.Query}}</div>
+                            </div>
                         </div>
                     </div>
                     {{end}}
