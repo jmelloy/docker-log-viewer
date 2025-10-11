@@ -21,11 +21,13 @@ import (
 )
 
 type CompareConfig struct {
-	URL1     string
-	URL2     string
-	DataFile string
-	Output   string
-	Timeout  time.Duration
+	URL1        string
+	URL2        string
+	DataFile    string
+	Output      string
+	Timeout     time.Duration
+	BearerToken string
+	DevID       string
 }
 
 type RequestResult struct {
@@ -33,6 +35,7 @@ type RequestResult struct {
 	RequestID   string
 	Duration    time.Duration
 	StatusCode  int
+	PostData    string
 	Logs        []LogMessage
 	SQLAnalysis *SQLAnalysis
 	Error       error
@@ -81,6 +84,8 @@ func parseFlags() CompareConfig {
 	flag.StringVar(&config.DataFile, "data", "", "GraphQL or JSON data file (required)")
 	flag.StringVar(&config.Output, "output", "comparison.html", "Output HTML file")
 	flag.DurationVar(&config.Timeout, "timeout", 10*time.Second, "Timeout for log collection")
+	flag.StringVar(&config.BearerToken, "token", os.Getenv("BEARER_TOKEN"), "Bearer token for authentication")
+	flag.StringVar(&config.DevID, "dev-id", os.Getenv("X_GLUE_DEV_ID"), "X-Glue-Dev-Id header value")
 	flag.Parse()
 	
 	if config.URL1 == "" || config.URL2 == "" || config.DataFile == "" {
@@ -122,17 +127,17 @@ func runComparison(config CompareConfig) error {
 	
 	// Test URL1
 	log.Printf("Testing URL1: %s", config.URL1)
-	result1 := testURL(config.URL1, data, logChan, config.Timeout)
+	result1 := testURL(config.URL1, data, logChan, config.Timeout, &config)
 	
 	// Wait a bit between requests
 	time.Sleep(2 * time.Second)
 	
 	// Test URL2
 	log.Printf("Testing URL2: %s", config.URL2)
-	result2 := testURL(config.URL2, data, logChan, config.Timeout)
+	result2 := testURL(config.URL2, data, logChan, config.Timeout, &config)
 	
 	// Generate HTML report
-	if err := generateHTML(config.Output, result1, result2); err != nil {
+	if err := generateHTML(config.Output, result1, result2, string(data)); err != nil {
 		return fmt.Errorf("failed to generate HTML: %w", err)
 	}
 	
@@ -140,10 +145,18 @@ func runComparison(config CompareConfig) error {
 	return nil
 }
 
-func testURL(url string, data []byte, logChan <-chan LogMessage, timeout time.Duration) *RequestResult {
+func testURL(url string, data []byte, logChan <-chan LogMessage, timeout time.Duration, config *CompareConfig) *RequestResult {
 	result := &RequestResult{
 		URL:  url,
 		Logs: make([]LogMessage, 0),
+	}
+	
+	// Format the post data nicely
+	var prettyData bytes.Buffer
+	if err := json.Indent(&prettyData, data, "", "  "); err == nil {
+		result.PostData = prettyData.String()
+	} else {
+		result.PostData = string(data)
 	}
 	
 	// Determine content type
@@ -163,6 +176,14 @@ func testURL(url string, data []byte, logChan <-chan LogMessage, timeout time.Du
 	}
 	
 	req.Header.Set("Content-Type", contentType)
+	
+	// Add authentication headers
+	if config.BearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+config.BearerToken)
+	}
+	if config.DevID != "" {
+		req.Header.Set("X-Glue-Dev-Id", config.DevID)
+	}
 	
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -368,7 +389,7 @@ func normalizeQuery(query string) string {
 	return strings.TrimSpace(normalized)
 }
 
-func generateHTML(filename string, result1, result2 *RequestResult) error {
+func generateHTML(filename string, result1, result2 *RequestResult, postData string) error {
 	tmpl := template.Must(template.New("comparison-report.tmpl").Funcs(template.FuncMap{
 		"escapeHTML": template.HTMLEscapeString,
 		"formatDuration": func(d time.Duration) string {
@@ -386,12 +407,14 @@ func generateHTML(filename string, result1, result2 *RequestResult) error {
 	defer f.Close()
 	
 	data := struct {
-		Result1 *RequestResult
-		Result2 *RequestResult
+		Result1   *RequestResult
+		Result2   *RequestResult
+		PostData  string
 		Generated time.Time
 	}{
-		Result1: result1,
-		Result2: result2,
+		Result1:   result1,
+		Result2:   result2,
+		PostData:  postData,
 		Generated: time.Now(),
 	}
 	
