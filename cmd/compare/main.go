@@ -59,6 +59,40 @@ type SQLAnalysis struct {
 	FrequentQueries []QueryGroup
 	NPlusOneIssues  []QueryGroup
 	TablesAccessed  map[string]int
+	AllQueries      []SQLQuery
+}
+
+type QueryDiff struct {
+	Query1       string
+	Query2       string
+	Diff         string
+	Added        []string
+	Removed      []string
+	Changed      []string
+	IsSame       bool
+}
+
+type ComparisonAnalysis struct {
+	QueryDiffs      []QueryDiff
+	QueriesOnlyIn1  []SQLQuery
+	QueriesOnlyIn2  []SQLQuery
+	CommonQueries   []QueryComparison
+	PerfImprovements []QueryComparison
+	PerfRegressions  []QueryComparison
+}
+
+type QueryComparison struct {
+	Query        string
+	Duration1    float64
+	Duration2    float64
+	DiffPercent  float64
+	Improvement  bool
+	Table        string
+	Operation    string
+	Rows1        int
+	Rows2        int
+	Count1       int
+	Count2       int
 }
 
 type QueryGroup struct {
@@ -273,6 +307,7 @@ func analyzeSQLQueries(logs []logs.LogMessage) *SQLAnalysis {
 	analysis := &SQLAnalysis{
 		TotalQueries:   len(queries),
 		TablesAccessed: make(map[string]int),
+		AllQueries:     queries,
 	}
 
 	// Calculate total and average duration
@@ -426,12 +461,278 @@ func ansiToHTML(text string) template.HTML {
 	return template.HTML(result.String())
 }
 
+func formatSQL(sql string) string {
+	depth := 0
+	
+	// Replace major keywords with newlines
+	formatted := sql
+	formatted = regexp.MustCompile(`\bSELECT\b`).ReplaceAllString(formatted, "\nSELECT")
+	formatted = regexp.MustCompile(`\bFROM\b`).ReplaceAllString(formatted, "\nFROM")
+	formatted = regexp.MustCompile(`\bWHERE\b`).ReplaceAllString(formatted, "\nWHERE")
+	formatted = regexp.MustCompile(`\bAND\b`).ReplaceAllString(formatted, "\n  AND")
+	formatted = regexp.MustCompile(`\bOR\b`).ReplaceAllString(formatted, "\n  OR")
+	formatted = regexp.MustCompile(`\bLEFT JOIN\b`).ReplaceAllString(formatted, "\nLEFT JOIN")
+	formatted = regexp.MustCompile(`\bINNER JOIN\b`).ReplaceAllString(formatted, "\nINNER JOIN")
+	formatted = regexp.MustCompile(`\bRIGHT JOIN\b`).ReplaceAllString(formatted, "\nRIGHT JOIN")
+	formatted = regexp.MustCompile(`\bGROUP BY\b`).ReplaceAllString(formatted, "\nGROUP BY")
+	formatted = regexp.MustCompile(`\bORDER BY\b`).ReplaceAllString(formatted, "\nORDER BY")
+	formatted = regexp.MustCompile(`\bLIMIT\b`).ReplaceAllString(formatted, "\nLIMIT")
+	
+	// Handle parentheses
+	formatted = strings.ReplaceAll(formatted, "(", "\n(\n")
+	formatted = strings.ReplaceAll(formatted, ")", "\n)\n")
+	
+	// Split into lines and indent
+	lines := strings.Split(formatted, "\n")
+	var result strings.Builder
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		
+		if line == ")" {
+			depth--
+		}
+		
+		result.WriteString(strings.Repeat("  ", depth))
+		result.WriteString(line)
+		result.WriteString("\n")
+		
+		if line == "(" {
+			depth++
+		}
+	}
+	
+	return strings.TrimSpace(result.String())
+}
+
+func formatAndHighlightSQL(sql string) template.HTML {
+	// First format the SQL
+	formatted := formatSQL(sql)
+	
+	// Apply syntax highlighting with proper escaping
+	// We use ReplaceAllStringFunc to escape each part individually
+	keywords := regexp.MustCompile(`\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AND|OR|NOT|IN|EXISTS|LIKE|IS|NULL|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|SET|VALUES|INTO|DISTINCT|UNION|CASE|WHEN|THEN|ELSE|END)\b`)
+	strings_re := regexp.MustCompile(`('[^']*')`)
+	numbers := regexp.MustCompile(`\b(\d+(?:\.\d+)?)\b`)
+	
+	// Process in order: keywords first, then strings, then numbers
+	result := keywords.ReplaceAllStringFunc(formatted, func(match string) string {
+		return fmt.Sprintf(`<span class="sql-keyword">%s</span>`, template.HTMLEscapeString(match))
+	})
+	
+	result = strings_re.ReplaceAllStringFunc(result, func(match string) string {
+		// Check if already inside a span tag
+		if strings.Contains(match, "sql-keyword") {
+			return match
+		}
+		return fmt.Sprintf(`<span class="sql-string">%s</span>`, template.HTMLEscapeString(match))
+	})
+	
+	result = numbers.ReplaceAllStringFunc(result, func(match string) string {
+		// Check if already inside a span tag
+		if strings.Contains(match, "sql-keyword") || strings.Contains(match, "sql-string") {
+			return match
+		}
+		return fmt.Sprintf(`<span class="sql-number">%s</span>`, template.HTMLEscapeString(match))
+	})
+	
+	// Escape any remaining untagged content
+	// Split by tags and escape the text between them
+	var builder strings.Builder
+	inTag := false
+	current := ""
+	
+	for i := 0; i < len(result); i++ {
+		if result[i] == '<' {
+			if !inTag && current != "" {
+				builder.WriteString(template.HTMLEscapeString(current))
+				current = ""
+			}
+			inTag = true
+			builder.WriteByte('<')
+		} else if result[i] == '>' {
+			inTag = false
+			builder.WriteByte('>')
+		} else if inTag {
+			builder.WriteByte(result[i])
+		} else {
+			current += string(result[i])
+			if i == len(result)-1 || result[i+1] == '<' {
+				builder.WriteString(template.HTMLEscapeString(current))
+				current = ""
+			}
+		}
+	}
+	
+	return template.HTML(builder.String())
+}
+
+func compareQuerySequences(result1, result2 *RequestResult) *ComparisonAnalysis {
+	analysis := &ComparisonAnalysis{}
+	
+	if result1.SQLAnalysis == nil || result2.SQLAnalysis == nil {
+		return analysis
+	}
+	
+	queries1 := result1.SQLAnalysis.AllQueries
+	queries2 := result2.SQLAnalysis.AllQueries
+	
+	// Group queries by normalized form
+	map1 := make(map[string][]SQLQuery)
+	map2 := make(map[string][]SQLQuery)
+	
+	for _, q := range queries1 {
+		map1[q.Normalized] = append(map1[q.Normalized], q)
+	}
+	for _, q := range queries2 {
+		map2[q.Normalized] = append(map2[q.Normalized], q)
+	}
+	
+	// Find queries only in result1
+	for norm, queries := range map1 {
+		if _, exists := map2[norm]; !exists {
+			analysis.QueriesOnlyIn1 = append(analysis.QueriesOnlyIn1, queries[0])
+		}
+	}
+	
+	// Find queries only in result2
+	for norm, queries := range map2 {
+		if _, exists := map1[norm]; !exists {
+			analysis.QueriesOnlyIn2 = append(analysis.QueriesOnlyIn2, queries[0])
+		}
+	}
+	
+	// Compare common queries
+	for norm, queries1 := range map1 {
+		if queries2, exists := map2[norm]; exists {
+			avgDur1 := 0.0
+			avgDur2 := 0.0
+			totalRows1 := 0
+			totalRows2 := 0
+			
+			for _, q := range queries1 {
+				avgDur1 += q.Duration
+				totalRows1 += q.Rows
+			}
+			for _, q := range queries2 {
+				avgDur2 += q.Duration
+				totalRows2 += q.Rows
+			}
+			avgDur1 /= float64(len(queries1))
+			avgDur2 /= float64(len(queries2))
+			avgRows1 := 0
+			avgRows2 := 0
+			if len(queries1) > 0 {
+				avgRows1 = totalRows1 / len(queries1)
+			}
+			if len(queries2) > 0 {
+				avgRows2 = totalRows2 / len(queries2)
+			}
+			
+			comp := QueryComparison{
+				Query:      queries1[0].Query,
+				Duration1:  avgDur1,
+				Duration2:  avgDur2,
+				Table:      queries1[0].Table,
+				Operation:  queries1[0].Operation,
+				Rows1:      avgRows1,
+				Rows2:      avgRows2,
+				Count1:     len(queries1),
+				Count2:     len(queries2),
+			}
+			
+			if avgDur1 > 0 {
+				comp.DiffPercent = ((avgDur2 - avgDur1) / avgDur1) * 100
+				comp.Improvement = avgDur2 < avgDur1
+			}
+			
+			analysis.CommonQueries = append(analysis.CommonQueries, comp)
+			
+			if comp.Improvement && comp.DiffPercent < -10 {
+				analysis.PerfImprovements = append(analysis.PerfImprovements, comp)
+			} else if !comp.Improvement && comp.DiffPercent > 10 {
+				analysis.PerfRegressions = append(analysis.PerfRegressions, comp)
+			}
+		}
+	}
+	
+	// Sort by performance impact
+	sort.Slice(analysis.PerfImprovements, func(i, j int) bool {
+		return analysis.PerfImprovements[i].DiffPercent < analysis.PerfImprovements[j].DiffPercent
+	})
+	sort.Slice(analysis.PerfRegressions, func(i, j int) bool {
+		return analysis.PerfRegressions[i].DiffPercent > analysis.PerfRegressions[j].DiffPercent
+	})
+	
+	// Generate sequential diffs for all queries
+	maxLen := len(queries1)
+	if len(queries2) > maxLen {
+		maxLen = len(queries2)
+	}
+	
+	for i := 0; i < maxLen; i++ {
+		diff := QueryDiff{}
+		
+		if i < len(queries1) {
+			diff.Query1 = queries1[i].Query
+		}
+		if i < len(queries2) {
+			diff.Query2 = queries2[i].Query
+		}
+		
+		diff.IsSame = diff.Query1 == diff.Query2
+		if !diff.IsSame && diff.Query1 != "" && diff.Query2 != "" {
+			diff.Added, diff.Removed, diff.Changed = computeQueryDiff(diff.Query1, diff.Query2)
+		}
+		
+		analysis.QueryDiffs = append(analysis.QueryDiffs, diff)
+	}
+	
+	return analysis
+}
+
+func computeQueryDiff(q1, q2 string) ([]string, []string, []string) {
+	// Simple word-based diff
+	words1 := strings.Fields(q1)
+	words2 := strings.Fields(q2)
+	
+	wordMap1 := make(map[string]bool)
+	wordMap2 := make(map[string]bool)
+	
+	for _, w := range words1 {
+		wordMap1[w] = true
+	}
+	for _, w := range words2 {
+		wordMap2[w] = true
+	}
+	
+	var added, removed, changed []string
+	
+	for _, w := range words2 {
+		if !wordMap1[w] {
+			added = append(added, w)
+		}
+	}
+	for _, w := range words1 {
+		if !wordMap2[w] {
+			removed = append(removed, w)
+		}
+	}
+	
+	return added, removed, changed
+}
+
 func generateHTML(filename string, result1, result2 *RequestResult, postData string) error {
 	// Find template file relative to executable or in common locations
 	templatePath := "comparison-report.tmpl"
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 		templatePath = "cmd/compare/comparison-report.tmpl"
 	}
+	
+	comparison := compareQuerySequences(result1, result2)
 	
 	tmpl := template.Must(template.New("comparison-report.tmpl").Funcs(template.FuncMap{
 		"escapeHTML": template.HTMLEscapeString,
@@ -442,6 +743,22 @@ func generateHTML(filename string, result1, result2 *RequestResult, postData str
 		"formatFloat": func(f float64) string {
 			return fmt.Sprintf("%.2f", f)
 		},
+		"formatPercent": func(f float64) string {
+			if f > 0 {
+				return fmt.Sprintf("+%.1f%%", f)
+			}
+			return fmt.Sprintf("%.1f%%", f)
+		},
+		"shortenQuery": func(q string) string {
+			if len(q) > 100 {
+				return q[:97] + "..."
+			}
+			return q
+		},
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"formatSQL": formatAndHighlightSQL,
 	}).ParseFiles(templatePath))
 
 	f, err := os.Create(filename)
@@ -451,15 +768,17 @@ func generateHTML(filename string, result1, result2 *RequestResult, postData str
 	defer f.Close()
 
 	data := struct {
-		Result1   *RequestResult
-		Result2   *RequestResult
-		PostData  string
-		Generated time.Time
+		Result1    *RequestResult
+		Result2    *RequestResult
+		PostData   string
+		Generated  time.Time
+		Comparison *ComparisonAnalysis
 	}{
-		Result1:   result1,
-		Result2:   result2,
-		PostData:  postData,
-		Generated: time.Now(),
+		Result1:    result1,
+		Result2:    result2,
+		PostData:   postData,
+		Generated:  time.Now(),
+		Comparison: comparison,
 	}
 
 	return tmpl.Execute(f, data)
