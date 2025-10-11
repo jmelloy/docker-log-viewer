@@ -20,15 +20,38 @@ class DockerLogParser {
       "NONE",
     ]);
     this.ws = null;
+    this.pev2App = null;
 
     this.init();
   }
 
   async init() {
     this.setupEventListeners();
+    this.initPEV2();
     await this.loadContainers();
     this.connectWebSocket();
     await this.loadInitialLogs();
+  }
+
+  initPEV2() {
+    // Initialize PEV2 Vue app
+    const { createApp } = Vue;
+    this.pev2App = createApp({
+      data() {
+        return {
+          planSource: '',
+          planQuery: ''
+        }
+      },
+      methods: {
+        updatePlan(plan, query) {
+          this.planSource = plan;
+          this.planQuery = query;
+        }
+      }
+    });
+    this.pev2App.component('pev2', pev2.Plan);
+    this.pev2App.mount('#pev2App');
   }
 
   setupEventListeners() {
@@ -920,136 +943,27 @@ class DockerLogParser {
     }
   }
 
-  formatSQL(sql) {
-    let depth = 0;
-    return sql
-      .replace(/\bSELECT\b/g, "\nSELECT")
-      .replace(/\bFROM\b/g, "\nFROM")
-      .replace(/\bWHERE\b/g, "\nWHERE")
-      .replace(/\bAND\b/g, "\nAND")
-      .replace(/\bLEFT JOIN\b/g, "\nLEFT JOIN")
-      .replace(/\bGROUP BY\b/g, "\nGROUP BY")
-      .replace(/\(/g, "\n(\n")
-      .replace(/\)/g, "\n)\n")
-      .split("\n")
-      .map((line) => {
-        line = line.trim();
-        if (line === ")") depth--;
-        const indent = "  ".repeat(depth);
-        if (line === "(") depth++;
-        return indent + line;
-      })
-      .join("\n")
-      .replace(/\n\s*\n/g, "\n")
-      .trim();
-  }
-
-  highlightSQL(sql) {
-    const keywords =
-      /\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AND|OR|NOT|IN|EXISTS|LIKE|IS|NULL|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|SET|VALUES|INTO|DISTINCT|UNION|CASE|WHEN|THEN|ELSE|END)\b/gi;
-    const strings = /(\'[^\']*\')/g;
-    const numbers = /\b(\d+(\.\d+)?)\b/g;
-
-    let highlighted = this.escapeHtml(sql);
-    highlighted = highlighted.replace(
-      keywords,
-      '<span class="sql-keyword">$1</span>'
-    );
-    highlighted = highlighted.replace(
-      strings,
-      '<span class="sql-string">$1</span>'
-    );
-    highlighted = highlighted.replace(
-      numbers,
-      '<span class="sql-number">$1</span>'
-    );
-
-    return highlighted;
-  }
-
-  showExplainResult(result) {
-    document.getElementById("explainQuery").innerHTML = this.highlightSQL(
-      this.formatSQL(result.query)
-    );
-
-    const planEl = document.getElementById("explainPlan");
-
+  closeExplainModal() {
     if (result.error) {
-      planEl.innerHTML = `<div class="explain-error">${this.escapeHtml(
-        result.error
-      )}</div>`;
+      // Show error message
+      const pev2El = document.getElementById('pev2App');
+      pev2El.innerHTML = `<div class="alert alert-danger m-3">${this.escapeHtml(result.error)}</div>`;
     } else {
-      planEl.innerHTML = this.formatExplainPlan(result.queryPlan);
+      // Convert the PostgreSQL EXPLAIN JSON format to the format PEV2 expects
+      // PEV2 expects the plan as a JSON string
+      let planText = '';
+      if (result.queryPlan && result.queryPlan.length > 0) {
+        // PostgreSQL EXPLAIN (FORMAT JSON) returns an array with one element containing the plan
+        planText = JSON.stringify(result.queryPlan, null, 2);
+      }
+      
+      // Update the PEV2 component
+      if (this.pev2App && this.pev2App._instance) {
+        this.pev2App._instance.proxy.updatePlan(planText, result.query || '');
+      }
     }
 
     document.getElementById("explainModal").classList.remove("hidden");
-  }
-
-  formatExplainPlan(plan) {
-    if (!plan || plan.length === 0) {
-      return '<div class="explain-error">No plan data available</div>';
-    }
-
-    const formatNode = (node, level = 0) => {
-      if (!node) return "";
-
-      let html =
-        '<div class="explain-node" style="margin-left: ' +
-        level * 1.5 +
-        'rem">';
-
-      // Node Type
-      if (node["Node Type"]) {
-        html += `<div><span class="explain-node-type">${node["Node Type"]}</span>`;
-
-        // Cost and rows
-        if (node["Total Cost"]) {
-          html += `<span class="explain-cost">cost=${
-            node["Startup Cost"]?.toFixed(2) || 0
-          }..${node["Total Cost"].toFixed(2)}</span>`;
-        }
-        if (node["Plan Rows"]) {
-          html += `<span class="explain-rows">rows=${node["Plan Rows"]}</span>`;
-        }
-        html += "</div>";
-      }
-
-      // Additional details
-      const details = [];
-      if (node["Relation Name"])
-        details.push(`Table: ${node["Relation Name"]}`);
-      if (node["Index Name"]) details.push(`Index: ${node["Index Name"]}`);
-      if (node["Index Cond"]) details.push(`Index Cond: ${node["Index Cond"]}`);
-      if (node["Filter"]) details.push(`Filter: ${node["Filter"]}`);
-      if (node["Join Type"]) details.push(`Join Type: ${node["Join Type"]}`);
-      if (node["Hash Cond"]) details.push(`Hash Cond: ${node["Hash Cond"]}`);
-
-      if (details.length > 0) {
-        html += `<div class="explain-details">${this.escapeHtml(
-          details.join(" | ")
-        )}</div>`;
-      }
-
-      html += "</div>";
-
-      // Process child plans
-      if (node.Plans && node.Plans.length > 0) {
-        node.Plans.forEach((childPlan) => {
-          html += formatNode(childPlan, level + 1);
-        });
-      }
-
-      return html;
-    };
-
-    let html = "";
-    plan.forEach((p) => {
-      if (p.Plan) {
-        html += formatNode(p.Plan);
-      }
-    });
-
-    return html || '<div class="explain-error">Unable to format plan</div>';
   }
 
   closeExplainModal() {

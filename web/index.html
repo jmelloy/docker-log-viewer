@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Docker Log Parser</title>
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <link rel="stylesheet" href="pev2.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -148,22 +150,19 @@
     <div id="explainModal" class="modal hidden">
         <div class="modal-content explain-modal-content">
             <div class="modal-header">
-                <h3>SQL Query Explain Plan</h3>
+                <h3>SQL Query Explain Plan (PEV2)</h3>
                 <button id="closeExplainModal">✕</button>
             </div>
             <div class="modal-body">
-                <div class="modal-section">
-                    <h4>Query</h4>
-                    <pre id="explainQuery" class="query-display"></pre>
-                </div>
-                <div class="modal-section">
-                    <h4>Execution Plan</h4>
-                    <div id="explainPlan" class="explain-plan"></div>
+                <div id="pev2App" class="d-flex flex-column" style="height: 70vh;">
+                    <pev2 :plan-source="planSource" :plan-query="planQuery"></pev2>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="vue.global.prod.js"></script>
+    <script src="pev2.umd.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
