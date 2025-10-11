@@ -1,6 +1,6 @@
 {
   "go.goroot": "/Users/jeffreymelloy/.local/share/mise/installs/go/1.25.1",
-  "python.defaultInterpreterPath": "/Users/jeffreymelloy/.local/share/mise/installs/python/3.13.7/bin/python",
+  "python.defaultInterpreterPath": "/Users/jeffreymelloy/.local/share/mise/installs/python/3.14.0/bin/python",
   "go.alternateTools": {
     "go": "/Users/jeffreymelloy/.local/share/mise/shims/go",
     "dlv": "/Users/jeffreymelloy/.local/share/mise/shims/dlv",

@@ -943,3 +943,27 @@ button:disabled {
     color: #8b949e;
     margin-left: 0.25rem;
 }
+
+/* SQL Syntax Highlighting */
+.sql-keyword {
+    color: #ff7b72;
+    font-weight: bold;
+}
+
+.sql-string {
+    color: #a5d6ff;
+}
+
+.sql-number {
+    color: #79c0ff;
+}
+
+#explainQuery {
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    padding: 1rem;
+    background: #0d1117;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+}
