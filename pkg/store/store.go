@@ -1,7 +1,9 @@
 package store
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -21,14 +23,25 @@ type Store struct {
 	db *gorm.DB
 }
 
+// Server represents a server configuration with URL and authentication
+type Server struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Name        string    `gorm:"not null" json:"name"`
+	URL         string    `gorm:"not null" json:"url"`
+	BearerToken string    `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
+	DevID       string    `gorm:"column:dev_id" json:"devId,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
 // Request represents a saved GraphQL/API request template
 type Request struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"not null" json:"name"`
-	URL         string    `gorm:"not null" json:"url"`
+	ServerID    *uint     `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server      *Server   `gorm:"foreignKey:ServerID" json:"server,omitempty"`
 	RequestData string    `gorm:"not null;column:request_data" json:"requestData"`
-	BearerToken string    `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
-	DevID       string    `gorm:"column:dev_id" json:"devId,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
@@ -38,10 +51,13 @@ type Request struct {
 type Execution struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
 	RequestID       uint      `gorm:"not null;column:request_id;index" json:"requestId"`
+	ServerID        *uint     `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server          *Server   `gorm:"foreignKey:ServerID" json:"server,omitempty"`
 	RequestIDHeader string    `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
 	StatusCode      int       `gorm:"column:status_code" json:"statusCode"`
 	DurationMS      int64     `gorm:"column:duration_ms" json:"durationMs"`
 	ResponseBody    string    `gorm:"column:response_body" json:"responseBody,omitempty"`
+	ResponseHeaders string    `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
 	Error           string    `json:"error,omitempty"`
 	ExecutedAt      time.Time `gorm:"not null;column:executed_at;index" json:"executedAt"`
 	CreatedAt       time.Time `json:"createdAt"`
@@ -70,10 +86,12 @@ type SQLQuery struct {
 	ExecutionID     uint    `gorm:"not null;column:execution_id;index" json:"executionId"`
 	Query           string  `gorm:"not null" json:"query"`
 	NormalizedQuery string  `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
+	QueryHash       string  `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
 	DurationMS      float64 `gorm:"column:duration_ms" json:"durationMs"`
 	TableName       string  `gorm:"column:table_name" json:"tableName"`
 	Operation       string  `json:"operation"`
 	Rows            int     `json:"rows"`
+	ExplainPlan     string  `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
@@ -159,7 +177,7 @@ func (s *Store) CreateRequest(req *Request) (int64, error) {
 // GetRequest retrieves a request by ID
 func (s *Store) GetRequest(id int64) (*Request, error) {
 	var req Request
-	result := s.db.First(&req, id)
+	result := s.db.Preload("Server").First(&req, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -172,7 +190,7 @@ func (s *Store) GetRequest(id int64) (*Request, error) {
 // ListRequests retrieves all requests
 func (s *Store) ListRequests() ([]Request, error) {
 	var requests []Request
-	result := s.db.Order("created_at DESC").Find(&requests)
+	result := s.db.Preload("Server").Order("created_at DESC").Find(&requests)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
 	}
@@ -184,6 +202,56 @@ func (s *Store) DeleteRequest(id int64) error {
 	result := s.db.Delete(&Request{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete request: %w", result.Error)
+	}
+	return nil
+}
+
+// CreateServer creates a new server configuration
+func (s *Store) CreateServer(server *Server) (int64, error) {
+	result := s.db.Create(server)
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to create server: %w", result.Error)
+	}
+	return int64(server.ID), nil
+}
+
+// GetServer retrieves a server by ID
+func (s *Store) GetServer(id int64) (*Server, error) {
+	var server Server
+	result := s.db.First(&server, id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get server: %w", result.Error)
+	}
+	return &server, nil
+}
+
+// ListServers retrieves all servers
+func (s *Store) ListServers() ([]Server, error) {
+	var servers []Server
+	result := s.db.Order("name").Find(&servers)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to list servers: %w", result.Error)
+	}
+	return servers, nil
+}
+
+// UpdateServer updates a server configuration
+func (s *Store) UpdateServer(server *Server) error {
+	result := s.db.Save(server)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update server: %w", result.Error)
+	}
+	return nil
+}
+
+// DeleteServer deletes a server
+func (s *Store) DeleteServer(id int64) error {
+	result := s.db.Delete(&Server{}, id)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete server: %w", result.Error)
 	}
 	return nil
 }
@@ -384,4 +452,10 @@ func (s *Store) analyzeSQLQueries(queries []SQLQuery) *SQLAnalysis {
 	}
 
 	return analysis
+}
+
+// ComputeQueryHash computes a SHA256 hash of the normalized query
+func ComputeQueryHash(normalizedQuery string) string {
+	hash := sha256.Sum256([]byte(normalizedQuery))
+	return hex.EncodeToString(hash[:])
 }

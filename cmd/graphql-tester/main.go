@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -100,7 +101,11 @@ func listRequests(db *store.Store) {
 	for _, req := range requests {
 		fmt.Printf("ID: %d\n", req.ID)
 		fmt.Printf("Name: %s\n", req.Name)
-		fmt.Printf("URL: %s\n", req.URL)
+		if req.Server != nil {
+			fmt.Printf("Server: %s (%s)\n", req.Server.Name, req.Server.URL)
+		} else {
+			fmt.Printf("Server: (none)\n")
+		}
 		fmt.Printf("Created: %s\n", req.CreatedAt.Format(time.RFC3339))
 
 		// Count executions
@@ -130,13 +135,29 @@ func handleRequest(db *store.Store, config Config) error {
 		}
 	}
 
+	// Create or get server
+	var serverID *uint
+	if config.URL != "" {
+		server := &store.Server{
+			Name:        config.URL, // Use URL as server name for now
+			URL:         config.URL,
+			BearerToken: config.BearerToken,
+			DevID:       config.DevID,
+		}
+
+		sid, err := db.CreateServer(server)
+		if err != nil {
+			return fmt.Errorf("failed to create server: %w", err)
+		}
+		sidUint := uint(sid)
+		serverID = &sidUint
+	}
+
 	// Create request
 	req := &store.Request{
 		Name:        name,
-		URL:         config.URL,
+		ServerID:    serverID,
 		RequestData: string(data),
-		BearerToken: config.BearerToken,
-		DevID:       config.DevID,
 	}
 
 	reqID, err := db.CreateRequest(req)
@@ -194,18 +215,30 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	// Generate request ID
 	requestIDHeader := generateRequestID()
 
+	// Get server info for execution
+	var url, bearerToken, devID string
+	var serverIDForExec *uint
+	if req.Server != nil {
+		url = req.Server.URL
+		bearerToken = req.Server.BearerToken
+		devID = req.Server.DevID
+		serverIDForExec = &req.Server.ID
+	}
+
 	// Execute request
 	execution := &store.Execution{
 		RequestID:       uint(requestID),
+		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
 		ExecutedAt:      time.Now(),
 	}
 
 	startTime := time.Now()
-	statusCode, responseBody, err := makeRequest(req.URL, []byte(req.RequestData), requestIDHeader, req.BearerToken, req.DevID)
+	statusCode, responseBody, responseHeaders, err := makeRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID)
 	execution.DurationMS = time.Since(startTime).Milliseconds()
 	execution.StatusCode = statusCode
 	execution.ResponseBody = responseBody
+	execution.ResponseHeaders = responseHeaders
 
 	if err != nil {
 		execution.Error = err.Error()
@@ -249,10 +282,10 @@ func generateRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-func makeRequest(url string, data []byte, requestID, bearerToken, devID string) (int, string, error) {
+func makeRequest(url string, data []byte, requestID, bearerToken, devID string) (int, string, string, error) {
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -268,16 +301,19 @@ func makeRequest(url string, data []byte, requestID, bearerToken, devID string) 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 	defer resp.Body.Close()
 
+	// Capture response headers as JSON
+	headersJSON, _ := json.Marshal(resp.Header)
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return resp.StatusCode, "", err
+		return resp.StatusCode, "", string(headersJSON), err
 	}
 
-	return resp.StatusCode, string(bodyBytes), nil
+	return resp.StatusCode, string(bodyBytes), string(headersJSON), nil
 }
 
 func collectLogs(requestID string, logChan <-chan logs.LogMessage, timeout time.Duration) []logs.LogMessage {
@@ -322,9 +358,11 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 		if strings.Contains(message, "[sql]") {
 			sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
 			if len(sqlMatch) > 1 {
+				normalizedQuery := normalizeQuery(sqlMatch[1])
 				query := store.SQLQuery{
 					Query:           sqlMatch[1],
-					NormalizedQuery: normalizeQuery(sqlMatch[1]),
+					NormalizedQuery: normalizedQuery,
+					QueryHash:       store.ComputeQueryHash(normalizedQuery),
 				}
 
 				if msg.Entry.Fields != nil {

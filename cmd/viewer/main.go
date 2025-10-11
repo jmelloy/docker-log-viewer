@@ -476,18 +476,30 @@ func (wa *WebApp) executeRequest(requestID int64) {
 	// Generate request ID
 	requestIDHeader := generateRequestID()
 
+	// Get server info for execution
+	var url, bearerToken, devID string
+	var serverIDForExec *uint
+	if req.Server != nil {
+		url = req.Server.URL
+		bearerToken = req.Server.BearerToken
+		devID = req.Server.DevID
+		serverIDForExec = &req.Server.ID
+	}
+
 	execution := &store.Execution{
 		RequestID:       uint(requestID),
+		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
 		ExecutedAt:      time.Now(),
 	}
 
 	// Execute HTTP request
 	startTime := time.Now()
-	statusCode, responseBody, err := makeHTTPRequest(req.URL, []byte(req.RequestData), requestIDHeader, req.BearerToken, req.DevID)
+	statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID)
 	execution.DurationMS = time.Since(startTime).Milliseconds()
 	execution.StatusCode = statusCode
 	execution.ResponseBody = responseBody
+	execution.ResponseHeaders = responseHeaders
 
 	if err != nil {
 		execution.Error = err.Error()
@@ -529,10 +541,10 @@ func generateRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID string) (int, string, error) {
+func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID string) (int, string, string, error) {
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -548,16 +560,19 @@ func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID stri
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, "", err
+		return 0, "", "", err
 	}
 	defer resp.Body.Close()
 
+	// Capture response headers as JSON
+	headersJSON, _ := json.Marshal(resp.Header)
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return resp.StatusCode, "", err
+		return resp.StatusCode, "", string(headersJSON), err
 	}
 
-	return resp.StatusCode, string(bodyBytes), nil
+	return resp.StatusCode, string(bodyBytes), string(headersJSON), nil
 }
 
 func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration) []logs.LogMessage {
@@ -602,9 +617,11 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 		if strings.Contains(message, "[sql]") {
 			sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
 			if len(sqlMatch) > 1 {
+				normalizedQuery := normalizeQuery(sqlMatch[1])
 				query := store.SQLQuery{
 					Query:           sqlMatch[1],
-					NormalizedQuery: normalizeQuery(sqlMatch[1]),
+					NormalizedQuery: normalizedQuery,
+					QueryHash:       store.ComputeQueryHash(normalizedQuery),
 				}
 
 				if msg.Entry.Fields != nil {
