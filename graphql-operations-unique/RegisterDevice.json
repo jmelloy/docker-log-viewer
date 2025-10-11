@@ -1,0 +1,14 @@
+{
+  "operationName": "RegisterDevice",
+  "query": "mutation RegisterDevice($input: RegisterDeviceInput!) {\n  registerDevice(input: $input) {\n    id\n    __typename\n  }\n}",
+  "variables": {
+    "input": {
+      "appBuild": "",
+      "appVersion": "0.7.4 (unknown)",
+      "permissionStatus": "granted",
+      "platform": "web",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+      "uuid": "bc680b6c-a9fb-4381-87bb-38095c6a6984"
+    }
+  }
+}

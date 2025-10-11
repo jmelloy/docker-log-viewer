@@ -23,6 +23,8 @@
             border: 1px solid #30363d;
             border-radius: 6px;
             padding: 20px;
+            min-width: 0;
+            overflow: hidden;
         }
         .result.error { border-color: #f85149; }
         .header { margin-bottom: 20px; }
@@ -103,6 +105,8 @@
             border-radius: 3px;
             overflow-x: auto;
             margin-bottom: 8px;
+            max-width: 100%;
+            word-wrap: break-word;
         }
         .query-meta {
             display: flex;
@@ -131,7 +135,9 @@
             border-left: 2px solid #30363d;
             margin-bottom: 2px;
             white-space: pre-wrap;
-            word-break: break-all;
+            word-break: break-word;
+            overflow-x: auto;
+            max-width: 100%;
         }
         .log-line.error { border-left-color: #f85149; }
         .log-line.warn { border-left-color: #d29922; }
@@ -330,7 +336,7 @@
                 <div class="section">
                     <h4>Logs ({{len .Result1.Logs}} entries)</h4>
                     {{range .Result1.Logs}}
-                    <div class="log-line {{if .Entry}}{{if eq .Entry.Level "ERR"}}error{{else if eq .Entry.Level "ERROR"}}error{{else if eq .Entry.Level "WRN"}}warn{{else if eq .Entry.Level "WARN"}}warn{{else}}info{{end}}{{end}}">{{if .Entry}}{{.Entry.Raw}}{{end}}</div>
+                    <div class="log-line {{if .Entry}}{{if eq .Entry.Level "ERR"}}error{{else if eq .Entry.Level "ERROR"}}error{{else if eq .Entry.Level "WRN"}}warn{{else if eq .Entry.Level "WARN"}}warn{{else}}info{{end}}{{end}}">{{if .Entry}}{{ansiToHTML .Entry.Raw}}{{end}}</div>
                     {{end}}
                 </div>
                 {{end}}
@@ -447,7 +453,7 @@
                 <div class="section">
                     <h4>Logs ({{len .Result2.Logs}} entries)</h4>
                     {{range .Result2.Logs}}
-                    <div class="log-line {{if .Entry}}{{if eq .Entry.Level "ERR"}}error{{else if eq .Entry.Level "ERROR"}}error{{else if eq .Entry.Level "WRN"}}warn{{else if eq .Entry.Level "WARN"}}warn{{else}}info{{end}}{{end}}">{{if .Entry}}{{.Entry.Raw}}{{end}}</div>
+                    <div class="log-line {{if .Entry}}{{if eq .Entry.Level "ERR"}}error{{else if eq .Entry.Level "ERROR"}}error{{else if eq .Entry.Level "WRN"}}warn{{else if eq .Entry.Level "WARN"}}warn{{else}}info{{end}}{{end}}">{{if .Entry}}{{ansiToHTML .Entry.Raw}}{{end}}</div>
                     {{end}}
                 </div>
                 {{end}}

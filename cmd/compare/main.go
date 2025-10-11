@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"docker-log-parser/pkg/logs"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -143,11 +145,20 @@ func runComparison(config CompareConfig) error {
 	return nil
 }
 
+func generateRequestID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func testURL(url string, data []byte, logChan <-chan logs.LogMessage, timeout time.Duration, config *CompareConfig) *RequestResult {
 	result := &RequestResult{
 		URL:  url,
 		Logs: make([]logs.LogMessage, 0),
 	}
+
+	// Generate a unique request ID
+	result.RequestID = generateRequestID()
 
 	// Format the post data nicely
 	var prettyData bytes.Buffer
@@ -174,6 +185,7 @@ func testURL(url string, data []byte, logChan <-chan logs.LogMessage, timeout ti
 	}
 
 	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Request-Id", result.RequestID)
 
 	// Add authentication headers
 	if config.BearerToken != "" {
@@ -193,15 +205,9 @@ func testURL(url string, data []byte, logChan <-chan logs.LogMessage, timeout ti
 
 	result.Duration = time.Since(startTime)
 	result.StatusCode = resp.StatusCode
-	result.RequestID = resp.Header.Get("X-Request-Id")
 
 	// Read response body
 	io.Copy(io.Discard, resp.Body)
-
-	if result.RequestID == "" {
-		result.Error = fmt.Errorf("no X-Request-Id header found in response")
-		return result
-	}
 
 	log.Printf("Request ID: %s, Status: %d, Duration: %v", result.RequestID, result.StatusCode, result.Duration)
 
@@ -387,16 +393,56 @@ func normalizeQuery(query string) string {
 	return strings.TrimSpace(normalized)
 }
 
+func ansiToHTML(text string) template.HTML {
+	// ANSI color codes mapping to HTML colors
+	colorMap := map[string]string{
+		"30": "#000000", "31": "#f85149", "32": "#3fb950", "33": "#d29922",
+		"34": "#58a6ff", "35": "#bc8cff", "36": "#56d4dd", "37": "#c9d1d9",
+		"90": "#6e7681", "91": "#ff7b72", "92": "#7ee787", "93": "#f2cc60",
+		"94": "#79c0ff", "95": "#d2a8ff", "96": "#a5d6ff", "97": "#f0f6fc",
+	}
+
+	// Remove ANSI escape sequences and convert to HTML
+	ansiRegex := regexp.MustCompile(`\x1b\[([0-9;]+)m`)
+	var result strings.Builder
+	lastPos := 0
+
+	for _, match := range ansiRegex.FindAllStringSubmatchIndex(text, -1) {
+		// Add text before this match
+		result.WriteString(template.HTMLEscapeString(text[lastPos:match[0]]))
+
+		// Parse ANSI code
+		codes := text[match[2]:match[3]]
+		if codes == "0" || codes == "" {
+			result.WriteString("</span>")
+		} else if color, ok := colorMap[codes]; ok {
+			result.WriteString(fmt.Sprintf(`<span style="color: %s">`, color))
+		}
+
+		lastPos = match[1]
+	}
+	result.WriteString(template.HTMLEscapeString(text[lastPos:]))
+
+	return template.HTML(result.String())
+}
+
 func generateHTML(filename string, result1, result2 *RequestResult, postData string) error {
+	// Find template file relative to executable or in common locations
+	templatePath := "comparison-report.tmpl"
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		templatePath = "cmd/compare/comparison-report.tmpl"
+	}
+	
 	tmpl := template.Must(template.New("comparison-report.tmpl").Funcs(template.FuncMap{
 		"escapeHTML": template.HTMLEscapeString,
+		"ansiToHTML": ansiToHTML,
 		"formatDuration": func(d time.Duration) string {
 			return d.Round(time.Millisecond).String()
 		},
 		"formatFloat": func(f float64) string {
 			return fmt.Sprintf("%.2f", f)
 		},
-	}).ParseFiles("comparison-report.tmpl"))
+	}).ParseFiles(templatePath))
 
 	f, err := os.Create(filename)
 	if err != nil {

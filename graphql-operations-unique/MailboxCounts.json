@@ -1,0 +1,5 @@
+{
+  "operationName": "MailboxCounts",
+  "query": "query MailboxCounts {\n  mentionedThreads: threads(filter: {mailbox: mentioned}) {\n    totalCount\n    __typename\n  }\n  unreadInbox: threads(filter: {mailbox: unread}) {\n    totalCount\n    __typename\n  }\n  unseenFeed: threads(filter: {mailbox: unseen, excludePersistentChats: true}) {\n    totalCount\n    __typename\n  }\n}",
+  "variables": {}
+}

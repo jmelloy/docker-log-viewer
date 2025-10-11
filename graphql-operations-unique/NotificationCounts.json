@@ -1,0 +1,5 @@
+{
+  "operationName": "NotificationCounts",
+  "query": "query NotificationCounts {\n  notifications(filter: {feedType: all}) {\n    totalCount\n    unreadCount\n    unseenCount\n    __typename\n  }\n  joinApprovals {\n    totalCount\n    __typename\n  }\n}",
+  "variables": {}
+}

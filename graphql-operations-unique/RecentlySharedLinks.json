@@ -1,0 +1,16 @@
+{
+  "operationName": "RecentlySharedLinks",
+  "query": "query RecentlySharedLinks($filter: LinksFilter, $last: Int, $before: String) {\n  links(filter: $filter, last: $last, before: $before) {\n    ...LinkConnectionFields\n    __typename\n  }\n}\n\nfragment LinkConnectionFields on LinkConnection {\n  edges {\n    node {\n      ...LinkFields\n      __typename\n    }\n    __typename\n  }\n  totalCount\n  pageInfo {\n    hasPreviousPage\n    startCursor\n    __typename\n  }\n  __typename\n}\n\nfragment LinkFields on Link {\n  id\n  linked {\n    ... on User {\n      ...UserFields\n      __typename\n    }\n    ... on ExternalObject {\n      ...ExternalObjectFields\n      __typename\n    }\n    ... on File {\n      ...FileFields\n      __typename\n    }\n    __typename\n  }\n  message {\n    ...MessagePreviewFields\n    __typename\n  }\n  __typename\n}\n\nfragment UserFields on User {\n  ...UserCommonFields\n  workspaceProfiles {\n    ...WorkspaceProfileFields\n    __typename\n  }\n  __typename\n}\n\nfragment UserCommonFields on User {\n  id\n  addressDomains\n  avatarURL\n  bio\n  isRegistered\n  name\n  workspaceIDs\n  __typename\n}\n\nfragment WorkspaceProfileFields on WorkspaceProfile {\n  id\n  workspace {\n    ... on WorkspacePreview {\n      ...WorkspacePreviewSimpleFields\n      __typename\n    }\n    __typename\n  }\n  slackUser {\n    ...SlackUserFields\n    __typename\n  }\n  __typename\n}\n\nfragment WorkspacePreviewSimpleFields on WorkspacePreview {\n  ...WorkspacePreviewCommonFields\n  __typename\n}\n\nfragment WorkspacePreviewCommonFields on WorkspacePreview {\n  id\n  name\n  domains\n  avatarURL\n  joinableBy\n  memberCount\n  __typename\n}\n\nfragment SlackUserFields on SlackUser {\n  id\n  profileURL\n  teamID\n  __typename\n}\n\nfragment ExternalObjectFields on ExternalObject {\n  id\n  url\n  objectType\n  title\n  description\n  previewText\n  statusText\n  siteName\n  layout\n  icon {\n    url\n    __typename\n  }\n  statusIcon {\n    url\n    __typename\n  }\n  image {\n    url\n    blurHash\n    __typename\n  }\n  video {\n    url\n    contentType\n    __typename\n  }\n  audio {\n    url\n    contentType\n    __typename\n  }\n  __typename\n}\n\nfragment FileFields on File {\n  id\n  url\n  name\n  fileType\n  contentType\n  contentLength\n  metadata {\n    width\n    height\n    blurHash\n    __typename\n  }\n  previewable\n  __typename\n}\n\nfragment MessagePreviewFields on MessagePreview {\n  id\n  createdAt\n  threadID\n  user {\n    ...UserFields\n    __typename\n  }\n  __typename\n}",
+  "variables": {
+    "filter": {
+      "linkedCategories": [
+        "file",
+        "link"
+      ],
+      "recipientIDs": [
+        "wks_2KZUhIFrJMKOiIlIJ5dUHAkM4e4"
+      ]
+    },
+    "last": 4
+  }
+}

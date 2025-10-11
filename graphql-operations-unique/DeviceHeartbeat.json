@@ -1,0 +1,10 @@
+{
+  "operationName": "DeviceHeartbeat",
+  "query": "mutation DeviceHeartbeat($id: ID!, $input: DeviceHeartbeatInput!) {\n  deviceHeartbeat(id: $id, input: $input)\n}",
+  "variables": {
+    "id": "dev_33teiwmpG4bDIj1BOBdd0NGLPRU",
+    "input": {
+      "presence": "active"
+    }
+  }
+}
