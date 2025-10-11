@@ -76,15 +76,26 @@ class DockerLogParser {
       this.closeModal();
     });
 
+    document.getElementById("closeExplainModal").addEventListener("click", () => {
+      this.closeExplainModal();
+    });
+
     document.getElementById("logModal").addEventListener("click", (e) => {
       if (e.target.id === "logModal") {
         this.closeModal();
       }
     });
 
+    document.getElementById("explainModal").addEventListener("click", (e) => {
+      if (e.target.id === "explainModal") {
+        this.closeExplainModal();
+      }
+    });
+
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         this.closeModal();
+        this.closeExplainModal();
       }
     });
   }
@@ -499,6 +510,24 @@ class DockerLogParser {
           const table = log.entry?.fields?.["db.table"] || "unknown";
           const operation = log.entry?.fields?.["db.operation"] || "unknown";
           const rows = parseInt(log.entry?.fields?.["db.rows"] || 0);
+          
+          // Extract variables from db.vars field if present
+          let variables = {};
+          const dbVars = log.entry?.fields?.["db.vars"];
+          if (dbVars) {
+            try {
+              // db.vars can be a JSON array or string
+              const varsArray = typeof dbVars === 'string' ? JSON.parse(dbVars) : dbVars;
+              if (Array.isArray(varsArray)) {
+                // Convert array to indexed map: {"1": value1, "2": value2, ...}
+                varsArray.forEach((val, idx) => {
+                  variables[String(idx + 1)] = String(val);
+                });
+              }
+            } catch (e) {
+              console.warn('Failed to parse db.vars:', dbVars, e);
+            }
+          }
 
           queries.push({
             query,
@@ -506,6 +535,7 @@ class DockerLogParser {
             table,
             operation,
             rows,
+            variables,
             normalized: this.normalizeQuery(query),
           });
         }
@@ -568,8 +598,8 @@ class DockerLogParser {
       .slice(0, 5);
     document.getElementById("slowestQueries").innerHTML = sortedBySlowest
       .map(
-        (q) => `
-            <div class="query-item">
+        (q, index) => `
+            <div class="query-item" data-query-index="${index}">
                 <div class="query-header">
                     <span class="query-duration ${
                       q.duration > 10 ? "query-slow" : ""
@@ -581,10 +611,29 @@ class DockerLogParser {
                     <span>Op: ${q.operation}</span>
                     <span>Rows: ${q.rows}</span>
                 </div>
+                <div class="query-actions">
+                    <button class="btn-explain" data-query="${this.escapeHtml(q.query)}" data-variables="${this.escapeHtml(JSON.stringify(q.variables || {}))}">Run EXPLAIN</button>
+                </div>
             </div>
         `
       )
       .join("");
+
+    // Add event listeners to EXPLAIN buttons
+    document.querySelectorAll('.btn-explain').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const query = btn.getAttribute('data-query');
+        const variablesStr = btn.getAttribute('data-variables');
+        let variables = {};
+        try {
+          variables = JSON.parse(variablesStr || '{}');
+        } catch (e) {
+          console.warn('Failed to parse variables:', variablesStr);
+        }
+        this.runExplain(query, variables);
+      });
+    });
 
     const sortedByFrequency = Object.entries(queryGroups)
       .map(([normalized, data]) => ({
@@ -614,10 +663,30 @@ class DockerLogParser {
                     <span>Table: ${item.example.table}</span>
                     <span>Op: ${item.example.operation}</span>
                 </div>
+                <div class="query-actions">
+                    <button class="btn-explain" data-query="${this.escapeHtml(item.example.query)}" data-variables="${this.escapeHtml(JSON.stringify(item.example.variables || {}))}">Run EXPLAIN</button>
+                </div>
             </div>
         `
       )
       .join("");
+
+    // Add event listeners to frequent queries EXPLAIN buttons
+    document.querySelectorAll('#frequentQueries .btn-explain').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const query = btn.getAttribute('data-query');
+        const variablesStr = btn.getAttribute('data-variables');
+        let variables = {};
+        try {
+          variables = JSON.parse(variablesStr || '{}');
+        } catch (e) {
+          console.warn('Failed to parse variables:', variablesStr);
+        }
+        this.runExplain(query, variables);
+      });
+    });
+    });
 
     const nPlusOne = sortedByFrequency.filter((item) => item.count > 5);
     if (nPlusOne.length > 0) {
@@ -805,6 +874,106 @@ class DockerLogParser {
 
   closeModal() {
     document.getElementById("logModal").classList.add("hidden");
+  }
+
+  async runExplain(query, variables = {}) {
+    try {
+      const response = await fetch('/api/explain', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: query,
+          variables: variables
+        })
+      });
+
+      const result = await response.json();
+      this.showExplainResult(result);
+    } catch (error) {
+      this.showExplainResult({
+        error: `Failed to run EXPLAIN: ${error.message}`,
+        query: query
+      });
+    }
+  }
+
+  showExplainResult(result) {
+    document.getElementById('explainQuery').textContent = result.query;
+    
+    const planEl = document.getElementById('explainPlan');
+    
+    if (result.error) {
+      planEl.innerHTML = `<div class="explain-error">${this.escapeHtml(result.error)}</div>`;
+    } else {
+      planEl.innerHTML = this.formatExplainPlan(result.queryPlan);
+    }
+    
+    document.getElementById('explainModal').classList.remove('hidden');
+  }
+
+  formatExplainPlan(plan) {
+    if (!plan || plan.length === 0) {
+      return '<div class="explain-error">No plan data available</div>';
+    }
+
+    const formatNode = (node, level = 0) => {
+      if (!node) return '';
+
+      let html = '<div class="explain-node" style="margin-left: ' + (level * 1.5) + 'rem">';
+      
+      // Node Type
+      if (node['Node Type']) {
+        html += `<div><span class="explain-node-type">${node['Node Type']}</span>`;
+        
+        // Cost and rows
+        if (node['Total Cost']) {
+          html += `<span class="explain-cost">cost=${node['Startup Cost']?.toFixed(2) || 0}..${node['Total Cost'].toFixed(2)}</span>`;
+        }
+        if (node['Plan Rows']) {
+          html += `<span class="explain-rows">rows=${node['Plan Rows']}</span>`;
+        }
+        html += '</div>';
+      }
+
+      // Additional details
+      const details = [];
+      if (node['Relation Name']) details.push(`Table: ${node['Relation Name']}`);
+      if (node['Index Name']) details.push(`Index: ${node['Index Name']}`);
+      if (node['Index Cond']) details.push(`Index Cond: ${node['Index Cond']}`);
+      if (node['Filter']) details.push(`Filter: ${node['Filter']}`);
+      if (node['Join Type']) details.push(`Join Type: ${node['Join Type']}`);
+      if (node['Hash Cond']) details.push(`Hash Cond: ${node['Hash Cond']}`);
+      
+      if (details.length > 0) {
+        html += `<div class="explain-details">${this.escapeHtml(details.join(' | '))}</div>`;
+      }
+
+      html += '</div>';
+
+      // Process child plans
+      if (node.Plans && node.Plans.length > 0) {
+        node.Plans.forEach(childPlan => {
+          html += formatNode(childPlan, level + 1);
+        });
+      }
+
+      return html;
+    };
+
+    let html = '';
+    plan.forEach(p => {
+      if (p.Plan) {
+        html += formatNode(p.Plan);
+      }
+    });
+
+    return html || '<div class="explain-error">Unable to format plan</div>';
+  }
+
+  closeExplainModal() {
+    document.getElementById('explainModal').classList.add('hidden');
   }
 
   scrollToBottom() {
