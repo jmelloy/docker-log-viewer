@@ -74,15 +74,21 @@ http://localhost:9000
 
 ```
 docker-log-parser/
-├── main.go              # Web server & WebSocket
-├── docker.go            # Docker integration
-├── parser.go            # Log parsing logic
-├── go.mod               # Go dependencies
+├── main.go                 # Web server & WebSocket
+├── cmd/
+│   └── compare-tool/       # URL comparison CLI tool
+│       └── main.go
+├── pkg/
+│   └── logs/               # Shared log parsing library
+│       ├── docker.go       # Docker integration
+│       └── parser.go       # Log parsing logic
+├── go.mod                  # Go dependencies
 ├── web/
-│   ├── index.html       # UI layout
-│   ├── style.css        # Styling
-│   └── app.js           # Frontend logic
-└── AGENTS.md            # This file
+│   ├── index.html          # UI layout
+│   ├── style.css           # Styling
+│   └── app.js              # Frontend logic
+├── AGENTS.md               # This file
+└── COMPARE-TOOL.md         # Comparison tool docs
 ```
 
 ## Code Conventions
