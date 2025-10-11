@@ -90,8 +90,8 @@ func ExplainQuery(req ExplainRequest) ExplainResponse {
 		resp.Query = query
 	}
 
-	// Run EXPLAIN (FORMAT JSON) without ANALYZE for safety
-	explainQuery := fmt.Sprintf("EXPLAIN (FORMAT JSON) %s", query)
+	// Run EXPLAIN ANALYZE (FORMAT JSON)
+	explainQuery := fmt.Sprintf("EXPLAIN (ANALYZE, FORMAT JSON) %s", query)
 	
 	rows, err := db.Query(explainQuery)
 	if err != nil {
