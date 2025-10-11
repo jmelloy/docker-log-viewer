@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/gorilla/websocket v1.5.3
+	github.com/lib/pq v1.10.9
 )
 
 require (
