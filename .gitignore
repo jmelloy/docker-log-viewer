@@ -36,3 +36,4 @@ compare-tool
 # Generated output files
 *.html
 !web/*.html
+!*.tmpl
