@@ -15,6 +15,8 @@ go build -o compare-tool compare.go docker.go parser.go
 - `-data` - JSON/GraphQL file (required)
 - `-output` - HTML output file (default: `comparison.html`)
 - `-timeout` - Log collection timeout (default: `10s`)
+- `-token` - Bearer token for auth (or env: `BEARER_TOKEN`)
+- `-dev-id` - X-Glue-Dev-Id header (or env: `X_GLUE_DEV_ID`)
 
 ## Requirements
 
@@ -31,6 +33,7 @@ DBG db.go:12 > [sql]: SELECT * FROM users WHERE id = $1 db.table=users duration=
 ## Output
 
 HTML report with:
+- **Request payload** - Collapsible JSON/GraphQL viewer
 - Response times, status codes
 - SQL stats: count, duration, slow queries, N+1 detection  
 - Full logs for each request

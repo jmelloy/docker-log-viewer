@@ -154,12 +154,70 @@
             gap: 10px;
             margin-bottom: 15px;
         }
+        .post-data-section {
+            margin-bottom: 20px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .post-data-header {
+            padding: 12px 15px;
+            background: #0d1117;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .post-data-header:hover {
+            background: #161b22;
+        }
+        .post-data-title {
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #58a6ff;
+        }
+        .post-data-toggle {
+            color: #8b949e;
+            font-size: 1rem;
+        }
+        .post-data-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .post-data-content.expanded {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .post-data-code {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #c9d1d9;
+            background: #0d1117;
+            padding: 15px;
+            margin: 0;
+            white-space: pre;
+            overflow-x: auto;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>URL Comparison Report</h1>
         <div class="timestamp">Generated: {{.Generated.Format "2006-01-02 15:04:05 MST"}}</div>
+        
+        <!-- Post Data Section -->
+        <div class="post-data-section">
+            <div class="post-data-header" onclick="togglePostData()">
+                <span class="post-data-title">Request Payload (GraphQL/JSON)</span>
+                <span class="post-data-toggle" id="postDataToggle">▼</span>
+            </div>
+            <div class="post-data-content" id="postDataContent">
+                <pre class="post-data-code">{{.PostData}}</pre>
+            </div>
+        </div>
         
         <div class="comparison">
             <!-- Result 1 -->
@@ -397,5 +455,20 @@
             </div>
         </div>
     </div>
+    
+    <script>
+        function togglePostData() {
+            const content = document.getElementById('postDataContent');
+            const toggle = document.getElementById('postDataToggle');
+            
+            if (content.classList.contains('expanded')) {
+                content.classList.remove('expanded');
+                toggle.textContent = '▼';
+            } else {
+                content.classList.add('expanded');
+                toggle.textContent = '▲';
+            }
+        }
+    </script>
 </body>
 </html>
