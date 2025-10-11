@@ -13,7 +13,8 @@ A tool for comparing GraphQL/JSON API endpoints by analyzing their logs and SQL 
 ## Building
 
 ```bash
-go build -o compare-tool compare.go docker.go parser.go
+# Build the compare tool
+go build -o compare-tool ./cmd/compare-tool
 ```
 
 ## Usage

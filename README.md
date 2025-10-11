@@ -88,7 +88,7 @@ This repository also includes a command-line tool for comparing API endpoints by
 
 ```bash
 # Build the comparison tool
-go build -o compare-tool compare.go docker.go parser.go
+go build -o compare-tool ./cmd/compare-tool
 
 # Compare two URLs
 ./compare-tool \
@@ -109,9 +109,10 @@ See [COMPARE-TOOL.md](COMPARE-TOOL.md) for detailed documentation.
 ## Architecture
 
 - `main.go`: Web server, WebSocket handling, container monitoring
-- `docker.go`: Docker client integration and log streaming
-- `parser.go`: Log parsing and formatting logic
-- `compare.go`: URL comparison tool for performance testing
+- `cmd/compare-tool/`: URL comparison command-line tool
+- `pkg/logs/`: Shared log parsing and Docker integration library
+  - `docker.go`: Docker client integration and log streaming
+  - `parser.go`: Log parsing logic
 - `web/`: Frontend HTML, CSS, and JavaScript
 
 ## License

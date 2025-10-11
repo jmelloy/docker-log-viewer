@@ -1,0 +1,7 @@
+{
+  "operationName": "GetUserProfile",
+  "query": "query GetUserProfile($userId: ID!) { user(id: $userId) { id name email createdAt preferences { theme language } posts { id title content createdAt } } }",
+  "variables": {
+    "userId": "user_12345"
+  }
+}
