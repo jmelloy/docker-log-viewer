@@ -1,0 +1,9 @@
+{
+  "query": "mutation DeviceHeartbeat($id: ID!, $input: DeviceHeartbeatInput!) { deviceHeartbeat(id: $id, input: $input) }",
+  "variables": {
+    "id": "dev_33R5RI19uGaorvTdFHQQLn7SbwJ",
+    "input": {
+      "presence": "active"
+    }
+  }
+}

@@ -8,17 +8,18 @@ import (
 	"sync"
 	"time"
 
+	"docker-log-parser/pkg/logs"
 	"github.com/gorilla/websocket"
 )
 
 type WebApp struct {
-	docker       *DockerClient
-	logs         []LogMessage
+	docker       *logs.DockerClient
+	logs         []logs.LogMessage
 	logsMutex    sync.RWMutex
-	containers   []Container
+	containers   []logs.Container
 	clients      map[*websocket.Conn]bool
 	clientsMutex sync.RWMutex
-	logChan      chan LogMessage
+	logChan      chan logs.LogMessage
 	ctx          context.Context
 	cancel       context.CancelFunc
 	upgrader     websocket.Upgrader
@@ -30,17 +31,17 @@ type WSMessage struct {
 }
 
 type ContainersUpdateMessage struct {
-	Containers []Container `json:"containers"`
+	Containers []logs.Container `json:"containers"`
 }
 
 type LogWSMessage struct {
-	ContainerID string    `json:"containerId"`
-	Timestamp   time.Time `json:"timestamp"`
-	Entry       *LogEntry `json:"entry"`
+	ContainerID string         `json:"containerId"`
+	Timestamp   time.Time      `json:"timestamp"`
+	Entry       *logs.LogEntry `json:"entry"`
 }
 
 func NewWebApp() (*WebApp, error) {
-	docker, err := NewDockerClient()
+	docker, err := logs.NewDockerClient()
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +50,9 @@ func NewWebApp() (*WebApp, error) {
 
 	app := &WebApp{
 		docker:  docker,
-		logs:    make([]LogMessage, 0),
+		logs:    make([]logs.LogMessage, 0),
 		clients: make(map[*websocket.Conn]bool),
-		logChan: make(chan LogMessage, 1000),
+		logChan: make(chan logs.LogMessage, 1000),
 		ctx:     ctx,
 		cancel:  cancel,
 		upgrader: websocket.Upgrader{
@@ -124,7 +125,7 @@ func (wa *WebApp) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (wa *WebApp) broadcastLog(msg LogMessage) {
+func (wa *WebApp) broadcastLog(msg logs.LogMessage) {
 	wa.clientsMutex.RLock()
 	defer wa.clientsMutex.RUnlock()
 
@@ -234,7 +235,7 @@ func (wa *WebApp) monitorContainers() {
 	}
 }
 
-func (wa *WebApp) broadcastContainerUpdate(containers []Container) {
+func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 	update := ContainersUpdateMessage{
 		Containers: containers,
 	}
