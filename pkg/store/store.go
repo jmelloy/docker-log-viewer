@@ -63,10 +63,11 @@ type SampleQuery struct {
 // ExecutedRequest represents a single execution of a request (executed request)
 type ExecutedRequest struct {
 	ID              uint           `gorm:"primaryKey" json:"id"`
-	RequestID       uint           `gorm:"not null;column:request_id;index" json:"requestId"`
+	SampleID        *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
 	ServerID        *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
 	Server          *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
 	RequestIDHeader string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
+	RequestBody     string         `gorm:"column:request_body" json:"requestBody,omitempty"`
 	StatusCode      int            `gorm:"column:status_code" json:"statusCode"`
 	DurationMS      int64          `gorm:"column:duration_ms" json:"durationMs"`
 	ResponseBody    string         `gorm:"column:response_body" json:"responseBody,omitempty"`
@@ -346,7 +347,7 @@ func (s *Store) GetExecution(id int64) (*ExecutedRequest, error) {
 // ListExecutions retrieves all executions for a request
 func (s *Store) ListExecutions(requestID int64) ([]ExecutedRequest, error) {
 	var executions []ExecutedRequest
-	result := s.db.Where("request_id = ?", requestID).Order("executed_at DESC").Find(&executions)
+	result := s.db.Where("sample_id = ?", requestID).Order("executed_at DESC").Find(&executions)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list executions: %w", result.Error)
 	}
@@ -463,9 +464,12 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		return nil, nil
 	}
 
-	req, err := s.GetRequest(int64(exec.RequestID))
-	if err != nil {
-		return nil, err
+	var req *SampleQuery
+	if exec.SampleID != nil {
+		req, err = s.GetRequest(int64(*exec.SampleID))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	logs, err := s.GetExecutionLogs(executionID)
