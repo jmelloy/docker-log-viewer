@@ -26,22 +26,75 @@
       <div class="main-layout">
         <aside class="sidebar">
           <div class="section">
-            <h3>Sample Queries</h3>
-            <button id="newSampleQueryBtn" class="btn-primary">
-              + New Sample Query
+            <h3>Execute Query</h3>
+
+            <div class="form-group">
+              <label for="sampleQuerySelect">Sample Query (optional):</label>
+              <select id="sampleQuerySelect">
+                <option value="">-- Select to populate --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="executeServerSelect">Server:</label>
+              <select id="executeServerSelect">
+                <option value="">-- Select Server --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="executeQueryData">Query Data (JSON):</label>
+              <textarea
+                id="executeQueryData"
+                rows="15"
+                placeholder='{"query": "{ users { id name } }", "operationName": "GetUsers"}'
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="executeTokenOverride">Bearer Token Override:</label>
+              <input
+                type="text"
+                id="executeTokenOverride"
+                placeholder="Optional override"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="executeDevIDOverride">Dev ID Override:</label>
+              <input
+                type="text"
+                id="executeDevIDOverride"
+                placeholder="Optional override"
+              />
+            </div>
+
+            <button
+              id="executeSidebarBtn"
+              class="btn-primary"
+              style="width: 100%"
+            >
+              Execute Query
             </button>
-            <div id="sampleQueriesList" class="requests-list"></div>
+
+            <button
+              id="manageSampleQueriesBtn"
+              class="btn-secondary"
+              style="width: 100%; margin-top: 0.5rem"
+            >
+              Manage Sample Queries
+            </button>
           </div>
         </aside>
 
         <main class="content">
-          <div id="emptyState" class="empty-state">
+          <div style="padding: 2rem">
             <div
               style="
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 1rem;
+                margin-bottom: 1.5rem;
               "
             >
               <h2 style="margin: 0">Recent Requests</h2>
@@ -53,56 +106,29 @@
                 Compare Selected
               </button>
             </div>
-            <p>
-              No requests executed yet. Select a sample query and execute it to
-              get started.
-            </p>
             <div id="requestsList" class="executions-list"></div>
           </div>
-
-          <div id="sampleQueryDetail" class="request-detail hidden">
-            <div class="detail-header">
-              <h2 id="sampleQueryName"></h2>
-              <div class="detail-actions">
-                <button id="executeBtn" class="btn-primary">
-                  Execute Query
-                </button>
-                <button id="deleteBtn" class="btn-danger">Delete</button>
-              </div>
-            </div>
-
-            <div class="detail-section">
-              <h3>Query Details</h3>
-              <div class="form-row">
-                <label>URL:</label>
-                <div id="sampleQueryURL" class="value"></div>
-              </div>
-              <div class="form-row">
-                <label>Created:</label>
-                <div id="sampleQueryCreated" class="value"></div>
-              </div>
-            </div>
-
-            <div class="detail-section">
-              <h3>Query Data</h3>
-              <pre id="sampleQueryData" class="json-display"></pre>
-            </div>
-
-            <div
-              class="detail-section"
-              id="variablesSection"
-              style="display: none"
-            >
-              <h3>Variables</h3>
-              <pre id="sampleQueryVariables" class="json-display"></pre>
-            </div>
-
-            <div class="detail-section">
-              <h3>Past Requests</h3>
-              <div id="pastRequestsList" class="executions-list"></div>
-            </div>
-          </div>
         </main>
+      </div>
+    </div>
+
+    <!-- Manage Sample Queries Modal -->
+    <div id="manageSampleQueriesModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Manage Sample Queries</h3>
+          <button id="closeManageSampleQueriesModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <button
+            id="newSampleQueryBtn"
+            class="btn-primary"
+            style="margin-bottom: 1rem"
+          >
+            + New Sample Query
+          </button>
+          <div id="sampleQueriesList" class="requests-list"></div>
+        </div>
       </div>
     </div>
 
@@ -171,40 +197,6 @@
           <button id="cancelNewSampleQueryBtn" class="btn-secondary">
             Cancel
           </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Execute Query Modal -->
-    <div id="executeQueryModal" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>Execute Query</h3>
-          <button id="closeExecuteQueryModal">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label for="executeServer">Server:</label>
-            <select id="executeServer">
-              <option value="">-- Select Server --</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="executeToken">Bearer Token Override (optional):</label>
-            <input type="text" id="executeToken" placeholder="Override token" />
-          </div>
-          <div class="form-group">
-            <label for="executeDevID">Dev ID Override (optional):</label>
-            <input
-              type="text"
-              id="executeDevID"
-              placeholder="Override dev ID"
-            />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button id="confirmExecuteBtn" class="btn-primary">Execute</button>
-          <button id="cancelExecuteBtn" class="btn-secondary">Cancel</button>
         </div>
       </div>
     </div>

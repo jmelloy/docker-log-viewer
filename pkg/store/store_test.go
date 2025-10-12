@@ -52,7 +52,7 @@ func TestStore(t *testing.T) {
 
 	// Test creating a request
 	serverIDUint := uint(serverID)
-	req := &Request{
+	req := &SampleQuery{
 		Name:        "Test Request",
 		ServerID:    &serverIDUint,
 		RequestData: `{"query": "{ test }"}`,
@@ -87,9 +87,9 @@ func TestStore(t *testing.T) {
 	}
 
 	// Test creating execution
-	exec := &Execution{
-		RequestID:       uint(reqID),
-		ServerID:        &serverIDUint,
+	exec := &ExecutedRequest{
+		Name:            "Test Request",
+		ServerURL:       server.URL,
 		RequestIDHeader: "test-req-id",
 		StatusCode:      200,
 		DurationMS:      150,

@@ -363,7 +363,7 @@ func (wa *WebApp) createRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the request
-	req := &store.Request{
+	req := &store.SampleQuery{
 		Name:        input.Name,
 		ServerID:    serverID,
 		RequestData: input.RequestData,
@@ -458,26 +458,182 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 }
 
+func (wa *WebApp) handleDirectExecute(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		ServerID            uint   `json:"serverId"`
+		RequestData         string `json:"requestData"`
+		BearerTokenOverride string `json:"bearerTokenOverride,omitempty"`
+		DevIDOverride       string `json:"devIdOverride,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if input.ServerID == 0 || input.RequestData == "" {
+		http.Error(w, "serverId and requestData are required", http.StatusBadRequest)
+		return
+	}
+
+	// Execute in background
+	go func() {
+		server, err := wa.store.GetServer(int64(input.ServerID))
+		if err != nil || server == nil {
+			log.Printf("Failed to get server %d: %v", input.ServerID, err)
+			return
+		}
+
+		// Use token override if provided, otherwise use server's token
+		bearerToken := input.BearerTokenOverride
+		if bearerToken == "" {
+			bearerToken = server.BearerToken
+		}
+
+		// Use devID override if provided, otherwise use server's devID
+		devID := input.DevIDOverride
+		if devID == "" {
+			devID = server.DevID
+		}
+
+		// Execute the request
+		requestID := generateRequestID()
+		startTime := time.Now()
+		statusCode, responseBody, responseHeaders, err := makeHTTPRequest(
+			server.URL,
+			[]byte(input.RequestData),
+			requestID,
+			bearerToken,
+			devID,
+		)
+		duration := time.Since(startTime).Milliseconds()
+
+		errMsg := ""
+		if err != nil {
+			errMsg = err.Error()
+			log.Printf("Request execution failed: %v", err)
+		}
+
+		// Extract operation name from request data
+		operationName := ""
+		var requestDataParsed map[string]interface{}
+		if err := json.Unmarshal([]byte(input.RequestData), &requestDataParsed); err == nil {
+			if opName, ok := requestDataParsed["operationName"].(string); ok {
+				operationName = opName
+			}
+		}
+
+		// Store execution
+		execution := &store.ExecutedRequest{
+			Name:            operationName,
+			ServerURL:       server.URL,
+			RequestIDHeader: requestID,
+			RequestData:     input.RequestData,
+			StatusCode:      statusCode,
+			DurationMS:      duration,
+			ResponseBody:    responseBody,
+			ResponseHeaders: responseHeaders,
+			Error:           errMsg,
+			ExecutedAt:      time.Now(),
+		}
+
+		execID, err := wa.store.CreateExecution(execution)
+		if err != nil {
+			log.Printf("Failed to save execution: %v", err)
+			return
+		}
+
+		// Wait for logs and collect them
+		time.Sleep(10 * time.Second)
+		collectedLogs := wa.collectLogsForRequest(requestID, 10*time.Second)
+
+		// Save logs
+		if len(collectedLogs) > 0 {
+			if err := wa.store.SaveExecutionLogs(execID, collectedLogs); err != nil {
+				log.Printf("Failed to save execution logs: %v", err)
+			}
+		}
+
+		// Extract and save SQL queries
+		sqlQueries := extractSQLQueries(collectedLogs)
+		if len(sqlQueries) > 0 {
+			if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
+				log.Printf("Failed to save SQL queries: %v", err)
+			}
+
+			// Auto-execute EXPLAIN for queries taking longer than 2ms
+			for i, q := range sqlQueries {
+				if q.DurationMS > 2.0 {
+					log.Printf("Auto-executing EXPLAIN for slow query (%.2fms): %s", q.DurationMS, q.Query)
+					
+					variables := make(map[string]string)
+					if q.Variables != "" {
+						var varsArray []interface{}
+						if err := json.Unmarshal([]byte(q.Variables), &varsArray); err == nil {
+							for idx, val := range varsArray {
+								variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
+							}
+						} else {
+							log.Printf("Failed to parse db.vars for query %d: %v", i, err)
+						}
+					}
+					
+					req := sqlexplain.Request{
+						Query:     q.Query,
+						Variables: variables,
+					}
+					resp := sqlexplain.Explain(req)
+					
+					if resp.Error != "" {
+						log.Printf("Auto-EXPLAIN failed for query %d: %s", i, resp.Error)
+						continue
+					}
+					
+					planJSON, _ := json.Marshal(resp.QueryPlan)
+					if err := wa.store.UpdateQueryExplainPlan(execID, q.QueryHash, string(planJSON)); err != nil {
+						log.Printf("Failed to save EXPLAIN plan for query %d: %v", i, err)
+					} else {
+						log.Printf("Saved EXPLAIN plan for slow query (%.2fms)", q.DurationMS)
+					}
+				}
+			}
+		}
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
 func (wa *WebApp) handleExecutions(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	// Extract request ID from query param
-	requestIDStr := r.URL.Query().Get("request_id")
-	if requestIDStr == "" {
-		http.Error(w, "request_id parameter required", http.StatusBadRequest)
+	// Extract server ID from query param
+	serverIDStr := r.URL.Query().Get("server_id")
+	if serverIDStr == "" {
+		http.Error(w, "server_id parameter required", http.StatusBadRequest)
 		return
 	}
 
-	requestID, err := strconv.ParseInt(requestIDStr, 10, 64)
+	serverID, err := strconv.ParseInt(serverIDStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid request_id", http.StatusBadRequest)
+		http.Error(w, "Invalid server_id", http.StatusBadRequest)
 		return
 	}
 
-	executions, err := wa.store.ListExecutions(requestID)
+	executions, err := wa.store.ListExecutions(serverID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -537,19 +693,100 @@ func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		// Check if we're getting a specific server
+		idStr := r.URL.Query().Get("id")
+		if idStr != "" {
+			id, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				http.Error(w, "Invalid server ID", http.StatusBadRequest)
+				return
+			}
+			server, err := wa.store.GetServer(id)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if server == nil {
+				http.Error(w, "Server not found", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(server)
+			return
+		}
+
+		// List all servers
+		servers, err := wa.store.ListServers()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(servers)
+
+	case http.MethodPost:
+		var server store.Server
+		if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		id, err := wa.store.CreateServer(&server)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		server.ID = uint(id)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(server)
+
+	case http.MethodPut:
+		var server store.Server
+		if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if server.ID == 0 {
+			http.Error(w, "Server ID required", http.StatusBadRequest)
+			return
+		}
+
+		if err := wa.store.UpdateServer(&server); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(server)
+
+	case http.MethodDelete:
+		idStr := r.URL.Query().Get("id")
+		if idStr == "" {
+			http.Error(w, "Server ID required", http.StatusBadRequest)
+			return
+		}
+
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid server ID", http.StatusBadRequest)
+			return
+		}
+
+		if err := wa.store.DeleteServer(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
-
-	servers, err := wa.store.ListServers()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(servers)
 }
 
 func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, bearerTokenOverride, devIDOverride string) {
@@ -568,7 +805,6 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 
 	// Get server info for execution
 	var url, bearerToken, devID string
-	var serverIDForExec *uint
 	
 	// Use override server if provided, otherwise use sample query's server
 	if serverIDOverride != nil {
@@ -581,13 +817,11 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 			url = server.URL
 			bearerToken = server.BearerToken
 			devID = server.DevID
-			serverIDForExec = serverIDOverride
 		}
 	} else if req.Server != nil {
 		url = req.Server.URL
 		bearerToken = req.Server.BearerToken
 		devID = req.Server.DevID
-		serverIDForExec = &req.Server.ID
 	}
 
 	// Apply overrides
@@ -598,23 +832,36 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		devID = devIDOverride
 	}
 
-	execution := &store.Execution{
-		RequestID:       uint(requestID),
-		ServerID:        serverIDForExec,
-		RequestIDHeader: requestIDHeader,
-		ExecutedAt:      time.Now(),
+	// Extract operation name from request data
+	operationName := req.Name // Use sample query name as fallback
+	var requestDataParsed map[string]interface{}
+	if err := json.Unmarshal([]byte(req.RequestData), &requestDataParsed); err == nil {
+		if opName, ok := requestDataParsed["operationName"].(string); ok {
+			operationName = opName
+		}
 	}
 
 	// Execute HTTP request
 	startTime := time.Now()
 	statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID)
-	execution.DurationMS = time.Since(startTime).Milliseconds()
-	execution.StatusCode = statusCode
-	execution.ResponseBody = responseBody
-	execution.ResponseHeaders = responseHeaders
-
+	duration := time.Since(startTime).Milliseconds()
+	
+	errMsg := ""
 	if err != nil {
-		execution.Error = err.Error()
+		errMsg = err.Error()
+	}
+
+	execution := &store.ExecutedRequest{
+		Name:            operationName,
+		ServerURL:       url,
+		RequestIDHeader: requestIDHeader,
+		RequestData:     req.RequestData,
+		StatusCode:      statusCode,
+		DurationMS:      duration,
+		ResponseBody:    responseBody,
+		ResponseHeaders: responseHeaders,
+		Error:           errMsg,
+		ExecutedAt:      time.Now(),
 	}
 
 	// Save execution
@@ -853,6 +1100,7 @@ func (wa *WebApp) Run(addr string) error {
 	// Request management endpoints
 	http.HandleFunc("/api/servers", wa.handleServers)
 	http.HandleFunc("/api/requests", wa.handleRequests)
+	http.HandleFunc("/api/execute", wa.handleDirectExecute)
 	http.HandleFunc("/api/requests/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/execute") {
 			wa.handleExecuteRequest(w, r)

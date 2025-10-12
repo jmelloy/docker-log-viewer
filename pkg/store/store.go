@@ -25,96 +25,87 @@ type Store struct {
 
 // Server represents a server configuration with URL and authentication
 type Server struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	URL         string    `gorm:"not null" json:"url"`
-	BearerToken string    `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
-	DevID       string    `gorm:"column:dev_id" json:"devId,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	Name        string         `gorm:"not null" json:"name"`
+	URL         string         `gorm:"not null" json:"url"`
+	BearerToken string         `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
+	DevID       string         `gorm:"column:dev_id" json:"devId,omitempty"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// Request represents a saved GraphQL/API request template (sample query)
-type Request struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	ServerID    *uint     `gorm:"column:server_id;index" json:"serverId,omitempty"`
-	Server      *Server   `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestData string    `gorm:"not null;column:request_data" json:"requestData"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+// SampleQuery represents a saved GraphQL/API request template
+type SampleQuery struct {
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	Name        string         `gorm:"not null" json:"name"`
+	ServerID    *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server      *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestData string         `gorm:"not null;column:request_data" json:"requestData"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// TableName specifies the table name for the Request model
-func (Request) TableName() string {
-	return "sample_queries"
-}
-
-// Execution represents a single execution of a request (executed request)
-type Execution struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	RequestID       uint      `gorm:"not null;column:request_id;index" json:"requestId"`
-	ServerID        *uint     `gorm:"column:server_id;index" json:"serverId,omitempty"`
-	Server          *Server   `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestIDHeader string    `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
-	StatusCode      int       `gorm:"column:status_code" json:"statusCode"`
-	DurationMS      int64     `gorm:"column:duration_ms" json:"durationMs"`
-	ResponseBody    string    `gorm:"column:response_body" json:"responseBody,omitempty"`
-	ResponseHeaders string    `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
-	Error           string    `json:"error,omitempty"`
-	ExecutedAt      time.Time `gorm:"not null;column:executed_at;index" json:"executedAt"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+// ExecutedRequest represents a single execution of a request
+type ExecutedRequest struct {
+	ID              uint           `gorm:"primaryKey" json:"id"`
+	Name            string         `gorm:"column:name" json:"name,omitempty"` // Operation name or query name
+	ServerURL       string         `gorm:"column:server_url" json:"serverUrl,omitempty"`
+	ServerID        uint           `gorm:"not null;column:server_id;index" json:"serverId"`
+	Server          *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestIDHeader string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
+	RequestData     string         `gorm:"column:request_data" json:"requestData,omitempty"`
+	StatusCode      int            `gorm:"column:status_code" json:"statusCode"`
+	DurationMS      int64          `gorm:"column:duration_ms" json:"durationMs"`
+	ResponseBody    string         `gorm:"column:response_body" json:"responseBody,omitempty"`
+	ResponseHeaders string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	ExecutedAt      time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
-// TableName specifies the table name for the Execution model
-func (Execution) TableName() string {
-	return "executed_requests"
 }
 
 // ExecutionLog represents a log entry from an execution
 type ExecutionLog struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	ExecutionID uint      `gorm:"not null;column:execution_id;index" json:"executionId"`
-	ContainerID string    `gorm:"not null;column:container_id" json:"containerId"`
-	Timestamp   time.Time `gorm:"not null" json:"timestamp"`
-	Level       string    `json:"level"`
-	Message     string    `json:"message"`
-	RawLog      string    `gorm:"column:raw_log" json:"rawLog"`
-	Fields      string    `json:"fields"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	ExecutionID uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
+	ContainerID string         `gorm:"not null;column:container_id" json:"containerId"`
+	Timestamp   time.Time      `gorm:"not null" json:"timestamp"`
+	Level       string         `json:"level"`
+	Message     string         `json:"message"`
+	RawLog      string         `gorm:"column:raw_log" json:"rawLog"`
+	Fields      string         `json:"fields"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
-	ID              uint    `gorm:"primaryKey" json:"id"`
-	ExecutionID     uint    `gorm:"not null;column:execution_id;index" json:"executionId"`
-	Query           string  `gorm:"not null" json:"query"`
-	NormalizedQuery string  `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
-	QueryHash       string  `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
-	DurationMS      float64 `gorm:"column:duration_ms" json:"durationMs"`
-	TableName       string  `gorm:"column:table_name" json:"tableName"`
-	Operation       string  `json:"operation"`
-	Rows            int     `json:"rows"`
-	Variables       string  `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
-	ExplainPlan     string  `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+	ID              uint           `gorm:"primaryKey" json:"id"`
+	ExecutionID     uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
+	Query           string         `gorm:"not null" json:"query"`
+	NormalizedQuery string         `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
+	QueryHash       string         `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
+	DurationMS      float64        `gorm:"column:duration_ms" json:"durationMs"`
+	TableName       string         `gorm:"column:table_name" json:"tableName"`
+	Operation       string         `json:"operation"`
+	Rows            int            `json:"rows"`
+	Variables       string         `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
+	ExplainPlan     string         `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // ExecutionDetail includes execution with related logs and SQL analysis
 type ExecutionDetail struct {
-	Execution   Execution      `json:"execution"`
-	Request     *Request       `json:"request,omitempty"`
-	Logs        []ExecutionLog `json:"logs"`
-	SQLQueries  []SQLQuery     `json:"sqlQueries"`
-	SQLAnalysis *SQLAnalysis   `json:"sqlAnalysis,omitempty"`
+	Execution   ExecutedRequest `json:"execution"`
+	Logs        []ExecutionLog  `json:"logs"`
+	SQLQueries  []SQLQuery      `json:"sqlQueries"`
+	SQLAnalysis *SQLAnalysis    `json:"sqlAnalysis,omitempty"`
 }
 
 // SQLAnalysis provides statistics about SQL queries
@@ -177,7 +168,7 @@ func (s *Store) Close() error {
 }
 
 // CreateRequest creates a new request template
-func (s *Store) CreateRequest(req *Request) (int64, error) {
+func (s *Store) CreateRequest(req *SampleQuery) (int64, error) {
 	result := s.db.Create(req)
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to create request: %w", result.Error)
@@ -186,8 +177,8 @@ func (s *Store) CreateRequest(req *Request) (int64, error) {
 }
 
 // GetRequest retrieves a request by ID
-func (s *Store) GetRequest(id int64) (*Request, error) {
-	var req Request
+func (s *Store) GetRequest(id int64) (*SampleQuery, error) {
+	var req SampleQuery
 	result := s.db.Preload("Server").First(&req, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -199,8 +190,8 @@ func (s *Store) GetRequest(id int64) (*Request, error) {
 }
 
 // ListRequests retrieves all requests
-func (s *Store) ListRequests() ([]Request, error) {
-	var requests []Request
+func (s *Store) ListRequests() ([]SampleQuery, error) {
+	var requests []SampleQuery
 	result := s.db.Preload("Server").Order("created_at DESC").Find(&requests)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
@@ -210,7 +201,7 @@ func (s *Store) ListRequests() ([]Request, error) {
 
 // DeleteRequest deletes a request and all its executions
 func (s *Store) DeleteRequest(id int64) error {
-	result := s.db.Delete(&Request{}, id)
+	result := s.db.Delete(&SampleQuery{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete request: %w", result.Error)
 	}
@@ -268,7 +259,7 @@ func (s *Store) DeleteServer(id int64) error {
 }
 
 // CreateExecution creates a new execution record
-func (s *Store) CreateExecution(exec *Execution) (int64, error) {
+func (s *Store) CreateExecution(exec *ExecutedRequest) (int64, error) {
 	result := s.db.Create(exec)
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to create execution: %w", result.Error)
@@ -277,8 +268,8 @@ func (s *Store) CreateExecution(exec *Execution) (int64, error) {
 }
 
 // GetExecution retrieves an execution by ID
-func (s *Store) GetExecution(id int64) (*Execution, error) {
-	var exec Execution
+func (s *Store) GetExecution(id int64) (*ExecutedRequest, error) {
+	var exec ExecutedRequest
 	result := s.db.First(&exec, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -289,19 +280,19 @@ func (s *Store) GetExecution(id int64) (*Execution, error) {
 	return &exec, nil
 }
 
-// ListExecutions retrieves all executions for a request
-func (s *Store) ListExecutions(requestID int64) ([]Execution, error) {
-	var executions []Execution
-	result := s.db.Where("request_id = ?", requestID).Order("executed_at DESC").Find(&executions)
+// ListExecutions retrieves all executions for a server
+func (s *Store) ListExecutions(serverID int64) ([]ExecutedRequest, error) {
+	var executions []ExecutedRequest
+	result := s.db.Preload("Server").Where("server_id = ?", serverID).Order("executed_at DESC").Find(&executions)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list executions: %w", result.Error)
 	}
 	return executions, nil
 }
 
-// ListAllExecutions retrieves all executions across all requests
-func (s *Store) ListAllExecutions() ([]Execution, error) {
-	var executions []Execution
+// ListAllExecutions retrieves all executions across all servers
+func (s *Store) ListAllExecutions() ([]ExecutedRequest, error) {
+	var executions []ExecutedRequest
 	result := s.db.Preload("Server").Order("executed_at DESC").Limit(100).Find(&executions)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list all executions: %w", result.Error)
@@ -381,11 +372,11 @@ func (s *Store) UpdateQueryExplainPlan(executionID int64, queryHash string, expl
 	result := s.db.Model(&SQLQuery{}).
 		Where("execution_id = ? AND query_hash = ?", executionID, queryHash).
 		Update("explain_plan", explainPlan)
-	
+
 	if result.Error != nil {
 		return fmt.Errorf("failed to update explain plan: %w", result.Error)
 	}
-	
+
 	return nil
 }
 
@@ -409,11 +400,6 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		return nil, nil
 	}
 
-	req, err := s.GetRequest(int64(exec.RequestID))
-	if err != nil {
-		return nil, err
-	}
-
 	logs, err := s.GetExecutionLogs(executionID)
 	if err != nil {
 		return nil, err
@@ -426,7 +412,6 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 
 	detail := &ExecutionDetail{
 		Execution:  *exec,
-		Request:    req,
 		Logs:       logs,
 		SQLQueries: sqlQueries,
 	}

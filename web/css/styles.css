@@ -1168,6 +1168,22 @@ button:disabled {
     color: #8b949e;
 }
 
+.btn-delete-query {
+    background: #da3633;
+    color: white;
+    border: 1px solid #f85149;
+    padding: 0.35rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-delete-query:hover {
+    background: #f85149;
+}
+
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
@@ -1342,11 +1358,15 @@ button:disabled {
 .execution-item-detailed {
     border: 1px solid #30363d;
     border-radius: 4px;
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
     background: #161b22;
     cursor: pointer;
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.85rem;
 }
 
 .execution-item-detailed:hover {
@@ -1354,44 +1374,71 @@ button:disabled {
     box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
 }
 
-.exec-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.5rem;
-}
-
 .exec-compare-checkbox {
     cursor: pointer;
+    flex-shrink: 0;
+}
+
+.exec-status {
+    min-width: 40px;
+    text-align: center;
+    font-weight: 600;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.exec-status.success {
+    background: #1f6f42;
+    color: #7ee787;
+}
+
+.exec-status.error {
+    background: #5a1e1e;
+    color: #f85149;
 }
 
 .exec-name {
     font-weight: 600;
     color: #c9d1d9;
-    flex: 1;
+    min-width: 120px;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.exec-details {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.75rem;
+.exec-duration {
+    color: #58a6ff;
+    font-weight: 500;
+    min-width: 50px;
+    flex-shrink: 0;
+}
+
+.exec-time {
     color: #8b949e;
-    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    min-width: 80px;
+    flex-shrink: 0;
 }
 
 .exec-server {
     color: #58a6ff;
-}
-
-.exec-last-log {
-    font-size: 0.75rem;
-    color: #8b949e;
-    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding-top: 0.5rem;
-    border-top: 1px solid #30363d;
+    min-width: 0;
+}
+
+.exec-id {
+    color: #8b949e;
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 150px;
 }
 
 .execution-overview {
@@ -1477,34 +1524,46 @@ button:disabled {
 /* Request Comparison */
 .comparison-grid {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: 1.5rem;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 1rem;
+    min-width: 0;
+}
+
+.comparison-column {
+    min-width: 0;
+    overflow: hidden;
 }
 
 .comparison-column h3 {
     color: #58a6ff;
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 .comparison-stats {
     background: #0d1117;
     border: 1px solid #30363d;
     border-radius: 4px;
-    padding: 1rem;
-    margin-bottom: 1rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
 }
 
 .comparison-stats div {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .comparison-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .comparison-section h4 {
     color: #8b949e;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     margin-bottom: 0.5rem;
 }
 
@@ -1512,13 +1571,35 @@ button:disabled {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
 }
 
 .comparison-query {
     background: #0d1117;
     border: 1px solid #30363d;
     border-radius: 4px;
-    padding: 0.75rem;
+    padding: 0.5rem;
+    min-width: 0;
+}
+
+.comparison-query.slower-query {
+    border-color: #f85149;
+    background: rgba(248, 81, 73, 0.1);
+}
+
+.comparison-query > div:first-child {
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.comparison-query .sql-query-text {
+    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 
 .comparison-divider {
@@ -1527,24 +1608,24 @@ button:disabled {
     justify-content: center;
     border-left: 1px solid #30363d;
     border-right: 1px solid #30363d;
-    padding: 0 1rem;
+    padding: 0 0.5rem;
 }
 
 .comparison-diff {
     text-align: center;
-    padding: 1rem;
+    padding: 0.75rem;
     background: #161b22;
     border-radius: 8px;
 }
 
 .comparison-diff div:first-child {
     color: #8b949e;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     margin-bottom: 0.5rem;
 }
 
 .comparison-diff div:last-child {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 600;
 }
 
