@@ -2,13 +2,24 @@
 
 ## Overview
 
-The Docker Log Viewer web application has been successfully converted from vanilla JavaScript with manual DOM manipulation to a modern Vue.js 3 reactive application.
+The Docker Log Viewer web applications have been successfully converted from vanilla JavaScript with manual DOM manipulation to modern Vue.js 3 reactive applications.
 
-## Code Reduction
+## Applications Converted
+
+### 1. Log Viewer (`web/index.html` + `web/js/app.js`)
 
 - **Before**: 997 lines (class-based JavaScript)
 - **After**: 700 lines (Vue.js application)
 - **Reduction**: ~30% smaller, much more maintainable
+
+### 2. Request Manager (`web/requests.html` + `web/js/requests.js`)
+
+- **Before**: 855 lines (requests.js) + 324 lines (requests.html) = 1,179 lines
+- **After**: 980 lines (requests.js) + 16 lines (requests.html) = 996 lines  
+- **Reduction**: 183 lines saved (~15.5% reduction)
+- **HTML reduction**: 95% smaller (324 → 16 lines)
+
+## Code Reduction
 
 ## Key Changes
 
