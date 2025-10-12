@@ -847,36 +847,43 @@ button:disabled {
 .ansi-bold { font-weight: bold; }
 
 /* PEV2 Styles */
-#pev2App {
+#pev2App,
+#pev2ExplainApp {
     background: #0d1117;
     color: #c9d1d9;
     min-height: 0;
     overflow: hidden;
 }
 
-#pev2App .alert {
+#pev2App .alert,
+#pev2ExplainApp .alert {
     margin: 1rem;
 }
 
-#pev2App .card {
+#pev2App .card,
+#pev2ExplainApp .card {
     background-color: #161b22 !important;
     border-color: #30363d !important;
     color: #c9d1d9 !important;
 }
 
 #pev2App .form-control,
-#pev2App .form-select {
+#pev2App .form-select,
+#pev2ExplainApp .form-control,
+#pev2ExplainApp .form-select {
     background-color: #0d1117 !important;
     border-color: #30363d !important;
     color: #c9d1d9 !important;
 }
 
-#pev2App .btn-primary {
+#pev2App .btn-primary,
+#pev2ExplainApp .btn-primary {
     background-color: #238636 !important;
     border-color: #2ea043 !important;
 }
 
-#pev2App .btn-primary:hover {
+#pev2App .btn-primary:hover,
+#pev2ExplainApp .btn-primary:hover {
     background-color: #2ea043 !important;
 }
 
