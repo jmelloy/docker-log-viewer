@@ -1,6 +1,6 @@
 const { createApp } = Vue;
 
-createApp({
+const app = createApp({
   data() {
     return {
       containers: [],
@@ -21,7 +21,6 @@ createApp({
         error: null
       },
       sqlAnalysis: null,
-      pev2App: null,
       collapsedProjects: new Set()
     };
   },
@@ -59,7 +58,6 @@ createApp({
 
   mounted() {
     this.init();
-    this.initPEV2();
   },
 
   methods: {
@@ -67,26 +65,6 @@ createApp({
       await this.loadContainers();
       this.connectWebSocket();
       await this.loadInitialLogs();
-    },
-
-    initPEV2() {
-      // Initialize PEV2 Vue app in the modal
-      this.pev2App = createApp({
-        data() {
-          return {
-            planSource: '',
-            planQuery: ''
-          }
-        },
-        methods: {
-          updatePlan(plan, query) {
-            this.planSource = plan;
-            this.planQuery = query;
-          }
-        }
-      });
-      this.pev2App.component('pev2', pev2.Plan);
-      this.pev2App.mount('#pev2App');
     },
 
     getLevelVariants(level) {
@@ -578,10 +556,6 @@ createApp({
           this.explainData.error = null;
           this.explainData.planSource = planText;
           this.explainData.planQuery = result.query || '';
-
-          if (this.pev2App && this.pev2App._instance) {
-            this.pev2App._instance.proxy.updatePlan(planText, result.query || '');
-          }
         }
         
         this.showExplainModal = true;
@@ -900,4 +874,10 @@ createApp({
       </div>
     </div>
   `
-}).mount('#app');
+});
+
+// Register PEV2 component
+app.component('pev2', pev2.Plan);
+
+// Mount the app
+app.mount('#app');
