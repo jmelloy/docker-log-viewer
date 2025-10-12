@@ -853,6 +853,12 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 					if vars, ok := msg.Entry.Fields["db.vars"]; ok {
 						query.Variables = vars
 					}
+					// Check both gql.operation and gql.operationName for GraphQL operation
+					if gqlOp, ok := msg.Entry.Fields["gql.operation"]; ok {
+						query.GraphQLOperation = gqlOp
+					} else if gqlOp, ok := msg.Entry.Fields["gql.operationName"]; ok {
+						query.GraphQLOperation = gqlOp
+					}
 				}
 
 				queries = append(queries, query)

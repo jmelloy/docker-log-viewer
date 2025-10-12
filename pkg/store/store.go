@@ -105,20 +105,21 @@ type ExecutionLog struct {
 
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
-	ID              uint    `gorm:"primaryKey" json:"id"`
-	ExecutionID     uint    `gorm:"not null;column:execution_id;index" json:"executionId"`
-	Query           string  `gorm:"not null" json:"query"`
-	NormalizedQuery string  `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
-	QueryHash       string  `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
-	DurationMS      float64 `gorm:"column:duration_ms" json:"durationMs"`
-	TableName       string  `gorm:"column:table_name" json:"tableName"`
-	Operation       string  `json:"operation"`
-	Rows            int     `json:"rows"`
-	Variables       string  `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
-	ExplainPlan     string  `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	ID               uint    `gorm:"primaryKey" json:"id"`
+	ExecutionID      uint    `gorm:"not null;column:execution_id;index" json:"executionId"`
+	Query            string  `gorm:"not null" json:"query"`
+	NormalizedQuery  string  `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
+	QueryHash        string  `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
+	DurationMS       float64 `gorm:"column:duration_ms" json:"durationMs"`
+	TableName        string  `gorm:"column:table_name" json:"tableName"`
+	Operation        string  `json:"operation"`
+	Rows             int     `json:"rows"`
+	Variables        string  `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
+	GraphQLOperation string  `gorm:"column:gql_operation" json:"graphqlOperation,omitempty"`
+	ExplainPlan      string  `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // ExecutionDetail includes execution with related logs and SQL analysis
