@@ -35,7 +35,7 @@ type Server struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// Request represents a saved GraphQL/API request template
+// Request represents a saved GraphQL/API request template (sample query)
 type Request struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"not null" json:"name"`
@@ -47,7 +47,12 @@ type Request struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// Execution represents a single execution of a request
+// TableName specifies the table name for the Request model
+func (Request) TableName() string {
+	return "sample_queries"
+}
+
+// Execution represents a single execution of a request (executed request)
 type Execution struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
 	RequestID       uint      `gorm:"not null;column:request_id;index" json:"requestId"`
@@ -63,6 +68,11 @@ type Execution struct {
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// TableName specifies the table name for the Execution model
+func (Execution) TableName() string {
+	return "executed_requests"
 }
 
 // ExecutionLog represents a log entry from an execution
