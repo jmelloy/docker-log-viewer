@@ -1,15 +1,24 @@
 /* Request Manager Specific Styles */
 
+.app-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: #0d1117;
+    color: #c9d1d9;
+}
+
 .app-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #161b22;
     color: white;
     padding: 1rem 2rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-bottom: 1px solid #30363d;
 }
 
 .app-header h1 {
     margin: 0 0 0.5rem 0;
     font-size: 1.5rem;
+    color: #58a6ff;
 }
 
 .app-header nav {
@@ -43,8 +52,8 @@
 
 .sidebar {
     width: 300px;
-    background: #f8f9fa;
-    border-right: 1px solid #dee2e6;
+    background: #161b22;
+    border-right: 1px solid #30363d;
     overflow-y: auto;
 }
 
@@ -52,6 +61,19 @@
     flex: 1;
     padding: 2rem;
     overflow-y: auto;
+    background: #0d1117;
+}
+
+.section {
+    padding: 1rem;
+}
+
+.section h3 {
+    font-size: 0.9rem;
+    color: #8b949e;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .requests-list {
@@ -62,33 +84,33 @@
 
 .request-item {
     padding: 1rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid #30363d;
     border-radius: 4px;
     margin-bottom: 0.5rem;
     cursor: pointer;
     transition: all 0.2s;
-    background: white;
+    background: #0d1117;
 }
 
 .request-item:hover {
-    border-color: #667eea;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    border-color: #58a6ff;
+    box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
 }
 
 .request-item.active {
-    border-color: #667eea;
-    background: #f0f4ff;
+    border-color: #58a6ff;
+    background: #161b22;
 }
 
 .request-item-name {
     font-weight: 600;
-    color: #2c3e50;
+    color: #c9d1d9;
     margin-bottom: 0.25rem;
 }
 
 .request-item-url {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: #8b949e;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -99,17 +121,17 @@
     justify-content: space-between;
     margin-top: 0.5rem;
     font-size: 0.75rem;
-    color: #adb5bd;
+    color: #8b949e;
 }
 
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
-    color: #6c757d;
+    color: #8b949e;
 }
 
 .empty-state h2 {
-    color: #495057;
+    color: #c9d1d9;
     margin-bottom: 0.5rem;
 }
 
@@ -123,12 +145,12 @@
     align-items: center;
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid #30363d;
 }
 
 .detail-header h2 {
     margin: 0;
-    color: #2c3e50;
+    color: #c9d1d9;
 }
 
 .detail-actions {
@@ -137,8 +159,8 @@
 }
 
 .detail-section {
-    background: white;
-    border: 1px solid #dee2e6;
+    background: #161b22;
+    border: 1px solid #30363d;
     border-radius: 8px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -146,7 +168,7 @@
 
 .detail-section h3 {
     margin: 0 0 1rem 0;
-    color: #495057;
+    color: #8b949e;
     font-size: 1.125rem;
 }
 
@@ -159,23 +181,23 @@
 
 .form-row label {
     font-weight: 500;
-    color: #495057;
+    color: #8b949e;
 }
 
 .form-row .value {
-    color: #2c3e50;
+    color: #c9d1d9;
 }
 
 .json-display {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: #0d1117;
+    border: 1px solid #30363d;
     border-radius: 4px;
     padding: 1rem;
     overflow-x: auto;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.875rem;
     line-height: 1.5;
-    color: #2c3e50;
+    color: #c9d1d9;
 }
 
 .executions-list {
@@ -188,16 +210,17 @@
     grid-template-columns: auto 1fr auto auto;
     gap: 1rem;
     padding: 1rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid #30363d;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s;
     align-items: center;
+    background: #161b22;
 }
 
 .execution-item:hover {
-    border-color: #667eea;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+    border-color: #58a6ff;
+    box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
 }
 
 .execution-status {
@@ -209,13 +232,13 @@
 }
 
 .execution-status.success {
-    background: #d4edda;
-    color: #155724;
+    background: #1f6f42;
+    color: #7ee787;
 }
 
 .execution-status.error {
-    background: #f8d7da;
-    color: #721c24;
+    background: #5a1e1e;
+    color: #f85149;
 }
 
 .execution-info {
@@ -226,19 +249,19 @@
 
 .execution-time {
     font-size: 0.875rem;
-    color: #6c757d;
+    color: #8b949e;
 }
 
 .execution-stats {
     display: flex;
     gap: 1rem;
     font-size: 0.875rem;
-    color: #495057;
+    color: #c9d1d9;
 }
 
 .execution-duration {
     font-weight: 500;
-    color: #667eea;
+    color: #58a6ff;
 }
 
 /* Modal Styles */
@@ -260,13 +283,14 @@
 }
 
 .modal-content {
-    background: white;
+    background: #161b22;
     border-radius: 8px;
     max-width: 600px;
     width: 90%;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border: 1px solid #30363d;
 }
 
 .execution-modal-content {
@@ -278,12 +302,12 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid #30363d;
 }
 
 .modal-header h3 {
     margin: 0;
-    color: #2c3e50;
+    color: #c9d1d9;
 }
 
 .modal-header button {
@@ -291,7 +315,7 @@
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #6c757d;
+    color: #8b949e;
     padding: 0;
     width: 30px;
     height: 30px;
@@ -302,8 +326,8 @@
 }
 
 .modal-header button:hover {
-    background: #f8f9fa;
-    color: #495057;
+    background: #21262d;
+    color: #c9d1d9;
 }
 
 .modal-body {
@@ -312,7 +336,7 @@
 
 .modal-footer {
     padding: 1rem 1.5rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid #30363d;
     display: flex;
     gap: 0.5rem;
     justify-content: flex-end;
@@ -326,17 +350,20 @@
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;
-    color: #495057;
+    color: #8b949e;
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
     width: 100%;
     padding: 0.5rem;
-    border: 1px solid #ced4da;
+    border: 1px solid #30363d;
     border-radius: 4px;
     font-family: inherit;
     font-size: 1rem;
+    background: #0d1117;
+    color: #c9d1d9;
 }
 
 .form-group textarea {
@@ -346,16 +373,17 @@
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group select:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #238636;
     color: white;
-    border: none;
+    border: 1px solid #2ea043;
     padding: 0.5rem 1rem;
     border-radius: 4px;
     cursor: pointer;
@@ -364,14 +392,13 @@
 }
 
 .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    background: #2ea043;
 }
 
 .btn-secondary {
-    background: #6c757d;
-    color: white;
-    border: none;
+    background: #21262d;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
     padding: 0.5rem 1rem;
     border-radius: 4px;
     cursor: pointer;
@@ -380,13 +407,13 @@
 }
 
 .btn-secondary:hover {
-    background: #5a6268;
+    background: #30363d;
 }
 
 .btn-danger {
-    background: #dc3545;
+    background: #da3633;
     color: white;
-    border: none;
+    border: 1px solid #f85149;
     padding: 0.5rem 1rem;
     border-radius: 4px;
     cursor: pointer;
@@ -395,7 +422,7 @@
 }
 
 .btn-danger:hover {
-    background: #c82333;
+    background: #f85149;
 }
 
 .modal-section {
@@ -404,7 +431,7 @@
 
 .modal-section h4 {
     margin: 0 0 1rem 0;
-    color: #495057;
+    color: #8b949e;
 }
 
 .execution-overview {
@@ -421,7 +448,7 @@
 .stat-label {
     display: block;
     font-size: 0.75rem;
-    color: #6c757d;
+    color: #8b949e;
     margin-bottom: 0.25rem;
     text-transform: uppercase;
 }
@@ -430,15 +457,15 @@
     display: block;
     font-size: 1.125rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: #58a6ff;
 }
 
 .error-display {
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
+    background: #1f1214;
+    border: 1px solid #da3633;
     border-radius: 4px;
     padding: 1rem;
-    color: #721c24;
+    color: #f85149;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.875rem;
 }
@@ -457,10 +484,10 @@
 
 .sql-query-item {
     padding: 1rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid #30363d;
     border-radius: 4px;
     margin-bottom: 0.5rem;
-    background: #f8f9fa;
+    background: #0d1117;
 }
 
 .sql-query-header {
@@ -468,18 +495,18 @@
     justify-content: space-between;
     margin-bottom: 0.5rem;
     font-size: 0.875rem;
-    color: #6c757d;
+    color: #8b949e;
 }
 
 .sql-query-duration {
     font-weight: 600;
-    color: #667eea;
+    color: #58a6ff;
 }
 
 .sql-query-text {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.875rem;
-    color: #2c3e50;
+    color: #c9d1d9;
     overflow-x: auto;
 }
 
@@ -490,10 +517,10 @@
 
 .log-entry {
     padding: 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid #30363d;
     border-radius: 4px;
     margin-bottom: 0.5rem;
-    background: #f8f9fa;
+    background: #0d1117;
     font-size: 0.875rem;
 }
 
@@ -511,31 +538,31 @@
 }
 
 .log-level.INFO {
-    background: #d1ecf1;
-    color: #0c5460;
+    background: #1f6f42;
+    color: #7ee787;
 }
 
 .log-level.ERROR {
-    background: #f8d7da;
-    color: #721c24;
+    background: #5a1e1e;
+    color: #f85149;
 }
 
 .log-level.WARN {
-    background: #fff3cd;
-    color: #856404;
+    background: #3d2e00;
+    color: #f0883e;
 }
 
 .log-level.DEBUG {
-    background: #e2e3e5;
-    color: #383d41;
+    background: #30363d;
+    color: #8b949e;
 }
 
 .log-timestamp {
-    color: #6c757d;
+    color: #8b949e;
     font-size: 0.75rem;
 }
 
 .log-message {
-    color: #2c3e50;
+    color: #c9d1d9;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
