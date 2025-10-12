@@ -602,12 +602,14 @@ const app = createApp({
   template: `
     <div class="container">
       <header>
-        <h1>Docker Log Parser</h1>
-        <div class="header-controls">
-          <nav style="display: flex; gap: 1rem; align-items: center; margin-right: 1rem;">
-            <a href="/" style="color: white; text-decoration: none; font-weight: 500;">Log Viewer</a>
-            <a href="/requests.html" style="color: rgba(255,255,255,0.8); text-decoration: none;">Request Manager</a>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <h1>🔱 Logseidon</h1>
+          <nav style="display: flex; gap: 1rem; align-items: center;">
+            <a href="/" class="active" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px; background: rgba(255, 255, 255, 0.2); font-weight: 500;">Log Viewer</a>
+            <a href="/requests.html" style="color: rgba(255,255,255,0.8); text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">Request Manager</a>
           </nav>
+        </div>
+        <div class="header-controls">
           <div class="search-box">
             <input type="text" v-model="searchQuery" placeholder="Search logs...">
             <button @click="searchQuery = ''" class="clear-btn" title="Clear search">✕</button>

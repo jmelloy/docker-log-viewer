@@ -11,7 +11,7 @@
 .app-header {
     background: #161b22;
     color: white;
-    padding: 1rem 2rem;
+    padding: 1rem;
     border-bottom: 1px solid #30363d;
 }
 
@@ -59,7 +59,7 @@
 
 .content {
     flex: 1;
-    padding: 2rem;
+    padding: 0;
     overflow-y: auto;
     background: #0d1117;
 }
