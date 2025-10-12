@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ type Config struct {
 	DBPath      string
 	URL         string
 	DataFile    string
+	DataDir     string
 	Name        string
 	Timeout     time.Duration
 	BearerToken string
@@ -31,6 +33,7 @@ type Config struct {
 	Execute     bool
 	List        bool
 	Delete      int64
+	BatchMode   bool
 }
 
 func main() {
@@ -57,6 +60,14 @@ func main() {
 		return
 	}
 
+	// Handle directory processing mode
+	if config.DataDir != "" {
+		if err := handleDirectory(db, config); err != nil {
+			log.Fatalf("Failed to handle directory: %v", err)
+		}
+		return
+	}
+
 	if config.DataFile == "" || config.URL == "" {
 		flag.Usage()
 		os.Exit(1)
@@ -74,11 +85,13 @@ func parseFlags() Config {
 	flag.StringVar(&config.DBPath, "db", "graphql-requests.db", "Path to SQLite database")
 	flag.StringVar(&config.URL, "url", "", "GraphQL/API endpoint URL")
 	flag.StringVar(&config.DataFile, "data", "", "GraphQL or JSON data file")
+	flag.StringVar(&config.DataDir, "dir", "", "Directory containing JSON files to process")
 	flag.StringVar(&config.Name, "name", "", "Name for this request (defaults to filename)")
 	flag.DurationVar(&config.Timeout, "timeout", 10*time.Second, "Timeout for log collection")
 	flag.StringVar(&config.BearerToken, "token", os.Getenv("BEARER_TOKEN"), "Bearer token for authentication")
 	flag.StringVar(&config.DevID, "dev-id", os.Getenv("X_GLUE_DEV_USER_ID"), "X-GlueDev-UserID header value")
 	flag.BoolVar(&config.Execute, "execute", false, "Execute the request immediately after saving")
+	flag.BoolVar(&config.BatchMode, "batch", false, "Execute all requests in batch mode (for directory processing)")
 	flag.BoolVar(&config.List, "list", false, "List all saved requests")
 	flag.Int64Var(&config.Delete, "delete", 0, "Delete request by ID")
 
@@ -175,6 +188,126 @@ func handleRequest(db *store.Store, config Config) error {
 		}
 	} else {
 		log.Printf("Request saved. Use -execute flag to run it immediately, or use the web UI.")
+	}
+
+	return nil
+}
+
+func handleDirectory(db *store.Store, config Config) error {
+	if config.URL == "" {
+		return fmt.Errorf("URL is required when processing a directory")
+	}
+
+	// Read all JSON files from the directory
+	jsonFiles, err := filepath.Glob(filepath.Join(config.DataDir, "*.json"))
+	if err != nil {
+		return fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	if len(jsonFiles) == 0 {
+		log.Printf("No JSON files found in directory: %s", config.DataDir)
+		return nil
+	}
+
+	log.Printf("Found %d JSON files in directory: %s", len(jsonFiles), config.DataDir)
+
+	// Process each JSON file
+	var requestIDs []int64
+	for _, jsonFile := range jsonFiles {
+		log.Printf("Processing file: %s", jsonFile)
+
+		// Read the JSON file
+		data, err := os.ReadFile(jsonFile)
+		if err != nil {
+			log.Printf("Failed to read file %s: %v", jsonFile, err)
+			continue
+		}
+
+		// Parse the JSON to determine if it's a single operation or array
+		var operations []struct {
+			OperationName string `json:"operationName"`
+		}
+
+		// Try to parse as array first
+		if err := json.Unmarshal(data, &operations); err != nil {
+			// If that fails, try as single operation
+			var singleOp struct {
+				OperationName string `json:"operationName"`
+			}
+			if err := json.Unmarshal(data, &singleOp); err != nil {
+				log.Printf("Failed to parse JSON in file %s: %v", jsonFile, err)
+				continue
+			}
+			operations = []struct {
+				OperationName string `json:"operationName"`
+			}{singleOp}
+		}
+
+		// Create or get server
+		var serverID *uint
+		server := &store.Server{
+			Name:        config.URL,
+			URL:         config.URL,
+			BearerToken: config.BearerToken,
+			DevID:       config.DevID,
+		}
+
+		sid, err := db.CreateServer(server)
+		if err != nil {
+			log.Printf("Failed to create server for file %s: %v", jsonFile, err)
+			continue
+		}
+		sidUint := uint(sid)
+		serverID = &sidUint
+
+		// Process each operation
+		for i, operation := range operations {
+			// Determine name from operation name or filename
+			name := operation.OperationName
+			if name == "" {
+				name = filepath.Base(jsonFile)
+				if idx := strings.LastIndex(name, "."); idx >= 0 {
+					name = name[:idx]
+				}
+				if len(operations) > 1 {
+					name = fmt.Sprintf("%s_%d", name, i+1)
+				}
+			} else if len(operations) > 1 {
+				name = fmt.Sprintf("%s_%d", name, i+1)
+			}
+
+			// Create request
+			req := &store.Request{
+				Name:        name,
+				ServerID:    serverID,
+				RequestData: string(data),
+			}
+
+			reqID, err := db.CreateRequest(req)
+			if err != nil {
+				log.Printf("Failed to create request for file %s, operation %d: %v", jsonFile, i+1, err)
+				continue
+			}
+
+			log.Printf("Saved request '%s' with ID %d", name, reqID)
+			requestIDs = append(requestIDs, reqID)
+		}
+	}
+
+	log.Printf("Successfully processed %d files, created %d requests", len(jsonFiles), len(requestIDs))
+
+	// Execute requests if batch mode is enabled
+	if config.BatchMode && len(requestIDs) > 0 {
+		log.Printf("Executing %d requests in batch mode...", len(requestIDs))
+		for i, reqID := range requestIDs {
+			log.Printf("Executing request %d/%d (ID: %d)", i+1, len(requestIDs), reqID)
+			if err := executeRequest(db, reqID, config); err != nil {
+				log.Printf("Failed to execute request %d: %v", reqID, err)
+			}
+		}
+		log.Printf("Batch execution completed")
+	} else if len(requestIDs) > 0 {
+		log.Printf("Requests saved. Use -batch flag to execute them immediately, or use the web UI.")
 	}
 
 	return nil
