@@ -104,16 +104,28 @@ class RequestManager {
       return;
     }
 
-    container.innerHTML = this.sampleQueries.map(sq => `
-      <div class="request-item ${this.selectedSampleQuery?.id === sq.id ? 'active' : ''}" 
-           data-id="${sq.id}">
-        <div class="request-item-name">${this.escapeHtml(sq.name)}</div>
-        <div class="request-item-url">${this.escapeHtml(sq.server ? sq.server.url : '(no server)')}</div>
-        <div class="request-item-meta">
-          <span>${new Date(sq.createdAt).toLocaleDateString()}</span>
+    container.innerHTML = this.sampleQueries.map(sq => {
+      // Extract operation name from requestData
+      let displayName = sq.name;
+      try {
+        const data = JSON.parse(sq.requestData);
+        if (data.operationName) {
+          displayName = data.operationName;
+        }
+      } catch (e) {
+        // Use the original name if parsing fails
+      }
+
+      return `
+        <div class="request-item ${this.selectedSampleQuery?.id === sq.id ? 'active' : ''}" 
+             data-id="${sq.id}">
+          <div class="request-item-name">${this.escapeHtml(displayName)}</div>
+          <div class="request-item-meta">
+            <span>${new Date(sq.createdAt).toLocaleDateString()}</span>
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     // Add click handlers
     container.querySelectorAll('.request-item').forEach(item => {
@@ -134,23 +146,21 @@ class RequestManager {
 
     container.innerHTML = this.allRequests.map(req => {
       const statusClass = req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
+      const time = new Date(req.executedAt);
+      const timeStr = time.toLocaleTimeString();
+      
       return `
-        <div class="execution-item" data-id="${req.id}">
-          <div class="execution-status ${statusClass}">${req.statusCode || 'ERR'}</div>
-          <div class="execution-info">
-            <div class="execution-time">${new Date(req.executedAt).toLocaleString()}</div>
-            <div class="execution-stats">
-              <span>ID: ${req.requestIdHeader}</span>
-            </div>
-          </div>
-          <div class="execution-duration">${req.durationMs}ms</div>
-          <div>→</div>
+        <div class="execution-item-compact" data-id="${req.id}">
+          <span class="exec-status ${statusClass}">${req.statusCode || 'ERR'}</span>
+          <span class="exec-time">${timeStr}</span>
+          <span class="exec-duration">${req.durationMs}ms</span>
+          <span class="exec-id">req_id=${req.requestIdHeader}</span>
         </div>
       `;
     }).join('');
 
     // Add click handlers
-    container.querySelectorAll('.execution-item').forEach(item => {
+    container.querySelectorAll('.execution-item-compact').forEach(item => {
       item.addEventListener('click', () => {
         const id = parseInt(item.dataset.id);
         this.showRequestDetail(id);
@@ -298,15 +308,45 @@ class RequestManager {
 
       // Render SQL queries
       const sqlContainer = document.getElementById('sqlQueriesList');
-      sqlContainer.innerHTML = detail.sqlQueries.map(q => `
-        <div class="sql-query-item">
-          <div class="sql-query-header">
-            <span>${q.tableName || 'unknown'} - ${q.operation || 'SELECT'}</span>
-            <span class="sql-query-duration">${q.durationMs.toFixed(2)}ms</span>
+      sqlContainer.innerHTML = detail.sqlQueries.map((q, idx) => {
+        const hasPlan = q.explainPlan && q.explainPlan.length > 0;
+        return `
+          <div class="sql-query-item">
+            <div class="sql-query-header">
+              <span>${q.tableName || 'unknown'} - ${q.operation || 'SELECT'}</span>
+              <span class="sql-query-duration">${q.durationMs.toFixed(2)}ms</span>
+            </div>
+            <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
+            <div class="query-actions">
+              <button class="btn-explain" data-query-idx="${idx}">Run EXPLAIN</button>
+              ${hasPlan ? `<button class="btn-explain btn-secondary" data-query-idx="${idx}" data-show-plan="true">View Saved Plan</button>` : ''}
+            </div>
           </div>
-          <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
+
+      // Add EXPLAIN click handlers
+      sqlContainer.querySelectorAll('.btn-explain').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.queryIdx);
+          const query = detail.sqlQueries[idx];
+          
+          if (e.target.dataset.showPlan === 'true') {
+            // Show saved plan
+            try {
+              const plan = JSON.parse(query.explainPlan);
+              console.log('Saved EXPLAIN Plan:', plan);
+              alert('Saved EXPLAIN plan logged to console. Check browser console for details.');
+            } catch (err) {
+              alert('Error parsing saved plan: ' + err.message);
+            }
+          } else {
+            // Run new EXPLAIN
+            const variables = query.variables ? JSON.parse(query.variables) : {};
+            this.runExplain(query.query, variables);
+          }
+        });
+      });
     } else {
       document.getElementById('reqSQLSection').style.display = 'none';
     }
@@ -549,6 +589,37 @@ class RequestManager {
     } catch (error) {
       console.error('Failed to delete sample query:', error);
       alert('Failed to delete sample query: ' + error.message);
+    }
+  }
+
+  async runExplain(query, variables = {}) {
+    try {
+      const payload = {
+        query: query,
+        variables: variables,
+      };
+
+      const response = await fetch("/api/explain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+      
+      // Show EXPLAIN result in a simple alert for now
+      // TODO: Integrate PEV2 visualization
+      if (result.error) {
+        alert(`EXPLAIN Error: ${result.error}`);
+      } else {
+        const planText = result.queryPlan ? JSON.stringify(result.queryPlan, null, 2) : 'No plan available';
+        console.log('EXPLAIN Plan:', planText);
+        alert('EXPLAIN plan logged to console. Check browser console for details.');
+      }
+    } catch (error) {
+      alert(`Failed to run EXPLAIN: ${error.message}`);
     }
   }
 
