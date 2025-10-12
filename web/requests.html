@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GraphQL Request Manager</title>
+    <title>Request Manager</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="requests.css">
 </head>
 <body>
     <div class="app-container">
         <header class="app-header">
-            <h1>GraphQL Request Manager</h1>
+            <h1>Request Manager</h1>
             <nav>
                 <a href="/">Log Viewer</a>
                 <a href="/requests.html" class="active">Request Manager</a>
@@ -20,135 +20,171 @@
         <div class="main-layout">
             <aside class="sidebar">
                 <div class="section">
-                    <h3>Saved Requests</h3>
-                    <button id="newRequestBtn" class="btn-primary">+ New Request</button>
-                    <div id="requestsList" class="requests-list"></div>
+                    <h3>Sample Queries</h3>
+                    <button id="newSampleQueryBtn" class="btn-primary">+ New Sample Query</button>
+                    <div id="sampleQueriesList" class="requests-list"></div>
                 </div>
             </aside>
 
             <main class="content">
                 <div id="emptyState" class="empty-state">
-                    <h2>No Request Selected</h2>
-                    <p>Select a request from the sidebar or create a new one to get started.</p>
+                    <h2>Recent Requests</h2>
+                    <p>No requests executed yet. Select a sample query and execute it to get started.</p>
+                    <div id="requestsList" class="executions-list"></div>
                 </div>
 
-                <div id="requestDetail" class="request-detail hidden">
+                <div id="sampleQueryDetail" class="request-detail hidden">
                     <div class="detail-header">
-                        <h2 id="requestName"></h2>
+                        <h2 id="sampleQueryName"></h2>
                         <div class="detail-actions">
-                            <button id="executeBtn" class="btn-primary">Execute Request</button>
+                            <button id="executeBtn" class="btn-primary">Execute Query</button>
                             <button id="deleteBtn" class="btn-danger">Delete</button>
                         </div>
                     </div>
 
                     <div class="detail-section">
-                        <h3>Request Details</h3>
+                        <h3>Query Details</h3>
                         <div class="form-row">
                             <label>URL:</label>
-                            <div id="requestURL" class="value"></div>
+                            <div id="sampleQueryURL" class="value"></div>
                         </div>
                         <div class="form-row">
                             <label>Created:</label>
-                            <div id="requestCreated" class="value"></div>
+                            <div id="sampleQueryCreated" class="value"></div>
                         </div>
                     </div>
 
                     <div class="detail-section">
-                        <h3>Request Data</h3>
-                        <pre id="requestData" class="json-display"></pre>
+                        <h3>Query Data</h3>
+                        <pre id="sampleQueryData" class="json-display"></pre>
+                    </div>
+
+                    <div class="detail-section" id="variablesSection" style="display: none;">
+                        <h3>Variables</h3>
+                        <pre id="sampleQueryVariables" class="json-display"></pre>
                     </div>
 
                     <div class="detail-section">
-                        <h3>Executions</h3>
-                        <div id="executionsList" class="executions-list"></div>
+                        <h3>Past Requests</h3>
+                        <div id="pastRequestsList" class="executions-list"></div>
                     </div>
                 </div>
             </main>
         </div>
     </div>
 
-    <!-- New Request Modal -->
-    <div id="newRequestModal" class="modal hidden">
+    <!-- New Sample Query Modal -->
+    <div id="newSampleQueryModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>New Request</h3>
-                <button id="closeNewRequestModal">✕</button>
+                <h3>New Sample Query</h3>
+                <button id="closeNewSampleQueryModal">✕</button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="newRequestName">Name:</label>
-                    <input type="text" id="newRequestName" placeholder="e.g., FetchUsers" required>
+                    <label for="newSampleQueryName">Name:</label>
+                    <input type="text" id="newSampleQueryName" placeholder="e.g., FetchUsers" required>
                 </div>
                 <div class="form-group">
-                    <label for="newRequestServer">Server:</label>
-                    <select id="newRequestServer">
+                    <label for="newSampleQueryServer">Server:</label>
+                    <select id="newSampleQueryServer">
                         <option value="">-- New Server --</option>
                     </select>
                 </div>
                 <div id="newServerFields">
                     <div class="form-group">
-                        <label for="newRequestURL">URL:</label>
-                        <input type="text" id="newRequestURL" placeholder="https://api.example.com/graphql">
+                        <label for="newSampleQueryURL">URL:</label>
+                        <input type="text" id="newSampleQueryURL" placeholder="https://api.example.com/graphql">
                     </div>
                     <div class="form-group">
-                        <label for="newRequestToken">Bearer Token (optional):</label>
-                        <input type="text" id="newRequestToken" placeholder="your-token-here">
+                        <label for="newSampleQueryToken">Bearer Token (optional):</label>
+                        <input type="text" id="newSampleQueryToken" placeholder="your-token-here">
                     </div>
                     <div class="form-group">
-                        <label for="newRequestDevID">Dev ID (optional):</label>
-                        <input type="text" id="newRequestDevID" placeholder="dev-user-id">
+                        <label for="newSampleQueryDevID">Dev ID (optional):</label>
+                        <input type="text" id="newSampleQueryDevID" placeholder="dev-user-id">
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="newRequestData">Request Data (JSON):</label>
-                    <textarea id="newRequestData" rows="15" placeholder='{"query": "{ users { id name } }"}'></textarea>
+                    <label for="newSampleQueryData">Query Data (JSON):</label>
+                    <textarea id="newSampleQueryData" rows="15" placeholder='{"query": "{ users { id name } }"}'></textarea>
                 </div>
             </div>
             <div class="modal-footer">
-                <button id="saveRequestBtn" class="btn-primary">Save Request</button>
-                <button id="cancelNewRequestBtn" class="btn-secondary">Cancel</button>
+                <button id="saveSampleQueryBtn" class="btn-primary">Save Sample Query</button>
+                <button id="cancelNewSampleQueryBtn" class="btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
 
-    <!-- Execution Detail Modal -->
-    <div id="executionModal" class="modal hidden">
+    <!-- Execute Query Modal -->
+    <div id="executeQueryModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Execute Query</h3>
+                <button id="closeExecuteQueryModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="executeServer">Server:</label>
+                    <select id="executeServer">
+                        <option value="">-- Select Server --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="executeToken">Bearer Token Override (optional):</label>
+                    <input type="text" id="executeToken" placeholder="Override token">
+                </div>
+                <div class="form-group">
+                    <label for="executeDevID">Dev ID Override (optional):</label>
+                    <input type="text" id="executeDevID" placeholder="Override dev ID">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="confirmExecuteBtn" class="btn-primary">Execute</button>
+                <button id="cancelExecuteBtn" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Request Detail Modal -->
+    <div id="requestDetailModal" class="modal hidden">
         <div class="modal-content execution-modal-content">
             <div class="modal-header">
-                <h3>Execution Details</h3>
-                <button id="closeExecutionModal">✕</button>
+                <h3>Request Details</h3>
+                <button id="closeRequestDetailModal">✕</button>
             </div>
             <div class="modal-body">
                 <div class="execution-overview">
                     <div class="stat-item">
                         <span class="stat-label">Status Code</span>
-                        <span class="stat-value" id="execStatusCode"></span>
+                        <span class="stat-value" id="reqStatusCode"></span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Duration</span>
-                        <span class="stat-value" id="execDuration"></span>
+                        <span class="stat-value" id="reqDuration"></span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Request ID</span>
-                        <span class="stat-value" id="execRequestID"></span>
+                        <span class="stat-value" id="reqRequestID"></span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Executed At</span>
-                        <span class="stat-value" id="execTime"></span>
+                        <span class="stat-value" id="reqTime"></span>
                     </div>
                 </div>
 
                 <div class="modal-section">
                     <h4>Response</h4>
-                    <pre id="execResponse" class="json-display"></pre>
+                    <pre id="reqResponse" class="json-display"></pre>
                 </div>
 
-                <div class="modal-section" id="execErrorSection" style="display: none;">
+                <div class="modal-section" id="reqErrorSection" style="display: none;">
                     <h4>Error</h4>
-                    <pre id="execError" class="error-display"></pre>
+                    <pre id="reqError" class="error-display"></pre>
                 </div>
 
-                <div class="modal-section" id="execSQLSection" style="display: none;">
+                <div class="modal-section" id="reqSQLSection" style="display: none;">
                     <h4>SQL Analysis</h4>
                     <div class="stats-grid">
                         <div class="stat-item">
@@ -174,7 +210,7 @@
 
                 <div class="modal-section">
                     <h4>Logs (<span id="logsCount">0</span>)</h4>
-                    <div id="execLogs" class="logs-list"></div>
+                    <div id="reqLogs" class="logs-list"></div>
                 </div>
             </div>
         </div>

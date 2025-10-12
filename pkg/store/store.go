@@ -35,7 +35,7 @@ type Server struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// Request represents a saved GraphQL/API request template
+// Request represents a saved GraphQL/API request template (sample query)
 type Request struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Name        string    `gorm:"not null" json:"name"`
@@ -47,7 +47,12 @@ type Request struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// Execution represents a single execution of a request
+// TableName specifies the table name for the Request model
+func (Request) TableName() string {
+	return "sample_queries"
+}
+
+// Execution represents a single execution of a request (executed request)
 type Execution struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
 	RequestID       uint      `gorm:"not null;column:request_id;index" json:"requestId"`
@@ -63,6 +68,11 @@ type Execution struct {
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// TableName specifies the table name for the Execution model
+func (Execution) TableName() string {
+	return "executed_requests"
 }
 
 // ExecutionLog represents a log entry from an execution
@@ -284,6 +294,16 @@ func (s *Store) ListExecutions(requestID int64) ([]Execution, error) {
 	result := s.db.Where("request_id = ?", requestID).Order("executed_at DESC").Find(&executions)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list executions: %w", result.Error)
+	}
+	return executions, nil
+}
+
+// ListAllExecutions retrieves all executions across all requests
+func (s *Store) ListAllExecutions() ([]Execution, error) {
+	var executions []Execution
+	result := s.db.Preload("Server").Order("executed_at DESC").Limit(100).Find(&executions)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to list all executions: %w", result.Error)
 	}
 	return executions, nil
 }
