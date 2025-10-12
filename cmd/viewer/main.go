@@ -363,7 +363,7 @@ func (wa *WebApp) createRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the request
-	req := &store.Request{
+	req := &store.SampleQuery{
 		Name:        input.Name,
 		ServerID:    serverID,
 		RequestData: input.RequestData,
@@ -643,7 +643,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		devID = devIDOverride
 	}
 
-	execution := &store.Execution{
+	execution := &store.ExecutedRequest{
 		RequestID:       uint(requestID),
 		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,

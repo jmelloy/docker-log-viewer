@@ -48,8 +48,8 @@ type Server struct {
 	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// Request represents a saved GraphQL/API request template (sample query)
-type Request struct {
+// SampleQuery represents a saved GraphQL/API request template (sample query)
+type SampleQuery struct {
 	ID          uint           `gorm:"primaryKey" json:"id"`
 	Name        string         `gorm:"not null" json:"name"`
 	ServerID    *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
@@ -60,13 +60,8 @@ type Request struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-// TableName specifies the table name for the Request model
-func (Request) TableName() string {
-	return "sample_queries"
-}
-
-// Execution represents a single execution of a request (executed request)
-type Execution struct {
+// ExecutedRequest represents a single execution of a request (executed request)
+type ExecutedRequest struct {
 	ID              uint           `gorm:"primaryKey" json:"id"`
 	RequestID       uint           `gorm:"not null;column:request_id;index" json:"requestId"`
 	ServerID        *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
@@ -81,11 +76,6 @@ type Execution struct {
 	CreatedAt       time.Time      `json:"createdAt"`
 	UpdatedAt       time.Time      `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
-// TableName specifies the table name for the Execution model
-func (Execution) TableName() string {
-	return "executed_requests"
 }
 
 // ExecutionLog represents a log entry from an execution
@@ -124,11 +114,11 @@ type SQLQuery struct {
 
 // ExecutionDetail includes execution with related logs and SQL analysis
 type ExecutionDetail struct {
-	Execution   Execution      `json:"execution"`
-	Request     *Request       `json:"request,omitempty"`
-	Logs        []ExecutionLog `json:"logs"`
-	SQLQueries  []SQLQuery     `json:"sqlQueries"`
-	SQLAnalysis *SQLAnalysis   `json:"sqlAnalysis,omitempty"`
+	Execution   ExecutedRequest `json:"execution"`
+	Request     *SampleQuery    `json:"request,omitempty"`
+	Logs        []ExecutionLog  `json:"logs"`
+	SQLQueries  []SQLQuery      `json:"sqlQueries"`
+	SQLAnalysis *SQLAnalysis    `json:"sqlAnalysis,omitempty"`
 }
 
 // SQLAnalysis provides statistics about SQL queries
@@ -191,7 +181,7 @@ func (s *Store) Close() error {
 }
 
 // CreateRequest creates a new request template
-func (s *Store) CreateRequest(req *Request) (int64, error) {
+func (s *Store) CreateRequest(req *SampleQuery) (int64, error) {
 	result := s.db.Create(req)
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to create request: %w", result.Error)
@@ -200,8 +190,8 @@ func (s *Store) CreateRequest(req *Request) (int64, error) {
 }
 
 // GetRequest retrieves a request by ID
-func (s *Store) GetRequest(id int64) (*Request, error) {
-	var req Request
+func (s *Store) GetRequest(id int64) (*SampleQuery, error) {
+	var req SampleQuery
 	result := s.db.Preload("Server").First(&req, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -213,8 +203,8 @@ func (s *Store) GetRequest(id int64) (*Request, error) {
 }
 
 // ListRequests retrieves all requests
-func (s *Store) ListRequests() ([]Request, error) {
-	var requests []Request
+func (s *Store) ListRequests() ([]SampleQuery, error) {
+	var requests []SampleQuery
 	result := s.db.Preload("Server").Order("created_at DESC").Find(&requests)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
@@ -224,7 +214,7 @@ func (s *Store) ListRequests() ([]Request, error) {
 
 // DeleteRequest deletes a request and all its executions
 func (s *Store) DeleteRequest(id int64) error {
-	result := s.db.Delete(&Request{}, id)
+	result := s.db.Delete(&SampleQuery{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete request: %w", result.Error)
 	}
@@ -332,7 +322,7 @@ func (s *Store) DeleteDatabaseURL(id int64) error {
 }
 
 // CreateExecution creates a new execution record
-func (s *Store) CreateExecution(exec *Execution) (int64, error) {
+func (s *Store) CreateExecution(exec *ExecutedRequest) (int64, error) {
 	result := s.db.Create(exec)
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to create execution: %w", result.Error)
@@ -341,8 +331,8 @@ func (s *Store) CreateExecution(exec *Execution) (int64, error) {
 }
 
 // GetExecution retrieves an execution by ID
-func (s *Store) GetExecution(id int64) (*Execution, error) {
-	var exec Execution
+func (s *Store) GetExecution(id int64) (*ExecutedRequest, error) {
+	var exec ExecutedRequest
 	result := s.db.First(&exec, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -354,8 +344,8 @@ func (s *Store) GetExecution(id int64) (*Execution, error) {
 }
 
 // ListExecutions retrieves all executions for a request
-func (s *Store) ListExecutions(requestID int64) ([]Execution, error) {
-	var executions []Execution
+func (s *Store) ListExecutions(requestID int64) ([]ExecutedRequest, error) {
+	var executions []ExecutedRequest
 	result := s.db.Where("request_id = ?", requestID).Order("executed_at DESC").Find(&executions)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list executions: %w", result.Error)
@@ -364,8 +354,8 @@ func (s *Store) ListExecutions(requestID int64) ([]Execution, error) {
 }
 
 // ListAllExecutions retrieves all executions across all requests
-func (s *Store) ListAllExecutions() ([]Execution, error) {
-	var executions []Execution
+func (s *Store) ListAllExecutions() ([]ExecutedRequest, error) {
+	var executions []ExecutedRequest
 	result := s.db.Preload("Server").Order("executed_at DESC").Limit(100).Find(&executions)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list all executions: %w", result.Error)
