@@ -5,12 +5,12 @@ const app = createApp({
     // Load persisted container state from localStorage
     let selectedContainers = new Set();
     try {
-      const saved = localStorage.getItem('selectedContainers');
+      const saved = localStorage.getItem("selectedContainers");
       if (saved) {
         selectedContainers = new Set(JSON.parse(saved));
       }
     } catch (e) {
-      console.warn('Failed to load container state:', e);
+      console.warn("Failed to load container state:", e);
     }
 
     return {
@@ -19,7 +19,20 @@ const app = createApp({
       logs: [],
       searchQuery: "",
       traceFilter: null,
-      selectedLevels: new Set(["DBG", "DEBUG", "TRC", "TRACE", "INF", "INFO", "WRN", "WARN", "ERR", "ERROR", "FATAL", "NONE"]),
+      selectedLevels: new Set([
+        "DBG",
+        "DEBUG",
+        "TRC",
+        "TRACE",
+        "INF",
+        "INFO",
+        "WRN",
+        "WARN",
+        "ERR",
+        "ERROR",
+        "FATAL",
+        "NONE",
+      ]),
       ws: null,
       wsConnected: false,
       showLogModal: false,
@@ -27,24 +40,24 @@ const app = createApp({
       showAnalyzer: false,
       selectedLog: null,
       explainData: {
-        planSource: '',
-        planQuery: '',
-        error: null
+        planSource: "",
+        planQuery: "",
+        error: null,
       },
       sqlAnalysis: null,
-      collapsedProjects: new Set()
+      collapsedProjects: new Set(),
     };
   },
 
   computed: {
     filteredLogs() {
       const startIdx = Math.max(0, this.logs.length - 1000);
-      return this.logs.slice(startIdx).filter(log => this.shouldShowLog(log));
+      return this.logs.slice(startIdx).filter((log) => this.shouldShowLog(log));
     },
 
     containersByProject() {
       const groups = {};
-      this.containers.forEach(container => {
+      this.containers.forEach((container) => {
         const project = this.getProjectName(container.Name);
         if (!groups[project]) {
           groups[project] = [];
@@ -52,7 +65,7 @@ const app = createApp({
         groups[project].push(container);
       });
       // Sort containers within each project by name
-      Object.keys(groups).forEach(project => {
+      Object.keys(groups).forEach((project) => {
         groups[project].sort((a, b) => a.Name.localeCompare(b.Name));
       });
       return groups;
@@ -71,16 +84,16 @@ const app = createApp({
     },
 
     filterDisplayType() {
-      return this.traceFilter ? this.traceFilter.type : '';
+      return this.traceFilter ? this.traceFilter.type : "";
     },
 
     filterDisplayValue() {
-      return this.traceFilter ? this.traceFilter.value : '';
+      return this.traceFilter ? this.traceFilter.value : "";
     },
 
     logCountText() {
       return `${this.filteredLogs.length} logs`;
-    }
+    },
   },
 
   mounted() {
@@ -108,18 +121,18 @@ const app = createApp({
 
     toggleLevel(level) {
       const levelVariants = this.getLevelVariants(level);
-      const hasAll = levelVariants.every(v => this.selectedLevels.has(v));
-      
+      const hasAll = levelVariants.every((v) => this.selectedLevels.has(v));
+
       if (hasAll) {
-        levelVariants.forEach(v => this.selectedLevels.delete(v));
+        levelVariants.forEach((v) => this.selectedLevels.delete(v));
       } else {
-        levelVariants.forEach(v => this.selectedLevels.add(v));
+        levelVariants.forEach((v) => this.selectedLevels.add(v));
       }
     },
 
     isLevelSelected(level) {
       const levelVariants = this.getLevelVariants(level);
-      return levelVariants.every(v => this.selectedLevels.has(v));
+      return levelVariants.every((v) => this.selectedLevels.has(v));
     },
 
     async loadContainers() {
@@ -128,7 +141,7 @@ const app = createApp({
         this.containers = await response.json();
         // Only select new containers if there's no saved state
         if (this.selectedContainers.size === 0) {
-          this.containers.forEach(c => this.selectedContainers.add(c.ID));
+          this.containers.forEach((c) => this.selectedContainers.add(c.ID));
           this.saveContainerState();
         }
       } catch (error) {
@@ -186,21 +199,21 @@ const app = createApp({
 
     handleContainerUpdate(data) {
       const newContainers = data.containers;
-      const oldIDs = new Set(this.containers.map(c => c.ID));
-      const newIDs = new Set(newContainers.map(c => c.ID));
+      const oldIDs = new Set(this.containers.map((c) => c.ID));
+      const newIDs = new Set(newContainers.map((c) => c.ID));
 
-      const added = newContainers.filter(c => !oldIDs.has(c.ID));
-      const removed = this.containers.filter(c => !newIDs.has(c.ID));
+      const added = newContainers.filter((c) => !oldIDs.has(c.ID));
+      const removed = this.containers.filter((c) => !newIDs.has(c.ID));
 
       if (added.length > 0) {
-        added.forEach(c => {
+        added.forEach((c) => {
           this.selectedContainers.add(c.ID);
           console.log(`Container started: ${c.Name} (${c.ID})`);
         });
       }
 
       if (removed.length > 0) {
-        removed.forEach(c => {
+        removed.forEach((c) => {
           this.selectedContainers.delete(c.ID);
           console.log(`Container stopped: ${c.Name} (${c.ID})`);
         });
@@ -218,7 +231,9 @@ const app = createApp({
         return false;
       }
 
-      const logLevel = log.entry?.level ? log.entry.level.toUpperCase() : "NONE";
+      const logLevel = log.entry?.level
+        ? log.entry.level.toUpperCase()
+        : "NONE";
       if (!this.selectedLevels.has(logLevel)) {
         return false;
       }
@@ -282,9 +297,11 @@ const app = createApp({
 
     toggleProject(project) {
       const projectContainers = this.containersByProject[project];
-      const allSelected = projectContainers.every(c => this.selectedContainers.has(c.ID));
-      
-      projectContainers.forEach(c => {
+      const allSelected = projectContainers.every((c) =>
+        this.selectedContainers.has(c.ID)
+      );
+
+      projectContainers.forEach((c) => {
         if (allSelected) {
           this.selectedContainers.delete(c.ID);
         } else {
@@ -296,13 +313,17 @@ const app = createApp({
 
     isProjectSelected(project) {
       const projectContainers = this.containersByProject[project];
-      return projectContainers.every(c => this.selectedContainers.has(c.ID));
+      return projectContainers.every((c) => this.selectedContainers.has(c.ID));
     },
 
     isProjectIndeterminate(project) {
       const projectContainers = this.containersByProject[project];
-      const someSelected = projectContainers.some(c => this.selectedContainers.has(c.ID));
-      const allSelected = projectContainers.every(c => this.selectedContainers.has(c.ID));
+      const someSelected = projectContainers.some((c) =>
+        this.selectedContainers.has(c.ID)
+      );
+      const allSelected = projectContainers.every((c) =>
+        this.selectedContainers.has(c.ID)
+      );
       return someSelected && !allSelected;
     },
 
@@ -319,7 +340,9 @@ const app = createApp({
     },
 
     getContainerName(containerId) {
-      return this.containers.find(c => c.ID === containerId)?.Name || containerId;
+      return (
+        this.containers.find((c) => c.ID === containerId)?.Name || containerId
+      );
     },
 
     setTraceFilter(type, value, event) {
@@ -421,7 +444,7 @@ const app = createApp({
           slowestQueries: [],
           frequentQueries: [],
           nPlusOne: [],
-          tables: []
+          tables: [],
         };
         return;
       }
@@ -481,7 +504,7 @@ const app = createApp({
         slowestQueries,
         frequentQueries,
         nPlusOne,
-        tables: tablesList
+        tables: tablesList,
       };
     },
 
@@ -575,26 +598,26 @@ const app = createApp({
         });
 
         const result = await response.json();
-        
+
         if (result.error) {
           this.explainData.error = result.error;
-          this.explainData.planSource = '';
-          this.explainData.planQuery = result.query || '';
+          this.explainData.planSource = "";
+          this.explainData.planQuery = result.query || "";
         } else {
-          let planText = '';
+          let planText = "";
           if (result.queryPlan && result.queryPlan.length > 0) {
             planText = JSON.stringify(result.queryPlan, null, 2);
           }
-          
+
           this.explainData.error = null;
           this.explainData.planSource = planText;
-          this.explainData.planQuery = result.query || '';
+          this.explainData.planQuery = result.query || "";
         }
-        
+
         this.showExplainModal = true;
       } catch (error) {
         this.explainData.error = `Failed to run EXPLAIN: ${error.message}`;
-        this.explainData.planSource = '';
+        this.explainData.planSource = "";
         this.explainData.planQuery = query;
         this.showExplainModal = true;
       }
@@ -614,7 +637,8 @@ const app = createApp({
     },
 
     formatFieldValue(value) {
-      const shortValue = value.length > 100 ? value.substring(0, 100) + "..." : value;
+      const shortValue =
+        value.length > 100 ? value.substring(0, 100) + "..." : value;
       return shortValue;
     },
 
@@ -633,11 +657,14 @@ const app = createApp({
 
     saveContainerState() {
       try {
-        localStorage.setItem('selectedContainers', JSON.stringify([...this.selectedContainers]));
+        localStorage.setItem(
+          "selectedContainers",
+          JSON.stringify([...this.selectedContainers])
+        );
       } catch (e) {
-        console.warn('Failed to save container state:', e);
+        console.warn("Failed to save container state:", e);
       }
-    }
+    },
   },
 
   template: `
@@ -916,11 +943,11 @@ const app = createApp({
         </div>
       </div>
     </div>
-  `
+  `,
 });
 
 // Register PEV2 component
-app.component('pev2', pev2.Plan);
+app.component("pev2", pev2.Plan);
 
 // Mount the app
-app.mount('#app');
+app.mount("#app");

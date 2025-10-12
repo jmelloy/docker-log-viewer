@@ -25,38 +25,38 @@ type Store struct {
 
 // DatabaseURL represents a database connection configuration for EXPLAIN queries
 type DatabaseURL struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	Name             string    `gorm:"not null" json:"name"`
-	ConnectionString string    `gorm:"not null;column:connection_string" json:"connectionString"`
-	DatabaseType     string    `gorm:"not null;column:database_type;default:postgresql" json:"databaseType"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	ID               uint           `gorm:"primaryKey" json:"id"`
+	Name             string         `gorm:"not null" json:"name"`
+	ConnectionString string         `gorm:"not null;column:connection_string" json:"connectionString"`
+	DatabaseType     string         `gorm:"not null;column:database_type;default:postgresql" json:"databaseType"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // Server represents a server configuration with URL and authentication
 type Server struct {
-	ID                uint         `gorm:"primaryKey" json:"id"`
-	Name              string       `gorm:"not null" json:"name"`
-	URL               string       `gorm:"not null" json:"url"`
-	BearerToken       string       `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
-	DevID             string       `gorm:"column:dev_id" json:"devId,omitempty"`
-	DefaultDatabaseID *uint        `gorm:"column:default_database_id;index" json:"defaultDatabaseId,omitempty"`
-	DefaultDatabase   *DatabaseURL `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
-	CreatedAt         time.Time    `json:"createdAt"`
-	UpdatedAt         time.Time    `json:"updatedAt"`
+	ID                uint           `gorm:"primaryKey" json:"id"`
+	Name              string         `gorm:"not null" json:"name"`
+	URL               string         `gorm:"not null" json:"url"`
+	BearerToken       string         `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
+	DevID             string         `gorm:"column:dev_id" json:"devId,omitempty"`
+	DefaultDatabaseID *uint          `gorm:"column:default_database_id;index" json:"defaultDatabaseId,omitempty"`
+	DefaultDatabase   *DatabaseURL   `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
+	CreatedAt         time.Time      `json:"createdAt"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
 	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // Request represents a saved GraphQL/API request template (sample query)
 type Request struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	ServerID    *uint     `gorm:"column:server_id;index" json:"serverId,omitempty"`
-	Server      *Server   `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestData string    `gorm:"not null;column:request_data" json:"requestData"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	Name        string         `gorm:"not null" json:"name"`
+	ServerID    *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server      *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestData string         `gorm:"not null;column:request_data" json:"requestData"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
@@ -67,19 +67,19 @@ func (Request) TableName() string {
 
 // Execution represents a single execution of a request (executed request)
 type Execution struct {
-	ID              uint      `gorm:"primaryKey" json:"id"`
-	RequestID       uint      `gorm:"not null;column:request_id;index" json:"requestId"`
-	ServerID        *uint     `gorm:"column:server_id;index" json:"serverId,omitempty"`
-	Server          *Server   `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestIDHeader string    `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
-	StatusCode      int       `gorm:"column:status_code" json:"statusCode"`
-	DurationMS      int64     `gorm:"column:duration_ms" json:"durationMs"`
-	ResponseBody    string    `gorm:"column:response_body" json:"responseBody,omitempty"`
-	ResponseHeaders string    `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
-	Error           string    `json:"error,omitempty"`
-	ExecutedAt      time.Time `gorm:"not null;column:executed_at;index" json:"executedAt"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+	ID              uint           `gorm:"primaryKey" json:"id"`
+	RequestID       uint           `gorm:"not null;column:request_id;index" json:"requestId"`
+	ServerID        *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server          *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestIDHeader string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
+	StatusCode      int            `gorm:"column:status_code" json:"statusCode"`
+	DurationMS      int64          `gorm:"column:duration_ms" json:"durationMs"`
+	ResponseBody    string         `gorm:"column:response_body" json:"responseBody,omitempty"`
+	ResponseHeaders string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	ExecutedAt      time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
@@ -90,35 +90,35 @@ func (Execution) TableName() string {
 
 // ExecutionLog represents a log entry from an execution
 type ExecutionLog struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	ExecutionID uint      `gorm:"not null;column:execution_id;index" json:"executionId"`
-	ContainerID string    `gorm:"not null;column:container_id" json:"containerId"`
-	Timestamp   time.Time `gorm:"not null" json:"timestamp"`
-	Level       string    `json:"level"`
-	Message     string    `json:"message"`
-	RawLog      string    `gorm:"column:raw_log" json:"rawLog"`
-	Fields      string    `json:"fields"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          uint           `gorm:"primaryKey" json:"id"`
+	ExecutionID uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
+	ContainerID string         `gorm:"not null;column:container_id" json:"containerId"`
+	Timestamp   time.Time      `gorm:"not null" json:"timestamp"`
+	Level       string         `json:"level"`
+	Message     string         `json:"message"`
+	RawLog      string         `gorm:"column:raw_log" json:"rawLog"`
+	Fields      string         `json:"fields"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
-	ID               uint    `gorm:"primaryKey" json:"id"`
-	ExecutionID      uint    `gorm:"not null;column:execution_id;index" json:"executionId"`
-	Query            string  `gorm:"not null" json:"query"`
-	NormalizedQuery  string  `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
-	QueryHash        string  `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
-	DurationMS       float64 `gorm:"column:duration_ms" json:"durationMs"`
-	TableName        string  `gorm:"column:table_name" json:"tableName"`
-	Operation        string  `json:"operation"`
-	Rows             int     `json:"rows"`
-	Variables        string  `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
-	GraphQLOperation string  `gorm:"column:gql_operation" json:"graphqlOperation,omitempty"`
-	ExplainPlan      string  `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	ID               uint           `gorm:"primaryKey" json:"id"`
+	ExecutionID      uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
+	Query            string         `gorm:"not null" json:"query"`
+	NormalizedQuery  string         `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
+	QueryHash        string         `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
+	DurationMS       float64        `gorm:"column:duration_ms" json:"durationMs"`
+	TableName        string         `gorm:"column:table_name" json:"tableName"`
+	Operation        string         `json:"operation"`
+	Rows             int            `json:"rows"`
+	Variables        string         `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
+	GraphQLOperation string         `gorm:"column:gql_operation" json:"graphqlOperation,omitempty"`
+	ExplainPlan      string         `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
+	CreatedAt        time.Time      `json:"createdAt"`
+	UpdatedAt        time.Time      `json:"updatedAt"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
@@ -331,7 +331,6 @@ func (s *Store) DeleteDatabaseURL(id int64) error {
 	return nil
 }
 
-
 // CreateExecution creates a new execution record
 func (s *Store) CreateExecution(exec *Execution) (int64, error) {
 	result := s.db.Create(exec)
@@ -446,11 +445,11 @@ func (s *Store) UpdateQueryExplainPlan(executionID int64, queryHash string, expl
 	result := s.db.Model(&SQLQuery{}).
 		Where("execution_id = ? AND query_hash = ?", executionID, queryHash).
 		Update("explain_plan", explainPlan)
-	
+
 	if result.Error != nil {
 		return fmt.Errorf("failed to update explain plan: %w", result.Error)
 	}
-	
+
 	return nil
 }
 
