@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"docker-log-parser/pkg/logs"
+	"docker-log-parser/pkg/sqlexplain"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -1013,4 +1014,62 @@ func generateHTMLMultiRun(filename string, result1, result2 *MultiRunResult, pos
 	}
 
 	return tmpl.Execute(f, data)
+}
+
+// ConvertToQueryWithPlan converts compare tool's SQLQuery to sqlexplain.QueryWithPlan
+// This allows using the explain plan analyzer with queries from the compare tool
+func ConvertToQueryWithPlan(queries []SQLQuery, operationName string) []sqlexplain.QueryWithPlan {
+result := make([]sqlexplain.QueryWithPlan, len(queries))
+for i, q := range queries {
+result[i] = sqlexplain.QueryWithPlan{
+Query:           q.Query,
+NormalizedQuery: q.Normalized,
+OperationName:   operationName,
+Timestamp:       int64(i), // Use index as timestamp for ordering
+DurationMS:      q.Duration,
+TableName:       q.Table,
+Operation:       q.Operation,
+Rows:            q.Rows,
+ExplainPlan:     "", // Not available in basic compare tool queries
+Variables:       "",
+}
+}
+return result
+}
+
+// CompareQuerySetsWithExplainPlans compares two query sets and returns detailed analysis
+// This is a convenience function that wraps sqlexplain.CompareQuerySets
+func CompareQuerySetsWithExplainPlans(queries1, queries2 []SQLQuery, opName1, opName2 string) *sqlexplain.ExplainPlanComparison {
+qwp1 := ConvertToQueryWithPlan(queries1, opName1)
+qwp2 := ConvertToQueryWithPlan(queries2, opName2)
+return sqlexplain.CompareQuerySets(qwp1, qwp2)
+}
+
+// AnalyzeIndexUsageForQueries analyzes index usage and generates recommendations
+// This is a convenience function that wraps sqlexplain.AnalyzeIndexUsage
+func AnalyzeIndexUsageForQueries(queries []SQLQuery, operationName string) *sqlexplain.IndexAnalysis {
+qwp := ConvertToQueryWithPlan(queries, operationName)
+return sqlexplain.AnalyzeIndexUsage(qwp)
+}
+
+// FormatIndexRecommendations formats index recommendations as a readable string
+func FormatIndexRecommendations(analysis *sqlexplain.IndexAnalysis) string {
+if len(analysis.Recommendations) == 0 {
+return "No index recommendations."
+}
+
+var sb strings.Builder
+sb.WriteString(fmt.Sprintf("Index Recommendations (%d total, %d high priority):\n\n", 
+analysis.Summary.TotalRecommendations, analysis.Summary.HighPriorityRecs))
+
+for i, rec := range analysis.Recommendations {
+sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", i+1, strings.ToUpper(rec.Priority), rec.TableName))
+sb.WriteString(fmt.Sprintf("   Columns: %s\n", strings.Join(rec.Columns, ", ")))
+sb.WriteString(fmt.Sprintf("   Reason: %s\n", rec.Reason))
+sb.WriteString(fmt.Sprintf("   Impact: %s\n", rec.EstimatedImpact))
+sb.WriteString(fmt.Sprintf("   SQL: %s\n", rec.SQLCommand))
+sb.WriteString(fmt.Sprintf("   Affected Queries: %d\n\n", rec.AffectedQueries))
+}
+
+return sb.String()
 }
