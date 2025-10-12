@@ -1,855 +1,980 @@
-class RequestManager {
-  constructor() {
-    this.sampleQueries = [];
-    this.servers = [];
-    this.selectedSampleQuery = null;
-    this.requests = [];
-    this.allRequests = [];
-    this.init();
-  }
+const { createApp } = Vue;
 
-  async init() {
-    this.setupEventListeners();
+const app = createApp({
+  data() {
+    return {
+      sampleQueries: [],
+      servers: [],
+      selectedSampleQuery: null,
+      requests: [],
+      allRequests: [],
+      // Modal visibility
+      showNewSampleQueryModal: false,
+      showExecuteQueryModal: false,
+      showRequestDetailModal: false,
+      showExplainPlanModal: false,
+      showComparisonModal: false,
+      // Form data
+      newQueryForm: {
+        name: '',
+        requestData: '',
+        serverId: '',
+        url: '',
+        bearerToken: '',
+        devId: ''
+      },
+      executeForm: {
+        serverId: '',
+        tokenOverride: '',
+        devIdOverride: ''
+      },
+      // Selected data
+      selectedRequestDetail: null,
+      explainPlanData: null,
+      comparisonData: null,
+      pev2App: null
+    };
+  },
+
+  computed: {
+    showEmptyState() {
+      return !this.selectedSampleQuery;
+    },
+
+    showSampleQueryDetail() {
+      return this.selectedSampleQuery !== null;
+    },
+
+    showNewServerFields() {
+      return this.newQueryForm.serverId === '';
+    },
+
+    compareButtonVisible() {
+      const checkedBoxes = document.querySelectorAll('.exec-compare-checkbox:checked');
+      return checkedBoxes.length === 2;
+    },
+
+    selectedSampleQueryName() {
+      return this.selectedSampleQuery?.name || '';
+    },
+
+    selectedSampleQueryURL() {
+      return this.selectedSampleQuery?.server?.url || '(no server configured)';
+    },
+
+    selectedSampleQueryCreated() {
+      return this.selectedSampleQuery ? new Date(this.selectedSampleQuery.createdAt).toLocaleString() : '';
+    },
+
+    selectedSampleQueryData() {
+      if (!this.selectedSampleQuery) return '';
+      try {
+        const data = JSON.parse(this.selectedSampleQuery.requestData);
+        return JSON.stringify(data, null, 2);
+      } catch (e) {
+        return this.selectedSampleQuery.requestData;
+      }
+    },
+
+    selectedSampleQueryVariables() {
+      if (!this.selectedSampleQuery) return null;
+      try {
+        const data = JSON.parse(this.selectedSampleQuery.requestData);
+        return data.variables ? JSON.stringify(data.variables, null, 2) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+  },
+
+  async mounted() {
     await this.loadServers();
     await this.loadSampleQueries();
     await this.loadAllRequests();
-  }
+  },
 
-  setupEventListeners() {
-    // New sample query modal
-    document.getElementById('newSampleQueryBtn').addEventListener('click', () => {
-      this.showNewSampleQueryModal();
-    });
+  methods: {
 
-    document.getElementById('closeNewSampleQueryModal').addEventListener('click', () => {
-      this.hideNewSampleQueryModal();
-    });
+      async loadServers() {
+      try {
+        const response = await fetch('/api/servers');
+        this.servers = await response.json();
+      } catch (error) {
+        console.error('Failed to load servers:', error);
+        this.servers = [];
+      }
+    },
 
-    document.getElementById('cancelNewSampleQueryBtn').addEventListener('click', () => {
-      this.hideNewSampleQueryModal();
-    });
+    async loadSampleQueries() {
+      try {
+        const response = await fetch('/api/requests');
+        this.sampleQueries = await response.json();
+      } catch (error) {
+        console.error('Failed to load sample queries:', error);
+      }
+    },
 
-    document.getElementById('saveSampleQueryBtn').addEventListener('click', () => {
-      this.saveNewSampleQuery();
-    });
+    async loadAllRequests() {
+      try {
+        const response = await fetch('/api/all-executions');
+        const executions = await response.json();
+        
+        // Fetch additional details for each request to get logs
+        this.allRequests = await Promise.all(
+          executions.slice(0, 20).map(async req => {
+            try {
+              const response = await fetch(`/api/executions/${req.id}`);
+              const detail = await response.json();
+              const lastLog = detail.logs.length > 0 ? detail.logs[detail.logs.length - 1] : null;
+              
+              // Extract operation name from request data
+              let operationName = 'Unknown';
+              if (detail.execution.requestData) {
+                try {
+                  const requestData = JSON.parse(detail.execution.requestData);
+                  operationName = requestData.operationName || 'Unknown';
+                } catch (e) {
+                  console.warn('Failed to parse request data:', e);
+                }
+              }
+              
+              return { ...req, lastLog, operationName };
+            } catch (e) {
+              return { ...req, lastLog: null, operationName: 'Unknown' };
+            }
+          })
+        );
+      } catch (error) {
+        console.error('Failed to load requests:', error);
+      }
+    },
 
-    // Server selection change
-    document.getElementById('newSampleQueryServer').addEventListener('change', (e) => {
-      this.handleServerChange(e.target.value);
-    });
-
-    // Execute query modal
-    document.getElementById('closeExecuteQueryModal').addEventListener('click', () => {
-      this.hideExecuteQueryModal();
-    });
-
-    document.getElementById('cancelExecuteBtn').addEventListener('click', () => {
-      this.hideExecuteQueryModal();
-    });
-
-    document.getElementById('confirmExecuteBtn').addEventListener('click', () => {
-      this.confirmExecuteQuery();
-    });
-
-    // Request detail modal
-    document.getElementById('closeRequestDetailModal').addEventListener('click', () => {
-      this.hideRequestDetailModal();
-    });
-
-    // EXPLAIN plan modal
-    document.getElementById('closeExplainPlanModal').addEventListener('click', () => {
-      this.hideExplainPlanModal();
-    });
-
-    // Comparison modal
-    document.getElementById('closeComparisonModal').addEventListener('click', () => {
-      this.hideComparisonModal();
-    });
-
-    // Compare button
-    document.getElementById('compareRequestsBtn').addEventListener('click', () => {
-      this.compareSelectedRequests();
-    });
-
-    // Sample query actions
-    document.getElementById('executeBtn').addEventListener('click', () => {
-      this.showExecuteQueryModal();
-    });
-
-    document.getElementById('deleteBtn').addEventListener('click', () => {
-      this.deleteSampleQuery();
-    });
-  }
-
-  async loadServers() {
-    try {
-      const response = await fetch('/api/servers');
-      this.servers = await response.json();
-    } catch (error) {
-      console.error('Failed to load servers:', error);
-      this.servers = [];
-    }
-  }
-
-  async loadSampleQueries() {
-    try {
-      const response = await fetch('/api/requests');
-      this.sampleQueries = await response.json();
-      this.renderSampleQueriesList();
-    } catch (error) {
-      console.error('Failed to load sample queries:', error);
-    }
-  }
-
-  async loadAllRequests() {
-    try {
-      const response = await fetch('/api/all-executions');
-      this.allRequests = await response.json();
-      this.renderAllRequestsList();
-    } catch (error) {
-      console.error('Failed to load requests:', error);
-    }
-  }
-
-  renderSampleQueriesList() {
-    const container = document.getElementById('sampleQueriesList');
-    
-    if (this.sampleQueries.length === 0) {
-      container.innerHTML = '<p style="padding: 1rem; color: #6c757d; text-align: center;">No sample queries</p>';
-      return;
-    }
-
-    container.innerHTML = this.sampleQueries.map(sq => {
-      // Extract operation name from requestData
-      let displayName = sq.name;
+    getSampleQueryDisplayName(sq) {
       try {
         const data = JSON.parse(sq.requestData);
-        if (data.operationName) {
-          displayName = data.operationName;
-        }
+        return data.operationName || sq.name;
       } catch (e) {
-        // Use the original name if parsing fails
+        return sq.name;
       }
+    },
 
-      return `
-        <div class="request-item ${this.selectedSampleQuery?.id === sq.id ? 'active' : ''}" 
-             data-id="${sq.id}">
-          <div class="request-item-name">${this.escapeHtml(displayName)}</div>
-          <div class="request-item-meta">
-            <span>${new Date(sq.createdAt).toLocaleDateString()}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
+    isSampleQuerySelected(sqId) {
+      return this.selectedSampleQuery?.id === sqId;
+    },
 
-    // Add click handlers
-    container.querySelectorAll('.request-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const id = parseInt(item.dataset.id);
-        this.selectSampleQuery(id);
-      });
-    });
-  }
+    async selectSampleQuery(id) {
+      const sampleQuery = this.sampleQueries.find(sq => sq.id === id);
+      if (!sampleQuery) return;
 
-  async renderAllRequestsList() {
-    const container = document.getElementById('requestsList');
-    
-    if (this.allRequests.length === 0) {
-      container.innerHTML = '<p style="color: #6c757d;">No requests executed yet.</p>';
-      return;
-    }
+      this.selectedSampleQuery = sampleQuery;
+      await this.loadRequests(id);
+    },
 
-    // Fetch additional details for each request to get logs
-    const requestsWithDetails = await Promise.all(
-      this.allRequests.slice(0, 20).map(async req => {
+    async loadRequests(sampleQueryId) {
+      try {
+        const response = await fetch(`/api/executions?request_id=${sampleQueryId}`);
+        this.requests = await response.json();
+      } catch (error) {
+        console.error('Failed to load requests for sample query:', error);
+        this.requests = [];
+      }
+    },
+
+    getRequestStatusClass(req) {
+      return req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
+    },
+
+    getExecutionStatusClass(req) {
+      return req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
+    },
+
+    getExecutionTimeString(req) {
+      return new Date(req.executedAt).toLocaleTimeString();
+    },
+
+    getExecutionServerUrl(req) {
+      return req.server ? req.server.url : 'N/A';
+    },
+
+    getExecutionLastLogMsg(req) {
+      return req.lastLog ? (req.lastLog.message || req.lastLog.rawLog || '').substring(0, 100) : 'No logs';
+    },
+
+    handleExecutionClick(req, event) {
+      if (event.target.type !== 'checkbox') {
+        this.showRequestDetail(req.id);
+      }
+    },
+
+    updateCompareButton() {
+      // This will be handled by the computed property
+    },
+
+    async showRequestDetail(requestId) {
+      try {
+        const response = await fetch(`/api/executions/${requestId}`);
+        const detail = await response.json();
+        this.selectedRequestDetail = detail;
+        this.showRequestDetailModal = true;
+      } catch (error) {
+        console.error('Failed to load request detail:', error);
+      }
+    },
+
+    getDetailStatusClass() {
+      if (!this.selectedRequestDetail) return '';
+      const statusCode = this.selectedRequestDetail.execution.statusCode;
+      return statusCode >= 200 && statusCode < 300 ? 'success' : 'error';
+    },
+
+    getDetailRequestData() {
+      if (!this.selectedRequestDetail?.execution.requestData) return '(no request data)';
+      try {
+        const data = JSON.parse(this.selectedRequestDetail.execution.requestData);
+        return JSON.stringify(data, null, 2);
+      } catch (e) {
+        return this.selectedRequestDetail.execution.requestData;
+      }
+    },
+
+    getDetailResponseBody() {
+      if (!this.selectedRequestDetail?.execution.responseBody) return '(no response)';
+      try {
+        const data = JSON.parse(this.selectedRequestDetail.execution.responseBody);
+        return JSON.stringify(data, null, 2);
+      } catch (e) {
+        return this.selectedRequestDetail.execution.responseBody;
+      }
+    },
+
+    handleExplainClick(queryIdx) {
+      const query = this.selectedRequestDetail.sqlQueries[queryIdx];
+      
+      if (query.explainPlan && query.explainPlan.length > 0) {
+        // Show saved plan
         try {
-          const response = await fetch(`/api/executions/${req.id}`);
-          const detail = await response.json();
-          const lastLog = detail.logs.length > 0 ? detail.logs[detail.logs.length - 1] : null;
-          
-          // Extract operation name from request data
-          let operationName = 'Unknown';
-          if (detail.execution.requestData) {
-            try {
-              const requestData = JSON.parse(detail.execution.requestData);
-              operationName = requestData.operationName || 'Unknown';
-            } catch (e) {
-              console.warn('Failed to parse request data:', e);
-            }
-          }
-          
-          return { ...req, lastLog, operationName };
-        } catch (e) {
-          return { ...req, lastLog: null, operationName: 'Unknown' };
+          const plan = JSON.parse(query.explainPlan);
+          this.displayExplainPlan(plan, query.query);
+        } catch (err) {
+          alert('Error parsing saved plan: ' + err.message);
         }
-      })
-    );
-
-    container.innerHTML = requestsWithDetails.map(req => {
-      const statusClass = req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
-      const time = new Date(req.executedAt);
-      const timeStr = time.toLocaleTimeString();
-      const serverUrl = req.server ? req.server.url : 'N/A';
-      const lastLogMsg = req.lastLog ? (req.lastLog.message || req.lastLog.rawLog || '').substring(0, 100) : 'No logs';
-      
-      return `
-        <div class="execution-item-detailed" data-id="${req.id}">
-          <div class="exec-header">
-            <input type="checkbox" class="exec-compare-checkbox" data-id="${req.id}">
-            <span class="exec-status ${statusClass}">${req.statusCode || 'ERR'}</span>
-            <span class="exec-name">${this.escapeHtml(req.operationName)}</span>
-            <span class="exec-duration">${req.durationMs}ms</span>
-          </div>
-          <div class="exec-details">
-            <span class="exec-time">${timeStr}</span>
-            <span class="exec-server">${this.escapeHtml(serverUrl)}</span>
-            <span class="exec-id">req_id=${req.requestIdHeader}</span>
-          </div>
-          <div class="exec-last-log">${this.escapeHtml(lastLogMsg)}</div>
-        </div>
-      `;
-    }).join('');
-
-    // Add click handlers
-    container.querySelectorAll('.execution-item-detailed').forEach(item => {
-      item.addEventListener('click', (e) => {
-        if (e.target.type !== 'checkbox') {
-          const id = parseInt(item.dataset.id);
-          this.showRequestDetail(id);
-        }
-      });
-    });
-
-    // Handle checkbox changes
-    container.querySelectorAll('.exec-compare-checkbox').forEach(checkbox => {
-      checkbox.addEventListener('change', () => {
-        this.updateCompareButton();
-      });
-    });
-  }
-
-  updateCompareButton() {
-    const checkedBoxes = document.querySelectorAll('.exec-compare-checkbox:checked');
-    const compareBtn = document.getElementById('compareRequestsBtn');
-    
-    if (checkedBoxes.length === 2) {
-      compareBtn.style.display = 'block';
-    } else {
-      compareBtn.style.display = 'none';
-    }
-  }
-
-  async selectSampleQuery(id) {
-    const sampleQuery = this.sampleQueries.find(sq => sq.id === id);
-    if (!sampleQuery) return;
-
-    this.selectedSampleQuery = sampleQuery;
-    this.renderSampleQueriesList();
-    this.showSampleQueryDetail(sampleQuery);
-    await this.loadRequests(id);
-  }
-
-  showSampleQueryDetail(sampleQuery) {
-    document.getElementById('emptyState').classList.add('hidden');
-    document.getElementById('sampleQueryDetail').classList.remove('hidden');
-
-    document.getElementById('sampleQueryName').textContent = sampleQuery.name;
-    
-    // Show server info if available
-    if (sampleQuery.server) {
-      document.getElementById('sampleQueryURL').textContent = sampleQuery.server.url;
-    } else {
-      document.getElementById('sampleQueryURL').textContent = '(no server configured)';
-    }
-    
-    document.getElementById('sampleQueryCreated').textContent = new Date(sampleQuery.createdAt).toLocaleString();
-    
-    // Pretty print JSON and extract variables
-    try {
-      const data = JSON.parse(sampleQuery.requestData);
-      document.getElementById('sampleQueryData').textContent = JSON.stringify(data, null, 2);
-      
-      // Show variables if present
-      if (data.variables) {
-        document.getElementById('variablesSection').style.display = 'block';
-        document.getElementById('sampleQueryVariables').textContent = JSON.stringify(data.variables, null, 2);
       } else {
-        document.getElementById('variablesSection').style.display = 'none';
+        // Run new EXPLAIN
+        const variables = query.variables ? JSON.parse(query.variables) : {};
+        this.runExplain(query.query, variables);
       }
-    } catch (e) {
-      document.getElementById('sampleQueryData').textContent = sampleQuery.requestData;
-      document.getElementById('variablesSection').style.display = 'none';
-    }
-  }
+    },
 
-  async loadRequests(sampleQueryId) {
-    try {
-      const response = await fetch(`/api/executions?request_id=${sampleQueryId}`);
-      this.requests = await response.json();
-      this.renderRequestsForSampleQuery();
-    } catch (error) {
-      console.error('Failed to load requests for sample query:', error);
-      this.requests = [];
-      this.renderRequestsForSampleQuery();
-    }
-  }
-
-  renderRequestsForSampleQuery() {
-    const container = document.getElementById('pastRequestsList');
-    
-    if (this.requests.length === 0) {
-      container.innerHTML = '<p style="color: #6c757d;">No requests yet. Click "Execute Query" to run this query.</p>';
-      return;
-    }
-
-    container.innerHTML = this.requests.map(req => {
-      const statusClass = req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
-      return `
-        <div class="execution-item" data-id="${req.id}">
-          <div class="execution-status ${statusClass}">${req.statusCode || 'ERR'}</div>
-          <div class="execution-info">
-            <div class="execution-time">${new Date(req.executedAt).toLocaleString()}</div>
-            <div class="execution-stats">
-              <span>ID: ${req.requestIdHeader}</span>
-            </div>
-          </div>
-          <div class="execution-duration">${req.durationMs}ms</div>
-          <div>→</div>
-        </div>
-      `;
-    }).join('');
-
-    // Add click handlers
-    container.querySelectorAll('.execution-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const id = parseInt(item.dataset.id);
-        this.showRequestDetail(id);
+    displayExplainPlan(planData, query) {
+      this.explainPlanData = {
+        planData,
+        query,
+        error: null
+      };
+      
+      this.showExplainPlanModal = true;
+      
+      // Need to mount PEV2 after modal is visible
+      this.$nextTick(() => {
+        this.mountPEV2(planData, query);
       });
-    });
-  }
+    },
 
-  async showRequestDetail(requestId) {
-    try {
-      const response = await fetch(`/api/executions/${requestId}`);
-      const detail = await response.json();
-      this.renderRequestDetail(detail);
-    } catch (error) {
-      console.error('Failed to load request detail:', error);
-    }
-  }
-
-  renderRequestDetail(detail) {
-    const modal = document.getElementById('requestDetailModal');
-    
-    // Overview stats
-    const statusClass = detail.execution.statusCode >= 200 && detail.execution.statusCode < 300 ? 'success' : 'error';
-    document.getElementById('reqStatusCode').textContent = detail.execution.statusCode || 'Error';
-    document.getElementById('reqStatusCode').className = `stat-value ${statusClass}`;
-    document.getElementById('reqDuration').textContent = `${detail.execution.durationMs}ms`;
-    document.getElementById('reqRequestID').textContent = detail.execution.requestIdHeader;
-    document.getElementById('reqTime').textContent = new Date(detail.execution.executedAt).toLocaleString();
-
-    // Request Body
-    if (detail.execution.requestData) {
+    mountPEV2(planData, query) {
+      const pev2Container = document.getElementById('pev2ExplainApp');
+      if (!pev2Container) return;
+      
       try {
-        const data = JSON.parse(detail.execution.requestData);
-        document.getElementById('reqRequestBody').textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        document.getElementById('reqRequestBody').textContent = detail.execution.requestData;
-      }
-    } else {
-      document.getElementById('reqRequestBody').textContent = '(no request data)';
-    }
-
-    // Response
-    if (detail.execution.responseBody) {
-      try {
-        const data = JSON.parse(detail.execution.responseBody);
-        document.getElementById('reqResponse').textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        document.getElementById('reqResponse').textContent = detail.execution.responseBody;
-      }
-    } else {
-      document.getElementById('reqResponse').textContent = '(no response)';
-    }
-
-    // Error
-    if (detail.execution.error) {
-      document.getElementById('reqErrorSection').style.display = 'block';
-      document.getElementById('reqError').textContent = detail.execution.error;
-    } else {
-      document.getElementById('reqErrorSection').style.display = 'none';
-    }
-
-    // SQL Analysis
-    if (detail.sqlAnalysis && detail.sqlAnalysis.totalQueries > 0) {
-      document.getElementById('reqSQLSection').style.display = 'block';
-      document.getElementById('sqlTotalQueries').textContent = detail.sqlAnalysis.totalQueries;
-      document.getElementById('sqlUniqueQueries').textContent = detail.sqlAnalysis.uniqueQueries;
-      document.getElementById('sqlAvgDuration').textContent = `${detail.sqlAnalysis.avgDuration.toFixed(2)}ms`;
-      document.getElementById('sqlTotalDuration').textContent = `${detail.sqlAnalysis.totalDuration.toFixed(2)}ms`;
-
-      // Render SQL queries
-      const sqlContainer = document.getElementById('sqlQueriesList');
-      sqlContainer.innerHTML = detail.sqlQueries.map((q, idx) => {
-        const hasPlan = q.explainPlan && q.explainPlan.length > 0;
-        return `
-          <div class="sql-query-item">
-            <div class="sql-query-header">
-              <span>${q.tableName || 'unknown'} - ${q.operation || 'SELECT'}</span>
-              <span class="sql-query-duration">${q.durationMs.toFixed(2)}ms</span>
-            </div>
-            <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
-            <div class="query-actions">
-              ${!hasPlan ? `<button class="btn-explain" data-query-idx="${idx}">Run EXPLAIN</button>` : ''}
-              ${hasPlan ? `<button class="btn-explain btn-secondary" data-query-idx="${idx}" data-show-plan="true">View Saved Plan</button>` : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      // Add EXPLAIN click handlers
-      sqlContainer.querySelectorAll('.btn-explain').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          const idx = parseInt(e.target.dataset.queryIdx);
-          const query = detail.sqlQueries[idx];
-          
-          if (e.target.dataset.showPlan === 'true') {
-            // Show saved plan
-            try {
-              const plan = JSON.parse(query.explainPlan);
-              this.showExplainPlan(plan, query.query);
-            } catch (err) {
-              alert('Error parsing saved plan: ' + err.message);
-            }
-          } else {
-            // Run new EXPLAIN
-            const variables = query.variables ? JSON.parse(query.variables) : {};
-            this.runExplain(query.query, variables);
-          }
+        // Unmount any existing Vue app
+        if (this.pev2App) {
+          this.pev2App.unmount();
+        }
+        
+        // Create new Vue app with PEV2
+        const { createApp } = Vue;
+        this.pev2App = createApp({
+          data() {
+            return {
+              planSource: JSON.stringify(planData, null, 2),
+              planQuery: query
+            };
+          },
+          template: '<pev2 :plan-source="planSource" :plan-query="planQuery"></pev2>'
         });
-      });
-    } else {
-      document.getElementById('reqSQLSection').style.display = 'none';
-    }
+        
+        this.pev2App.component('pev2', pev2.Plan);
+        this.pev2App.mount(pev2Container);
+      } catch (err) {
+        this.explainPlanData.error = `Failed to display plan: ${err.message}`;
+      }
+    },
 
-    // Logs
-    document.getElementById('logsCount').textContent = detail.logs.length;
-    const logsContainer = document.getElementById('reqLogs');
-    
-    if (detail.logs.length === 0) {
-      logsContainer.innerHTML = '<p style="color: #6c757d;">No logs captured</p>';
-    } else {
-      logsContainer.innerHTML = detail.logs.map(log => `
-        <div class="log-entry">
-          <div class="log-entry-header">
-            <span class="log-level ${log.level || 'INFO'}">${log.level || 'INFO'}</span>
-            <span class="log-timestamp">${new Date(log.timestamp).toLocaleTimeString()}</span>
-          </div>
-          <div class="log-message">${this.escapeHtml(log.message || log.rawLog)}</div>
-        </div>
-      `).join('');
-    }
-
-    modal.classList.remove('hidden');
-  }
-
-  hideRequestDetailModal() {
-    document.getElementById('requestDetailModal').classList.add('hidden');
-  }
-
-  showExplainPlan(planData, query) {
-    const modal = document.getElementById('explainPlanModal');
-    const errorDiv = document.getElementById('explainPlanError');
-    const pev2Container = document.getElementById('pev2ExplainApp');
-    
-    errorDiv.style.display = 'none';
-    
-    try {
-      // Unmount any existing Vue app
+    closeExplainPlanModal() {
+      this.showExplainPlanModal = false;
       if (this.pev2App) {
         this.pev2App.unmount();
+        this.pev2App = null;
       }
-      
-      // Create new Vue app with PEV2
-      const { createApp } = Vue;
-      this.pev2App = createApp({
-        data() {
-          return {
-            planSource: JSON.stringify(planData, null, 2),
-            planQuery: query
-          };
-        },
-        template: '<pev2 :plan-source="planSource" :plan-query="planQuery"></pev2>'
-      });
-      
-      this.pev2App.component('pev2', pev2.Plan);
-      this.pev2App.mount(pev2Container);
-      
-      modal.classList.remove('hidden');
-    } catch (err) {
-      errorDiv.textContent = `Failed to display plan: ${err.message}`;
-      errorDiv.style.display = 'block';
-      modal.classList.remove('hidden');
-    }
-  }
+    },
 
-  hideExplainPlanModal() {
-    document.getElementById('explainPlanModal').classList.add('hidden');
-    if (this.pev2App) {
-      this.pev2App.unmount();
-      this.pev2App = null;
-    }
-  }
+    openNewSampleQueryModal() {
+      // Reset form
+      this.newQueryForm = {
+        name: '',
+        requestData: '',
+        serverId: '',
+        url: '',
+        bearerToken: '',
+        devId: ''
+      };
+      this.showNewSampleQueryModal = true;
+    },
 
-  showNewSampleQueryModal() {
-    // Reset form
-    document.getElementById('newSampleQueryName').value = '';
-    document.getElementById('newSampleQueryURL').value = '';
-    document.getElementById('newSampleQueryData').value = '';
-    document.getElementById('newSampleQueryToken').value = '';
-    document.getElementById('newSampleQueryDevID').value = '';
-    
-    // Populate server dropdown
-    const serverSelect = document.getElementById('newSampleQueryServer');
-    serverSelect.innerHTML = '<option value="">-- New Server --</option>';
-    this.servers.forEach(server => {
-      const option = document.createElement('option');
-      option.value = server.id;
-      option.textContent = `${server.name} (${server.url})`;
-      serverSelect.appendChild(option);
-    });
-    
-    // Reset to new server mode
-    serverSelect.value = '';
-    this.handleServerChange('');
-    
-    document.getElementById('newSampleQueryModal').classList.remove('hidden');
-  }
+    async saveNewSampleQuery() {
+      const { name, requestData, serverId, url, bearerToken, devId } = this.newQueryForm;
 
-  handleServerChange(serverId) {
-    const newServerFields = document.getElementById('newServerFields');
-    if (serverId === '') {
-      // New server mode - show URL/token/devID fields
-      newServerFields.style.display = 'block';
-      document.getElementById('newSampleQueryURL').required = true;
-    } else {
-      // Existing server mode - hide URL/token/devID fields
-      newServerFields.style.display = 'none';
-      document.getElementById('newSampleQueryURL').required = false;
-    }
-  }
-
-  hideNewSampleQueryModal() {
-    document.getElementById('newSampleQueryModal').classList.add('hidden');
-  }
-
-  async saveNewSampleQuery() {
-    const name = document.getElementById('newSampleQueryName').value.trim();
-    const requestData = document.getElementById('newSampleQueryData').value.trim();
-    const serverSelect = document.getElementById('newSampleQueryServer');
-    const serverId = serverSelect.value;
-
-    if (!name || !requestData) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
-    // Validate JSON
-    try {
-      JSON.parse(requestData);
-    } catch (e) {
-      alert('Invalid JSON in query data');
-      return;
-    }
-
-    // Build request payload
-    const payload = {
-      name,
-      requestData,
-    };
-
-    if (serverId) {
-      // Use existing server
-      payload.serverId = parseInt(serverId);
-    } else {
-      // Create new server with provided details
-      const url = document.getElementById('newSampleQueryURL').value.trim();
-      const bearerToken = document.getElementById('newSampleQueryToken').value.trim();
-      const devId = document.getElementById('newSampleQueryDevID').value.trim();
-
-      if (!url) {
-        alert('Please provide a URL for the new server');
+      if (!name || !requestData) {
+        alert('Please fill in all required fields');
         return;
       }
 
-      payload.url = url;
-      if (bearerToken) payload.bearerToken = bearerToken;
-      if (devId) payload.devId = devId;
-    }
-
-    try {
-      const response = await fetch('/api/requests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save sample query');
+      // Validate JSON
+      try {
+        JSON.parse(requestData);
+      } catch (e) {
+        alert('Invalid JSON in query data');
+        return;
       }
 
-      this.hideNewSampleQueryModal();
-      await this.loadServers(); // Reload servers in case a new one was created
-      await this.loadSampleQueries();
-    } catch (error) {
-      console.error('Failed to save sample query:', error);
-      alert('Failed to save sample query: ' + error.message);
-    }
-  }
+      // Build request payload
+      const payload = { name, requestData };
 
-  showExecuteQueryModal() {
-    if (!this.selectedSampleQuery) return;
-
-    // Populate server dropdown
-    const serverSelect = document.getElementById('executeServer');
-    serverSelect.innerHTML = '<option value="">-- Select Server --</option>';
-    this.servers.forEach(server => {
-      const option = document.createElement('option');
-      option.value = server.id;
-      option.textContent = `${server.name} (${server.url})`;
-      serverSelect.appendChild(option);
-    });
-
-    // Pre-select the sample query's server if available
-    if (this.selectedSampleQuery.server) {
-      serverSelect.value = this.selectedSampleQuery.server.id;
-    }
-
-    // Clear override fields
-    document.getElementById('executeToken').value = '';
-    document.getElementById('executeDevID').value = '';
-
-    document.getElementById('executeQueryModal').classList.remove('hidden');
-  }
-
-  hideExecuteQueryModal() {
-    document.getElementById('executeQueryModal').classList.add('hidden');
-  }
-
-  async confirmExecuteQuery() {
-    if (!this.selectedSampleQuery) return;
-
-    const serverSelect = document.getElementById('executeServer');
-    const serverId = serverSelect.value;
-    const tokenOverride = document.getElementById('executeToken').value.trim();
-    const devIdOverride = document.getElementById('executeDevID').value.trim();
-
-    if (!serverId) {
-      alert('Please select a server');
-      return;
-    }
-
-    const payload = {
-      serverId: parseInt(serverId),
-    };
-
-    if (tokenOverride) {
-      payload.bearerTokenOverride = tokenOverride;
-    }
-    if (devIdOverride) {
-      payload.devIdOverride = devIdOverride;
-    }
-
-    try {
-      const response = await fetch(`/api/requests/${this.selectedSampleQuery.id}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to execute query');
+      if (serverId) {
+        // Use existing server
+        payload.serverId = parseInt(serverId);
+      } else {
+        // Create new server with provided details
+        if (!url) {
+          alert('Please provide a URL for the new server');
+          return;
+        }
+        payload.url = url;
+        if (bearerToken) payload.bearerToken = bearerToken;
+        if (devId) payload.devId = devId;
       }
 
-      this.hideExecuteQueryModal();
-      alert('Query execution started. Results will appear in the requests list.');
-      
-      // Reload requests after a delay
-      setTimeout(() => {
-        this.loadRequests(this.selectedSampleQuery.id);
-        this.loadAllRequests();
-      }, 12000); // Wait 12 seconds for logs to be collected
-    } catch (error) {
-      console.error('Failed to execute query:', error);
-      alert('Failed to execute query: ' + error.message);
-    }
-  }
+      try {
+        const response = await fetch('/api/requests', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
 
-  async deleteSampleQuery() {
-    if (!this.selectedSampleQuery) return;
+        if (!response.ok) {
+          throw new Error('Failed to save sample query');
+        }
 
-    if (!confirm(`Delete sample query "${this.selectedSampleQuery.name}"? This will also delete all requests.`)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/requests/${this.selectedSampleQuery.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete sample query');
+        this.showNewSampleQueryModal = false;
+        await this.loadServers(); // Reload servers in case a new one was created
+        await this.loadSampleQueries();
+      } catch (error) {
+        console.error('Failed to save sample query:', error);
+        alert('Failed to save sample query: ' + error.message);
       }
+    },
 
-      this.selectedSampleQuery = null;
-      document.getElementById('emptyState').classList.remove('hidden');
-      document.getElementById('sampleQueryDetail').classList.add('hidden');
-      
-      await this.loadSampleQueries();
-      await this.loadAllRequests();
-    } catch (error) {
-      console.error('Failed to delete sample query:', error);
-      alert('Failed to delete sample query: ' + error.message);
-    }
-  }
+    openExecuteQueryModal() {
+      if (!this.selectedSampleQuery) return;
 
-  async runExplain(query, variables = {}) {
-    try {
-      const payload = {
-        query: query,
-        variables: variables,
+      // Pre-select the sample query's server if available
+      this.executeForm = {
+        serverId: this.selectedSampleQuery.server ? this.selectedSampleQuery.server.id.toString() : '',
+        tokenOverride: '',
+        devIdOverride: ''
       };
 
-      const response = await fetch("/api/explain", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      this.showExecuteQueryModal = true;
+    },
 
-      const result = await response.json();
-      
-      // Show EXPLAIN result in a simple alert for now
-      // TODO: Integrate PEV2 visualization
-      if (result.error) {
-        alert(`EXPLAIN Error: ${result.error}`);
-      } else {
-        const planText = result.queryPlan ? JSON.stringify(result.queryPlan, null, 2) : 'No plan available';
-        console.log('EXPLAIN Plan:', planText);
-        alert('EXPLAIN plan logged to console. Check browser console for details.');
+    async confirmExecuteQuery() {
+      if (!this.selectedSampleQuery) return;
+
+      const { serverId, tokenOverride, devIdOverride } = this.executeForm;
+
+      if (!serverId) {
+        alert('Please select a server');
+        return;
       }
-    } catch (error) {
-      alert(`Failed to run EXPLAIN: ${error.message}`);
+
+      const payload = {
+        serverId: parseInt(serverId),
+      };
+
+      if (tokenOverride) {
+        payload.bearerTokenOverride = tokenOverride;
+      }
+      if (devIdOverride) {
+        payload.devIdOverride = devIdOverride;
+      }
+
+      try {
+        const response = await fetch(`/api/requests/${this.selectedSampleQuery.id}/execute`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to execute query');
+        }
+
+        this.showExecuteQueryModal = false;
+        alert('Query execution started. Results will appear in the requests list.');
+        
+        // Reload requests after a delay
+        setTimeout(() => {
+          this.loadRequests(this.selectedSampleQuery.id);
+          this.loadAllRequests();
+        }, 12000); // Wait 12 seconds for logs to be collected
+      } catch (error) {
+        console.error('Failed to execute query:', error);
+        alert('Failed to execute query: ' + error.message);
+      }
+    },
+
+    async deleteSampleQuery() {
+      if (!this.selectedSampleQuery) return;
+
+      if (!confirm(`Delete sample query "${this.selectedSampleQuery.name}"? This will also delete all requests.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/requests/${this.selectedSampleQuery.id}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete sample query');
+        }
+
+        this.selectedSampleQuery = null;
+        
+        await this.loadSampleQueries();
+        await this.loadAllRequests();
+      } catch (error) {
+        console.error('Failed to delete sample query:', error);
+        alert('Failed to delete sample query: ' + error.message);
+      }
+    },
+
+    async runExplain(query, variables = {}) {
+      try {
+        const payload = {
+          query: query,
+          variables: variables,
+        };
+
+        const response = await fetch("/api/explain", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+        
+        if (result.error) {
+          alert(`EXPLAIN Error: ${result.error}`);
+        } else {
+          const planText = result.queryPlan ? JSON.stringify(result.queryPlan, null, 2) : 'No plan available';
+          console.log('EXPLAIN Plan:', planText);
+          alert('EXPLAIN plan logged to console. Check browser console for details.');
+        }
+      } catch (error) {
+        alert(`Failed to run EXPLAIN: ${error.message}`);
+      }
+    },
+
+    async compareSelectedRequests() {
+      const checkedBoxes = Array.from(document.querySelectorAll('.exec-compare-checkbox:checked'));
+      if (checkedBoxes.length !== 2) return;
+
+      const ids = checkedBoxes.map(cb => parseInt(cb.dataset.id));
+      
+      // Fetch details for both requests
+      const [detail1, detail2] = await Promise.all(
+        ids.map(async id => {
+          const response = await fetch(`/api/executions/${id}`);
+          return await response.json();
+        })
+      );
+
+      this.comparisonData = { detail1, detail2 };
+      this.showComparisonModal = true;
+    },
+
+    getComparisonTimeDiff() {
+      if (!this.comparisonData) return 0;
+      const { detail1, detail2 } = this.comparisonData;
+      return detail2.execution.durationMs - detail1.execution.durationMs;
+    },
+
+    getComparisonTimeDiffPercent() {
+      if (!this.comparisonData) return '0.0';
+      const diff = this.getComparisonTimeDiff();
+      const { detail1 } = this.comparisonData;
+      return ((diff / detail1.execution.durationMs) * 100).toFixed(1);
+    },
+
+    getComparisonTimeDiffClass() {
+      return this.getComparisonTimeDiff() > 0 ? 'diff-slower' : 'diff-faster';
+    },
+
+    escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
-  }
+  },
 
-  async compareSelectedRequests() {
-    const checkedBoxes = Array.from(document.querySelectorAll('.exec-compare-checkbox:checked'));
-    if (checkedBoxes.length !== 2) return;
+  template: `
+    <div class="app-container">
+      <header class="app-header">
+        <div style="display: flex; align-items: center; gap: 1rem">
+          <h1 style="margin: 0">🔱 Logseidon</h1>
+          <nav style="display: flex; gap: 1rem; align-items: center">
+            <a href="/">Log Viewer</a>
+            <a href="/requests.html" class="active">Request Manager</a>
+          </nav>
+        </div>
+      </header>
 
-    const ids = checkedBoxes.map(cb => parseInt(cb.dataset.id));
-    
-    // Fetch details for both requests
-    const [detail1, detail2] = await Promise.all(
-      ids.map(async id => {
-        const response = await fetch(`/api/executions/${id}`);
-        return await response.json();
-      })
-    );
-
-    this.showComparison(detail1, detail2);
-  }
-
-  showComparison(detail1, detail2) {
-    const modal = document.getElementById('comparisonModal');
-    const content = document.getElementById('comparisonContent');
-
-    const exec1 = detail1.execution;
-    const exec2 = detail2.execution;
-    
-    const timeDiff = exec2.durationMs - exec1.durationMs;
-    const timeDiffPercent = ((timeDiff / exec1.durationMs) * 100).toFixed(1);
-
-    content.innerHTML = `
-      <div class="comparison-grid">
-        <div class="comparison-column">
-          <h3>Request 1</h3>
-          <div class="comparison-stats">
-            <div><strong>Status:</strong> ${exec1.statusCode}</div>
-            <div><strong>Duration:</strong> ${exec1.durationMs}ms</div>
-            <div><strong>Request ID:</strong> ${exec1.requestIdHeader}</div>
-            <div><strong>Executed:</strong> ${new Date(exec1.executedAt).toLocaleString()}</div>
-          </div>
-          <div class="comparison-section">
-            <h4>Response</h4>
-            <pre class="json-display">${this.escapeHtml(exec1.responseBody || 'No response')}</pre>
-          </div>
-          <div class="comparison-section">
-            <h4>SQL Queries (${detail1.sqlQueries.length})</h4>
-            <div class="comparison-queries">
-              ${detail1.sqlQueries.map(q => `
-                <div class="comparison-query">
-                  <div><strong>${q.tableName}</strong> - ${q.durationMs.toFixed(2)}ms</div>
-                  <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
+      <div class="main-layout">
+        <aside class="sidebar">
+          <div class="section">
+            <h3>Sample Queries</h3>
+            <button @click="openNewSampleQueryModal" class="btn-primary">
+              + New Sample Query
+            </button>
+            <div class="requests-list">
+              <p v-if="sampleQueries.length === 0" style="padding: 1rem; color: #6c757d; text-align: center;">No sample queries</p>
+              <div v-for="sq in sampleQueries" 
+                   :key="sq.id"
+                   class="request-item"
+                   :class="{ active: isSampleQuerySelected(sq.id) }"
+                   @click="selectSampleQuery(sq.id)">
+                <div class="request-item-name">{{ getSampleQueryDisplayName(sq) }}</div>
+                <div class="request-item-meta">
+                  <span>{{ new Date(sq.createdAt).toLocaleDateString() }}</span>
                 </div>
-              `).join('')}
+              </div>
             </div>
           </div>
-        </div>
+        </aside>
 
-        <div class="comparison-divider">
-          <div class="comparison-diff">
-            <div>Time Difference</div>
-            <div class="${timeDiff > 0 ? 'diff-slower' : 'diff-faster'}">${timeDiff > 0 ? '+' : ''}${timeDiff}ms (${timeDiff > 0 ? '+' : ''}${timeDiffPercent}%)</div>
-          </div>
-        </div>
-
-        <div class="comparison-column">
-          <h3>Request 2</h3>
-          <div class="comparison-stats">
-            <div><strong>Status:</strong> ${exec2.statusCode}</div>
-            <div><strong>Duration:</strong> ${exec2.durationMs}ms</div>
-            <div><strong>Request ID:</strong> ${exec2.requestIdHeader}</div>
-            <div><strong>Executed:</strong> ${new Date(exec2.executedAt).toLocaleString()}</div>
-          </div>
-          <div class="comparison-section">
-            <h4>Response</h4>
-            <pre class="json-display">${this.escapeHtml(exec2.responseBody || 'No response')}</pre>
-          </div>
-          <div class="comparison-section">
-            <h4>SQL Queries (${detail2.sqlQueries.length})</h4>
-            <div class="comparison-queries">
-              ${detail2.sqlQueries.map(q => `
-                <div class="comparison-query">
-                  <div><strong>${q.tableName}</strong> - ${q.durationMs.toFixed(2)}ms</div>
-                  <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
+        <main class="content">
+          <div v-if="showEmptyState" class="empty-state">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h2 style="margin: 0">Recent Requests</h2>
+              <button
+                v-if="compareButtonVisible"
+                @click="compareSelectedRequests"
+                class="btn-primary">
+                Compare Selected
+              </button>
+            </div>
+            <p>No requests executed yet. Select a sample query and execute it to get started.</p>
+            <div class="executions-list">
+              <p v-if="allRequests.length === 0" style="color: #6c757d;">No requests executed yet.</p>
+              <div v-for="req in allRequests" 
+                   :key="req.id"
+                   class="execution-item-detailed"
+                   @click="handleExecutionClick(req, $event)">
+                <div class="exec-header">
+                  <input type="checkbox" class="exec-compare-checkbox" :data-id="req.id" @change="updateCompareButton">
+                  <span class="exec-status" :class="getExecutionStatusClass(req)">{{ req.statusCode || 'ERR' }}</span>
+                  <span class="exec-name">{{ req.operationName }}</span>
+                  <span class="exec-duration">{{ req.durationMs }}ms</span>
                 </div>
-              `).join('')}
+                <div class="exec-details">
+                  <span class="exec-time">{{ getExecutionTimeString(req) }}</span>
+                  <span class="exec-server">{{ getExecutionServerUrl(req) }}</span>
+                  <span class="exec-id">req_id={{ req.requestIdHeader }}</span>
+                </div>
+                <div class="exec-last-log">{{ getExecutionLastLogMsg(req) }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="showSampleQueryDetail" class="request-detail">
+            <div class="detail-header">
+              <h2>{{ selectedSampleQueryName }}</h2>
+              <div class="detail-actions">
+                <button @click="openExecuteQueryModal" class="btn-primary">
+                  Execute Query
+                </button>
+                <button @click="deleteSampleQuery" class="btn-danger">Delete</button>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <h3>Query Details</h3>
+              <div class="form-row">
+                <label>URL:</label>
+                <div class="value">{{ selectedSampleQueryURL }}</div>
+              </div>
+              <div class="form-row">
+                <label>Created:</label>
+                <div class="value">{{ selectedSampleQueryCreated }}</div>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <h3>Query Data</h3>
+              <pre class="json-display">{{ selectedSampleQueryData }}</pre>
+            </div>
+
+            <div v-if="selectedSampleQueryVariables" class="detail-section">
+              <h3>Variables</h3>
+              <pre class="json-display">{{ selectedSampleQueryVariables }}</pre>
+            </div>
+
+            <div class="detail-section">
+              <h3>Past Requests</h3>
+              <div class="executions-list">
+                <p v-if="requests.length === 0" style="color: #6c757d;">No requests yet. Click "Execute Query" to run this query.</p>
+                <div v-for="req in requests" 
+                     :key="req.id"
+                     class="execution-item"
+                     @click="showRequestDetail(req.id)">
+                  <div class="execution-status" :class="getRequestStatusClass(req)">{{ req.statusCode || 'ERR' }}</div>
+                  <div class="execution-info">
+                    <div class="execution-time">{{ new Date(req.executedAt).toLocaleString() }}</div>
+                    <div class="execution-stats">
+                      <span>ID: {{ req.requestIdHeader }}</span>
+                    </div>
+                  </div>
+                  <div class="execution-duration">{{ req.durationMs }}ms</div>
+                  <div>→</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- New Sample Query Modal -->
+    <div v-if="showNewSampleQueryModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>New Sample Query</h3>
+          <button @click="showNewSampleQueryModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="newSampleQueryName">Name:</label>
+            <input
+              type="text"
+              id="newSampleQueryName"
+              v-model="newQueryForm.name"
+              placeholder="e.g., FetchUsers"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="newSampleQueryServer">Server:</label>
+            <select id="newSampleQueryServer" v-model="newQueryForm.serverId">
+              <option value="">-- New Server --</option>
+              <option v-for="server in servers" :key="server.id" :value="server.id">
+                {{ server.name }} ({{ server.url }})
+              </option>
+            </select>
+          </div>
+          <div v-if="showNewServerFields">
+            <div class="form-group">
+              <label for="newSampleQueryURL">URL:</label>
+              <input
+                type="text"
+                id="newSampleQueryURL"
+                v-model="newQueryForm.url"
+                placeholder="https://api.example.com/graphql"
+              />
+            </div>
+            <div class="form-group">
+              <label for="newSampleQueryToken">Bearer Token (optional):</label>
+              <input
+                type="text"
+                id="newSampleQueryToken"
+                v-model="newQueryForm.bearerToken"
+                placeholder="your-token-here"
+              />
+            </div>
+            <div class="form-group">
+              <label for="newSampleQueryDevID">Dev ID (optional):</label>
+              <input
+                type="text"
+                id="newSampleQueryDevID"
+                v-model="newQueryForm.devId"
+                placeholder="dev-user-id"
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="newSampleQueryData">Query Data (JSON):</label>
+            <textarea
+              id="newSampleQueryData"
+              v-model="newQueryForm.requestData"
+              rows="15"
+              placeholder='{"query": "{ users { id name } }"}'
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="saveNewSampleQuery" class="btn-primary">
+            Save Sample Query
+          </button>
+          <button @click="showNewSampleQueryModal = false" class="btn-secondary">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execute Query Modal -->
+    <div v-if="showExecuteQueryModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Execute Query</h3>
+          <button @click="showExecuteQueryModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="executeServer">Server:</label>
+            <select id="executeServer" v-model="executeForm.serverId">
+              <option value="">-- Select Server --</option>
+              <option v-for="server in servers" :key="server.id" :value="server.id">
+                {{ server.name }} ({{ server.url }})
+              </option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="executeToken">Bearer Token Override (optional):</label>
+            <input type="text" id="executeToken" v-model="executeForm.tokenOverride" placeholder="Override token" />
+          </div>
+          <div class="form-group">
+            <label for="executeDevID">Dev ID Override (optional):</label>
+            <input
+              type="text"
+              id="executeDevID"
+              v-model="executeForm.devIdOverride"
+              placeholder="Override dev ID"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="confirmExecuteQuery" class="btn-primary">Execute</button>
+          <button @click="showExecuteQueryModal = false" class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Request Detail Modal -->
+    <div v-if="showRequestDetailModal && selectedRequestDetail" class="modal">
+      <div class="modal-content execution-modal-content">
+        <div class="modal-header">
+          <h3>Request Details</h3>
+          <button @click="showRequestDetailModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="execution-overview">
+            <div class="stat-item">
+              <span class="stat-label">Status Code</span>
+              <span class="stat-value" :class="getDetailStatusClass()">{{ selectedRequestDetail.execution.statusCode || 'Error' }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Duration</span>
+              <span class="stat-value">{{ selectedRequestDetail.execution.durationMs }}ms</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Request ID</span>
+              <span class="stat-value">{{ selectedRequestDetail.execution.requestIdHeader }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Executed At</span>
+              <span class="stat-value">{{ new Date(selectedRequestDetail.execution.executedAt).toLocaleString() }}</span>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <h4>Request Body</h4>
+            <pre class="json-display">{{ getDetailRequestData() }}</pre>
+          </div>
+
+          <div class="modal-section">
+            <h4>Response</h4>
+            <pre class="json-display">{{ getDetailResponseBody() }}</pre>
+          </div>
+
+          <div v-if="selectedRequestDetail.execution.error" class="modal-section">
+            <h4>Error</h4>
+            <pre class="error-display">{{ selectedRequestDetail.execution.error }}</pre>
+          </div>
+
+          <div v-if="selectedRequestDetail.sqlAnalysis && selectedRequestDetail.sqlAnalysis.totalQueries > 0" class="modal-section">
+            <h4>SQL Analysis</h4>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">Total Queries</span>
+                <span class="stat-value">{{ selectedRequestDetail.sqlAnalysis.totalQueries }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Unique Queries</span>
+                <span class="stat-value">{{ selectedRequestDetail.sqlAnalysis.uniqueQueries }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Avg Duration</span>
+                <span class="stat-value">{{ selectedRequestDetail.sqlAnalysis.avgDuration.toFixed(2) }}ms</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Total Duration</span>
+                <span class="stat-value">{{ selectedRequestDetail.sqlAnalysis.totalDuration.toFixed(2) }}ms</span>
+              </div>
+            </div>
+
+            <div class="sql-queries-list">
+              <div v-for="(q, idx) in selectedRequestDetail.sqlQueries" :key="idx" class="sql-query-item">
+                <div class="sql-query-header">
+                  <span>{{ q.tableName || 'unknown' }} - {{ q.operation || 'SELECT' }}</span>
+                  <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
+                </div>
+                <div class="sql-query-text">{{ q.query }}</div>
+                <div class="query-actions">
+                  <button v-if="!q.explainPlan || q.explainPlan.length === 0" 
+                          class="btn-explain" 
+                          @click="handleExplainClick(idx)">Run EXPLAIN</button>
+                  <button v-if="q.explainPlan && q.explainPlan.length > 0" 
+                          class="btn-explain btn-secondary" 
+                          @click="handleExplainClick(idx)">View Saved Plan</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <h4>Logs (<span>{{ selectedRequestDetail.logs.length }}</span>)</h4>
+            <div class="logs-list">
+              <p v-if="selectedRequestDetail.logs.length === 0" style="color: #6c757d;">No logs captured</p>
+              <div v-for="(log, idx) in selectedRequestDetail.logs" :key="idx" class="log-entry">
+                <div class="log-entry-header">
+                  <span class="log-level" :class="log.level || 'INFO'">{{ log.level || 'INFO' }}</span>
+                  <span class="log-timestamp">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
+                </div>
+                <div class="log-message">{{ log.message || log.rawLog }}</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    `;
+    </div>
 
-    modal.classList.remove('hidden');
-  }
+    <!-- EXPLAIN Plan Modal -->
+    <div v-if="showExplainPlanModal" class="modal">
+      <div class="modal-content explain-modal-content">
+        <div class="modal-header">
+          <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
+          <button @click="closeExplainPlanModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div
+            v-if="explainPlanData && explainPlanData.error"
+            class="alert alert-danger"
+            style="display: block; margin: 1rem;">
+            {{ explainPlanData.error }}
+          </div>
+          <div
+            id="pev2ExplainApp"
+            class="d-flex flex-column"
+          ></div>
+        </div>
+      </div>
+    </div>
 
-  hideComparisonModal() {
-    document.getElementById('comparisonModal').classList.add('hidden');
-  }
+    <!-- Request Comparison Modal -->
+    <div v-if="showComparisonModal && comparisonData" class="modal">
+      <div class="modal-content" style="max-width: 1400px">
+        <div class="modal-header">
+          <h3>Request Comparison</h3>
+          <button @click="showComparisonModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="comparison-grid">
+            <div class="comparison-column">
+              <h3>Request 1</h3>
+              <div class="comparison-stats">
+                <div><strong>Status:</strong> {{ comparisonData.detail1.execution.statusCode }}</div>
+                <div><strong>Duration:</strong> {{ comparisonData.detail1.execution.durationMs }}ms</div>
+                <div><strong>Request ID:</strong> {{ comparisonData.detail1.execution.requestIdHeader }}</div>
+                <div><strong>Executed:</strong> {{ new Date(comparisonData.detail1.execution.executedAt).toLocaleString() }}</div>
+              </div>
+              <div class="comparison-section">
+                <h4>Response</h4>
+                <pre class="json-display">{{ comparisonData.detail1.execution.responseBody || 'No response' }}</pre>
+              </div>
+              <div class="comparison-section">
+                <h4>SQL Queries ({{ comparisonData.detail1.sqlQueries.length }})</h4>
+                <div class="comparison-queries">
+                  <div v-for="(q, idx) in comparisonData.detail1.sqlQueries" :key="idx" class="comparison-query">
+                    <div><strong>{{ q.tableName }}</strong> - {{ q.durationMs.toFixed(2) }}ms</div>
+                    <div class="sql-query-text">{{ q.query }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-}
+            <div class="comparison-divider">
+              <div class="comparison-diff">
+                <div>Time Difference</div>
+                <div :class="getComparisonTimeDiffClass()">
+                  {{ getComparisonTimeDiff() > 0 ? '+' : '' }}{{ getComparisonTimeDiff() }}ms 
+                  ({{ getComparisonTimeDiff() > 0 ? '+' : '' }}{{ getComparisonTimeDiffPercent() }}%)
+                </div>
+              </div>
+            </div>
 
-// Initialize app
-const app = new RequestManager();
+            <div class="comparison-column">
+              <h3>Request 2</h3>
+              <div class="comparison-stats">
+                <div><strong>Status:</strong> {{ comparisonData.detail2.execution.statusCode }}</div>
+                <div><strong>Duration:</strong> {{ comparisonData.detail2.execution.durationMs }}ms</div>
+                <div><strong>Request ID:</strong> {{ comparisonData.detail2.execution.requestIdHeader }}</div>
+                <div><strong>Executed:</strong> {{ new Date(comparisonData.detail2.execution.executedAt).toLocaleString() }}</div>
+              </div>
+              <div class="comparison-section">
+                <h4>Response</h4>
+                <pre class="json-display">{{ comparisonData.detail2.execution.responseBody || 'No response' }}</pre>
+              </div>
+              <div class="comparison-section">
+                <h4>SQL Queries ({{ comparisonData.detail2.sqlQueries.length }})</h4>
+                <div class="comparison-queries">
+                  <div v-for="(q, idx) in comparisonData.detail2.sqlQueries" :key="idx" class="comparison-query">
+                    <div><strong>{{ q.tableName }}</strong> - {{ q.durationMs.toFixed(2) }}ms</div>
+                    <div class="sql-query-text">{{ q.query }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+});
+
+app.mount('#app');
