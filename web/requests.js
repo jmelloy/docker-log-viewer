@@ -1,53 +1,68 @@
 class RequestManager {
   constructor() {
-    this.requests = [];
+    this.sampleQueries = [];
     this.servers = [];
-    this.selectedRequest = null;
-    this.executions = [];
+    this.selectedSampleQuery = null;
+    this.requests = [];
+    this.allRequests = [];
     this.init();
   }
 
   async init() {
     this.setupEventListeners();
     await this.loadServers();
-    await this.loadRequests();
+    await this.loadSampleQueries();
+    await this.loadAllRequests();
   }
 
   setupEventListeners() {
-    // New request modal
-    document.getElementById('newRequestBtn').addEventListener('click', () => {
-      this.showNewRequestModal();
+    // New sample query modal
+    document.getElementById('newSampleQueryBtn').addEventListener('click', () => {
+      this.showNewSampleQueryModal();
     });
 
-    document.getElementById('closeNewRequestModal').addEventListener('click', () => {
-      this.hideNewRequestModal();
+    document.getElementById('closeNewSampleQueryModal').addEventListener('click', () => {
+      this.hideNewSampleQueryModal();
     });
 
-    document.getElementById('cancelNewRequestBtn').addEventListener('click', () => {
-      this.hideNewRequestModal();
+    document.getElementById('cancelNewSampleQueryBtn').addEventListener('click', () => {
+      this.hideNewSampleQueryModal();
     });
 
-    document.getElementById('saveRequestBtn').addEventListener('click', () => {
-      this.saveNewRequest();
+    document.getElementById('saveSampleQueryBtn').addEventListener('click', () => {
+      this.saveNewSampleQuery();
     });
 
     // Server selection change
-    document.getElementById('newRequestServer').addEventListener('change', (e) => {
+    document.getElementById('newSampleQueryServer').addEventListener('change', (e) => {
       this.handleServerChange(e.target.value);
     });
 
-    // Execution modal
-    document.getElementById('closeExecutionModal').addEventListener('click', () => {
-      this.hideExecutionModal();
+    // Execute query modal
+    document.getElementById('closeExecuteQueryModal').addEventListener('click', () => {
+      this.hideExecuteQueryModal();
     });
 
-    // Request actions
+    document.getElementById('cancelExecuteBtn').addEventListener('click', () => {
+      this.hideExecuteQueryModal();
+    });
+
+    document.getElementById('confirmExecuteBtn').addEventListener('click', () => {
+      this.confirmExecuteQuery();
+    });
+
+    // Request detail modal
+    document.getElementById('closeRequestDetailModal').addEventListener('click', () => {
+      this.hideRequestDetailModal();
+    });
+
+    // Sample query actions
     document.getElementById('executeBtn').addEventListener('click', () => {
-      this.executeRequest();
+      this.showExecuteQueryModal();
     });
 
     document.getElementById('deleteBtn').addEventListener('click', () => {
-      this.deleteRequest();
+      this.deleteSampleQuery();
     });
   }
 
@@ -61,31 +76,41 @@ class RequestManager {
     }
   }
 
-  async loadRequests() {
+  async loadSampleQueries() {
     try {
       const response = await fetch('/api/requests');
-      this.requests = await response.json();
-      this.renderRequestsList();
+      this.sampleQueries = await response.json();
+      this.renderSampleQueriesList();
+    } catch (error) {
+      console.error('Failed to load sample queries:', error);
+    }
+  }
+
+  async loadAllRequests() {
+    try {
+      const response = await fetch('/api/all-executions');
+      this.allRequests = await response.json();
+      this.renderAllRequestsList();
     } catch (error) {
       console.error('Failed to load requests:', error);
     }
   }
 
-  renderRequestsList() {
-    const container = document.getElementById('requestsList');
+  renderSampleQueriesList() {
+    const container = document.getElementById('sampleQueriesList');
     
-    if (this.requests.length === 0) {
-      container.innerHTML = '<p style="padding: 1rem; color: #6c757d; text-align: center;">No saved requests</p>';
+    if (this.sampleQueries.length === 0) {
+      container.innerHTML = '<p style="padding: 1rem; color: #6c757d; text-align: center;">No sample queries</p>';
       return;
     }
 
-    container.innerHTML = this.requests.map(req => `
-      <div class="request-item ${this.selectedRequest?.id === req.id ? 'active' : ''}" 
-           data-id="${req.id}">
-        <div class="request-item-name">${this.escapeHtml(req.name)}</div>
-        <div class="request-item-url">${this.escapeHtml(req.server ? req.server.url : '(no server)')}</div>
+    container.innerHTML = this.sampleQueries.map(sq => `
+      <div class="request-item ${this.selectedSampleQuery?.id === sq.id ? 'active' : ''}" 
+           data-id="${sq.id}">
+        <div class="request-item-name">${this.escapeHtml(sq.name)}</div>
+        <div class="request-item-url">${this.escapeHtml(sq.server ? sq.server.url : '(no server)')}</div>
         <div class="request-item-meta">
-          <span>${new Date(req.createdAt).toLocaleDateString()}</span>
+          <span>${new Date(sq.createdAt).toLocaleDateString()}</span>
         </div>
       </div>
     `).join('');
@@ -94,77 +119,31 @@ class RequestManager {
     container.querySelectorAll('.request-item').forEach(item => {
       item.addEventListener('click', () => {
         const id = parseInt(item.dataset.id);
-        this.selectRequest(id);
+        this.selectSampleQuery(id);
       });
     });
   }
 
-  async selectRequest(id) {
-    const request = this.requests.find(r => r.id === id);
-    if (!request) return;
-
-    this.selectedRequest = request;
-    this.renderRequestsList();
-    this.showRequestDetail(request);
-    await this.loadExecutions(id);
-  }
-
-  showRequestDetail(request) {
-    document.getElementById('emptyState').classList.add('hidden');
-    document.getElementById('requestDetail').classList.remove('hidden');
-
-    document.getElementById('requestName').textContent = request.name;
+  renderAllRequestsList() {
+    const container = document.getElementById('requestsList');
     
-    // Show server info if available
-    if (request.server) {
-      document.getElementById('requestURL').textContent = request.server.url;
-    } else {
-      document.getElementById('requestURL').textContent = '(no server configured)';
-    }
-    
-    document.getElementById('requestCreated').textContent = new Date(request.createdAt).toLocaleString();
-    
-    // Pretty print JSON
-    try {
-      const data = JSON.parse(request.requestData);
-      document.getElementById('requestData').textContent = JSON.stringify(data, null, 2);
-    } catch (e) {
-      document.getElementById('requestData').textContent = request.requestData;
-    }
-  }
-
-  async loadExecutions(requestId) {
-    try {
-      const response = await fetch(`/api/executions?request_id=${requestId}`);
-      this.executions = await response.json();
-      this.renderExecutions();
-    } catch (error) {
-      console.error('Failed to load executions:', error);
-      this.executions = [];
-      this.renderExecutions();
-    }
-  }
-
-  renderExecutions() {
-    const container = document.getElementById('executionsList');
-    
-    if (this.executions.length === 0) {
-      container.innerHTML = '<p style="color: #6c757d;">No executions yet. Click "Execute Request" to run this request.</p>';
+    if (this.allRequests.length === 0) {
+      container.innerHTML = '<p style="color: #6c757d;">No requests executed yet.</p>';
       return;
     }
 
-    container.innerHTML = this.executions.map(exec => {
-      const statusClass = exec.statusCode >= 200 && exec.statusCode < 300 ? 'success' : 'error';
+    container.innerHTML = this.allRequests.map(req => {
+      const statusClass = req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
       return `
-        <div class="execution-item" data-id="${exec.id}">
-          <div class="execution-status ${statusClass}">${exec.statusCode || 'ERR'}</div>
+        <div class="execution-item" data-id="${req.id}">
+          <div class="execution-status ${statusClass}">${req.statusCode || 'ERR'}</div>
           <div class="execution-info">
-            <div class="execution-time">${new Date(exec.executedAt).toLocaleString()}</div>
+            <div class="execution-time">${new Date(req.executedAt).toLocaleString()}</div>
             <div class="execution-stats">
-              <span>ID: ${exec.requestIdHeader}</span>
+              <span>ID: ${req.requestIdHeader}</span>
             </div>
           </div>
-          <div class="execution-duration">${exec.durationMs}ms</div>
+          <div class="execution-duration">${req.durationMs}ms</div>
           <div>→</div>
         </div>
       `;
@@ -174,55 +153,144 @@ class RequestManager {
     container.querySelectorAll('.execution-item').forEach(item => {
       item.addEventListener('click', () => {
         const id = parseInt(item.dataset.id);
-        this.showExecutionDetail(id);
+        this.showRequestDetail(id);
       });
     });
   }
 
-  async showExecutionDetail(executionId) {
+  async selectSampleQuery(id) {
+    const sampleQuery = this.sampleQueries.find(sq => sq.id === id);
+    if (!sampleQuery) return;
+
+    this.selectedSampleQuery = sampleQuery;
+    this.renderSampleQueriesList();
+    this.showSampleQueryDetail(sampleQuery);
+    await this.loadRequests(id);
+  }
+
+  showSampleQueryDetail(sampleQuery) {
+    document.getElementById('emptyState').classList.add('hidden');
+    document.getElementById('sampleQueryDetail').classList.remove('hidden');
+
+    document.getElementById('sampleQueryName').textContent = sampleQuery.name;
+    
+    // Show server info if available
+    if (sampleQuery.server) {
+      document.getElementById('sampleQueryURL').textContent = sampleQuery.server.url;
+    } else {
+      document.getElementById('sampleQueryURL').textContent = '(no server configured)';
+    }
+    
+    document.getElementById('sampleQueryCreated').textContent = new Date(sampleQuery.createdAt).toLocaleString();
+    
+    // Pretty print JSON and extract variables
     try {
-      const response = await fetch(`/api/executions/${executionId}`);
-      const detail = await response.json();
-      this.renderExecutionDetail(detail);
-    } catch (error) {
-      console.error('Failed to load execution detail:', error);
+      const data = JSON.parse(sampleQuery.requestData);
+      document.getElementById('sampleQueryData').textContent = JSON.stringify(data, null, 2);
+      
+      // Show variables if present
+      if (data.variables) {
+        document.getElementById('variablesSection').style.display = 'block';
+        document.getElementById('sampleQueryVariables').textContent = JSON.stringify(data.variables, null, 2);
+      } else {
+        document.getElementById('variablesSection').style.display = 'none';
+      }
+    } catch (e) {
+      document.getElementById('sampleQueryData').textContent = sampleQuery.requestData;
+      document.getElementById('variablesSection').style.display = 'none';
     }
   }
 
-  renderExecutionDetail(detail) {
-    const modal = document.getElementById('executionModal');
+  async loadRequests(sampleQueryId) {
+    try {
+      const response = await fetch(`/api/executions?request_id=${sampleQueryId}`);
+      this.requests = await response.json();
+      this.renderRequestsForSampleQuery();
+    } catch (error) {
+      console.error('Failed to load requests for sample query:', error);
+      this.requests = [];
+      this.renderRequestsForSampleQuery();
+    }
+  }
+
+  renderRequestsForSampleQuery() {
+    const container = document.getElementById('pastRequestsList');
+    
+    if (this.requests.length === 0) {
+      container.innerHTML = '<p style="color: #6c757d;">No requests yet. Click "Execute Query" to run this query.</p>';
+      return;
+    }
+
+    container.innerHTML = this.requests.map(req => {
+      const statusClass = req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
+      return `
+        <div class="execution-item" data-id="${req.id}">
+          <div class="execution-status ${statusClass}">${req.statusCode || 'ERR'}</div>
+          <div class="execution-info">
+            <div class="execution-time">${new Date(req.executedAt).toLocaleString()}</div>
+            <div class="execution-stats">
+              <span>ID: ${req.requestIdHeader}</span>
+            </div>
+          </div>
+          <div class="execution-duration">${req.durationMs}ms</div>
+          <div>→</div>
+        </div>
+      `;
+    }).join('');
+
+    // Add click handlers
+    container.querySelectorAll('.execution-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const id = parseInt(item.dataset.id);
+        this.showRequestDetail(id);
+      });
+    });
+  }
+
+  async showRequestDetail(requestId) {
+    try {
+      const response = await fetch(`/api/executions/${requestId}`);
+      const detail = await response.json();
+      this.renderRequestDetail(detail);
+    } catch (error) {
+      console.error('Failed to load request detail:', error);
+    }
+  }
+
+  renderRequestDetail(detail) {
+    const modal = document.getElementById('requestDetailModal');
     
     // Overview stats
     const statusClass = detail.execution.statusCode >= 200 && detail.execution.statusCode < 300 ? 'success' : 'error';
-    document.getElementById('execStatusCode').textContent = detail.execution.statusCode || 'Error';
-    document.getElementById('execStatusCode').className = `stat-value ${statusClass}`;
-    document.getElementById('execDuration').textContent = `${detail.execution.durationMs}ms`;
-    document.getElementById('execRequestID').textContent = detail.execution.requestIdHeader;
-    document.getElementById('execTime').textContent = new Date(detail.execution.executedAt).toLocaleString();
+    document.getElementById('reqStatusCode').textContent = detail.execution.statusCode || 'Error';
+    document.getElementById('reqStatusCode').className = `stat-value ${statusClass}`;
+    document.getElementById('reqDuration').textContent = `${detail.execution.durationMs}ms`;
+    document.getElementById('reqRequestID').textContent = detail.execution.requestIdHeader;
+    document.getElementById('reqTime').textContent = new Date(detail.execution.executedAt).toLocaleString();
 
     // Response
     if (detail.execution.responseBody) {
       try {
         const data = JSON.parse(detail.execution.responseBody);
-        document.getElementById('execResponse').textContent = JSON.stringify(data, null, 2);
+        document.getElementById('reqResponse').textContent = JSON.stringify(data, null, 2);
       } catch (e) {
-        document.getElementById('execResponse').textContent = detail.execution.responseBody;
+        document.getElementById('reqResponse').textContent = detail.execution.responseBody;
       }
     } else {
-      document.getElementById('execResponse').textContent = '(no response)';
+      document.getElementById('reqResponse').textContent = '(no response)';
     }
 
     // Error
     if (detail.execution.error) {
-      document.getElementById('execErrorSection').style.display = 'block';
-      document.getElementById('execError').textContent = detail.execution.error;
+      document.getElementById('reqErrorSection').style.display = 'block';
+      document.getElementById('reqError').textContent = detail.execution.error;
     } else {
-      document.getElementById('execErrorSection').style.display = 'none';
+      document.getElementById('reqErrorSection').style.display = 'none';
     }
 
     // SQL Analysis
     if (detail.sqlAnalysis && detail.sqlAnalysis.totalQueries > 0) {
-      document.getElementById('execSQLSection').style.display = 'block';
+      document.getElementById('reqSQLSection').style.display = 'block';
       document.getElementById('sqlTotalQueries').textContent = detail.sqlAnalysis.totalQueries;
       document.getElementById('sqlUniqueQueries').textContent = detail.sqlAnalysis.uniqueQueries;
       document.getElementById('sqlAvgDuration').textContent = `${detail.sqlAnalysis.avgDuration.toFixed(2)}ms`;
@@ -240,12 +308,12 @@ class RequestManager {
         </div>
       `).join('');
     } else {
-      document.getElementById('execSQLSection').style.display = 'none';
+      document.getElementById('reqSQLSection').style.display = 'none';
     }
 
     // Logs
     document.getElementById('logsCount').textContent = detail.logs.length;
-    const logsContainer = document.getElementById('execLogs');
+    const logsContainer = document.getElementById('reqLogs');
     
     if (detail.logs.length === 0) {
       logsContainer.innerHTML = '<p style="color: #6c757d;">No logs captured</p>';
@@ -264,20 +332,20 @@ class RequestManager {
     modal.classList.remove('hidden');
   }
 
-  hideExecutionModal() {
-    document.getElementById('executionModal').classList.add('hidden');
+  hideRequestDetailModal() {
+    document.getElementById('requestDetailModal').classList.add('hidden');
   }
 
-  showNewRequestModal() {
+  showNewSampleQueryModal() {
     // Reset form
-    document.getElementById('newRequestName').value = '';
-    document.getElementById('newRequestURL').value = '';
-    document.getElementById('newRequestData').value = '';
-    document.getElementById('newRequestToken').value = '';
-    document.getElementById('newRequestDevID').value = '';
+    document.getElementById('newSampleQueryName').value = '';
+    document.getElementById('newSampleQueryURL').value = '';
+    document.getElementById('newSampleQueryData').value = '';
+    document.getElementById('newSampleQueryToken').value = '';
+    document.getElementById('newSampleQueryDevID').value = '';
     
     // Populate server dropdown
-    const serverSelect = document.getElementById('newRequestServer');
+    const serverSelect = document.getElementById('newSampleQueryServer');
     serverSelect.innerHTML = '<option value="">-- New Server --</option>';
     this.servers.forEach(server => {
       const option = document.createElement('option');
@@ -290,7 +358,7 @@ class RequestManager {
     serverSelect.value = '';
     this.handleServerChange('');
     
-    document.getElementById('newRequestModal').classList.remove('hidden');
+    document.getElementById('newSampleQueryModal').classList.remove('hidden');
   }
 
   handleServerChange(serverId) {
@@ -298,22 +366,22 @@ class RequestManager {
     if (serverId === '') {
       // New server mode - show URL/token/devID fields
       newServerFields.style.display = 'block';
-      document.getElementById('newRequestURL').required = true;
+      document.getElementById('newSampleQueryURL').required = true;
     } else {
       // Existing server mode - hide URL/token/devID fields
       newServerFields.style.display = 'none';
-      document.getElementById('newRequestURL').required = false;
+      document.getElementById('newSampleQueryURL').required = false;
     }
   }
 
-  hideNewRequestModal() {
-    document.getElementById('newRequestModal').classList.add('hidden');
+  hideNewSampleQueryModal() {
+    document.getElementById('newSampleQueryModal').classList.add('hidden');
   }
 
-  async saveNewRequest() {
-    const name = document.getElementById('newRequestName').value.trim();
-    const requestData = document.getElementById('newRequestData').value.trim();
-    const serverSelect = document.getElementById('newRequestServer');
+  async saveNewSampleQuery() {
+    const name = document.getElementById('newSampleQueryName').value.trim();
+    const requestData = document.getElementById('newSampleQueryData').value.trim();
+    const serverSelect = document.getElementById('newSampleQueryServer');
     const serverId = serverSelect.value;
 
     if (!name || !requestData) {
@@ -325,7 +393,7 @@ class RequestManager {
     try {
       JSON.parse(requestData);
     } catch (e) {
-      alert('Invalid JSON in request data');
+      alert('Invalid JSON in query data');
       return;
     }
 
@@ -340,9 +408,9 @@ class RequestManager {
       payload.serverId = parseInt(serverId);
     } else {
       // Create new server with provided details
-      const url = document.getElementById('newRequestURL').value.trim();
-      const bearerToken = document.getElementById('newRequestToken').value.trim();
-      const devId = document.getElementById('newRequestDevID').value.trim();
+      const url = document.getElementById('newSampleQueryURL').value.trim();
+      const bearerToken = document.getElementById('newSampleQueryToken').value.trim();
+      const devId = document.getElementById('newSampleQueryDevID').value.trim();
 
       if (!url) {
         alert('Please provide a URL for the new server');
@@ -364,70 +432,123 @@ class RequestManager {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save request');
+        throw new Error('Failed to save sample query');
       }
 
-      this.hideNewRequestModal();
+      this.hideNewSampleQueryModal();
       await this.loadServers(); // Reload servers in case a new one was created
-      await this.loadRequests();
+      await this.loadSampleQueries();
     } catch (error) {
-      console.error('Failed to save request:', error);
-      alert('Failed to save request: ' + error.message);
+      console.error('Failed to save sample query:', error);
+      alert('Failed to save sample query: ' + error.message);
     }
   }
 
-  async executeRequest() {
-    if (!this.selectedRequest) return;
+  showExecuteQueryModal() {
+    if (!this.selectedSampleQuery) return;
 
-    if (!confirm('Execute this request? This will make a live API call.')) {
+    // Populate server dropdown
+    const serverSelect = document.getElementById('executeServer');
+    serverSelect.innerHTML = '<option value="">-- Select Server --</option>';
+    this.servers.forEach(server => {
+      const option = document.createElement('option');
+      option.value = server.id;
+      option.textContent = `${server.name} (${server.url})`;
+      serverSelect.appendChild(option);
+    });
+
+    // Pre-select the sample query's server if available
+    if (this.selectedSampleQuery.server) {
+      serverSelect.value = this.selectedSampleQuery.server.id;
+    }
+
+    // Clear override fields
+    document.getElementById('executeToken').value = '';
+    document.getElementById('executeDevID').value = '';
+
+    document.getElementById('executeQueryModal').classList.remove('hidden');
+  }
+
+  hideExecuteQueryModal() {
+    document.getElementById('executeQueryModal').classList.add('hidden');
+  }
+
+  async confirmExecuteQuery() {
+    if (!this.selectedSampleQuery) return;
+
+    const serverSelect = document.getElementById('executeServer');
+    const serverId = serverSelect.value;
+    const tokenOverride = document.getElementById('executeToken').value.trim();
+    const devIdOverride = document.getElementById('executeDevID').value.trim();
+
+    if (!serverId) {
+      alert('Please select a server');
       return;
     }
 
+    const payload = {
+      serverId: parseInt(serverId),
+    };
+
+    if (tokenOverride) {
+      payload.bearerTokenOverride = tokenOverride;
+    }
+    if (devIdOverride) {
+      payload.devIdOverride = devIdOverride;
+    }
+
     try {
-      const response = await fetch(`/api/requests/${this.selectedRequest.id}/execute`, {
+      const response = await fetch(`/api/requests/${this.selectedSampleQuery.id}/execute`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to execute request');
+        throw new Error('Failed to execute query');
       }
 
-      alert('Request execution started. Results will appear in the executions list.');
+      this.hideExecuteQueryModal();
+      alert('Query execution started. Results will appear in the requests list.');
       
-      // Reload executions after a delay
+      // Reload requests after a delay
       setTimeout(() => {
-        this.loadExecutions(this.selectedRequest.id);
+        this.loadRequests(this.selectedSampleQuery.id);
+        this.loadAllRequests();
       }, 12000); // Wait 12 seconds for logs to be collected
     } catch (error) {
-      console.error('Failed to execute request:', error);
-      alert('Failed to execute request: ' + error.message);
+      console.error('Failed to execute query:', error);
+      alert('Failed to execute query: ' + error.message);
     }
   }
 
-  async deleteRequest() {
-    if (!this.selectedRequest) return;
+  async deleteSampleQuery() {
+    if (!this.selectedSampleQuery) return;
 
-    if (!confirm(`Delete request "${this.selectedRequest.name}"? This will also delete all executions.`)) {
+    if (!confirm(`Delete sample query "${this.selectedSampleQuery.name}"? This will also delete all requests.`)) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/requests/${this.selectedRequest.id}`, {
+      const response = await fetch(`/api/requests/${this.selectedSampleQuery.id}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete request');
+        throw new Error('Failed to delete sample query');
       }
 
-      this.selectedRequest = null;
+      this.selectedSampleQuery = null;
       document.getElementById('emptyState').classList.remove('hidden');
-      document.getElementById('requestDetail').classList.add('hidden');
+      document.getElementById('sampleQueryDetail').classList.add('hidden');
       
-      await this.loadRequests();
+      await this.loadSampleQueries();
+      await this.loadAllRequests();
     } catch (error) {
-      console.error('Failed to delete request:', error);
-      alert('Failed to delete request: ' + error.message);
+      console.error('Failed to delete sample query:', error);
+      alert('Failed to delete sample query: ' + error.message);
     }
   }
 
