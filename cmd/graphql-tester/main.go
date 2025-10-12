@@ -359,10 +359,12 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	// Execute request
+	sampleID := uint(requestID)
 	execution := &store.ExecutedRequest{
-		RequestID:       uint(requestID),
+		SampleID:        &sampleID,
 		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
+		RequestBody:     req.RequestData,
 		ExecutedAt:      time.Now(),
 	}
 
