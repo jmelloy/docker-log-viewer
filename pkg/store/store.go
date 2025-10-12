@@ -288,6 +288,16 @@ func (s *Store) ListExecutions(requestID int64) ([]Execution, error) {
 	return executions, nil
 }
 
+// ListAllExecutions retrieves all executions across all requests
+func (s *Store) ListAllExecutions() ([]Execution, error) {
+	var executions []Execution
+	result := s.db.Preload("Server").Order("executed_at DESC").Limit(100).Find(&executions)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to list all executions: %w", result.Error)
+	}
+	return executions, nil
+}
+
 // SaveExecutionLogs saves log entries for an execution
 func (s *Store) SaveExecutionLogs(executionID int64, logMessages []logs.LogMessage) error {
 	var execLogs []ExecutionLog

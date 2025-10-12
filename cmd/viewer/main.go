@@ -437,8 +437,22 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute request in background
-	go wa.executeRequest(id)
+	// Parse request body for overrides
+	var input struct {
+		ServerID           *uint  `json:"serverId,omitempty"`
+		BearerTokenOverride string `json:"bearerTokenOverride,omitempty"`
+		DevIDOverride       string `json:"devIdOverride,omitempty"`
+	}
+	
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			// Ignore decode errors for backward compatibility
+			log.Printf("Warning: failed to decode execute request body: %v", err)
+		}
+	}
+
+	// Execute request in background with overrides
+	go wa.executeRequestWithOverrides(id, input.ServerID, input.BearerTokenOverride, input.DevIDOverride)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
@@ -464,6 +478,22 @@ func (wa *WebApp) handleExecutions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	executions, err := wa.store.ListExecutions(requestID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(executions)
+}
+
+func (wa *WebApp) handleAllExecutions(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	executions, err := wa.store.ListAllExecutions()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -522,7 +552,7 @@ func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(servers)
 }
 
-func (wa *WebApp) executeRequest(requestID int64) {
+func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, bearerTokenOverride, devIDOverride string) {
 	req, err := wa.store.GetRequest(requestID)
 	if err != nil {
 		log.Printf("Failed to get request %d: %v", requestID, err)
@@ -539,11 +569,33 @@ func (wa *WebApp) executeRequest(requestID int64) {
 	// Get server info for execution
 	var url, bearerToken, devID string
 	var serverIDForExec *uint
-	if req.Server != nil {
+	
+	// Use override server if provided, otherwise use sample query's server
+	if serverIDOverride != nil {
+		server, err := wa.store.GetServer(int64(*serverIDOverride))
+		if err != nil {
+			log.Printf("Failed to get override server %d: %v", *serverIDOverride, err)
+			return
+		}
+		if server != nil {
+			url = server.URL
+			bearerToken = server.BearerToken
+			devID = server.DevID
+			serverIDForExec = serverIDOverride
+		}
+	} else if req.Server != nil {
 		url = req.Server.URL
 		bearerToken = req.Server.BearerToken
 		devID = req.Server.DevID
 		serverIDForExec = &req.Server.ID
+	}
+
+	// Apply overrides
+	if bearerTokenOverride != "" {
+		bearerToken = bearerTokenOverride
+	}
+	if devIDOverride != "" {
+		devID = devIDOverride
 	}
 
 	execution := &store.Execution{
@@ -593,6 +645,10 @@ func (wa *WebApp) executeRequest(requestID int64) {
 			log.Printf("Failed to save SQL queries: %v", err)
 		}
 	}
+}
+
+func (wa *WebApp) executeRequest(requestID int64) {
+	wa.executeRequestWithOverrides(requestID, nil, "", "")
 }
 
 func generateRequestID() string {
@@ -758,6 +814,7 @@ func (wa *WebApp) Run(addr string) error {
 		}
 	})
 	http.HandleFunc("/api/executions", wa.handleExecutions)
+	http.HandleFunc("/api/all-executions", wa.handleAllExecutions)
 	http.HandleFunc("/api/executions/", wa.handleExecutionDetail)
 	
 	http.Handle("/", http.FileServer(http.Dir("./web")))
