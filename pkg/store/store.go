@@ -23,16 +23,29 @@ type Store struct {
 	db *gorm.DB
 }
 
+// DatabaseURL represents a database connection configuration for EXPLAIN queries
+type DatabaseURL struct {
+	ID               uint      `gorm:"primaryKey" json:"id"`
+	Name             string    `gorm:"not null" json:"name"`
+	ConnectionString string    `gorm:"not null;column:connection_string" json:"connectionString"`
+	DatabaseType     string    `gorm:"not null;column:database_type;default:postgresql" json:"databaseType"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
 // Server represents a server configuration with URL and authentication
 type Server struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Name        string    `gorm:"not null" json:"name"`
-	URL         string    `gorm:"not null" json:"url"`
-	BearerToken string    `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
-	DevID       string    `gorm:"column:dev_id" json:"devId,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                uint         `gorm:"primaryKey" json:"id"`
+	Name              string       `gorm:"not null" json:"name"`
+	URL               string       `gorm:"not null" json:"url"`
+	BearerToken       string       `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
+	DevID             string       `gorm:"column:dev_id" json:"devId,omitempty"`
+	DefaultDatabaseID *uint        `gorm:"column:default_database_id;index" json:"defaultDatabaseId,omitempty"`
+	DefaultDatabase   *DatabaseURL `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
+	CreatedAt         time.Time    `json:"createdAt"`
+	UpdatedAt         time.Time    `json:"updatedAt"`
+	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 // Request represents a saved GraphQL/API request template (sample query)
@@ -229,7 +242,7 @@ func (s *Store) CreateServer(server *Server) (int64, error) {
 // GetServer retrieves a server by ID
 func (s *Store) GetServer(id int64) (*Server, error) {
 	var server Server
-	result := s.db.First(&server, id)
+	result := s.db.Preload("DefaultDatabase").First(&server, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -242,7 +255,7 @@ func (s *Store) GetServer(id int64) (*Server, error) {
 // ListServers retrieves all servers
 func (s *Store) ListServers() ([]Server, error) {
 	var servers []Server
-	result := s.db.Order("name").Find(&servers)
+	result := s.db.Preload("DefaultDatabase").Order("name").Find(&servers)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list servers: %w", result.Error)
 	}
@@ -266,6 +279,57 @@ func (s *Store) DeleteServer(id int64) error {
 	}
 	return nil
 }
+
+// CreateDatabaseURL creates a new database URL configuration
+func (s *Store) CreateDatabaseURL(dbURL *DatabaseURL) (int64, error) {
+	result := s.db.Create(dbURL)
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to create database URL: %w", result.Error)
+	}
+	return int64(dbURL.ID), nil
+}
+
+// GetDatabaseURL retrieves a database URL by ID
+func (s *Store) GetDatabaseURL(id int64) (*DatabaseURL, error) {
+	var dbURL DatabaseURL
+	result := s.db.First(&dbURL, id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get database URL: %w", result.Error)
+	}
+	return &dbURL, nil
+}
+
+// ListDatabaseURLs retrieves all database URLs
+func (s *Store) ListDatabaseURLs() ([]DatabaseURL, error) {
+	var dbURLs []DatabaseURL
+	result := s.db.Order("name").Find(&dbURLs)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to list database URLs: %w", result.Error)
+	}
+	return dbURLs, nil
+}
+
+// UpdateDatabaseURL updates a database URL configuration
+func (s *Store) UpdateDatabaseURL(dbURL *DatabaseURL) error {
+	result := s.db.Save(dbURL)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update database URL: %w", result.Error)
+	}
+	return nil
+}
+
+// DeleteDatabaseURL deletes a database URL
+func (s *Store) DeleteDatabaseURL(id int64) error {
+	result := s.db.Delete(&DatabaseURL{}, id)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete database URL: %w", result.Error)
+	}
+	return nil
+}
+
 
 // CreateExecution creates a new execution record
 func (s *Store) CreateExecution(exec *Execution) (int64, error) {

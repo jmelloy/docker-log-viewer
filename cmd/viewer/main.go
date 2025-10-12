@@ -552,6 +552,51 @@ func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(servers)
 }
 
+func (wa *WebApp) handleDatabaseURLs(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		wa.listDatabaseURLs(w, r)
+	case http.MethodPost:
+		wa.createDatabaseURL(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (wa *WebApp) listDatabaseURLs(w http.ResponseWriter, r *http.Request) {
+	dbURLs, err := wa.store.ListDatabaseURLs()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(dbURLs)
+}
+
+func (wa *WebApp) createDatabaseURL(w http.ResponseWriter, r *http.Request) {
+	var dbURL store.DatabaseURL
+	if err := json.NewDecoder(r.Body).Decode(&dbURL); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	id, err := wa.store.CreateDatabaseURL(&dbURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]int64{"id": id})
+}
+
+
 func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, bearerTokenOverride, devIDOverride string) {
 	req, err := wa.store.GetRequest(requestID)
 	if err != nil {
@@ -852,6 +897,7 @@ func (wa *WebApp) Run(addr string) error {
 	
 	// Request management endpoints
 	http.HandleFunc("/api/servers", wa.handleServers)
+	http.HandleFunc("/api/database-urls", wa.handleDatabaseURLs)
 	http.HandleFunc("/api/requests", wa.handleRequests)
 	http.HandleFunc("/api/requests/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/execute") {
