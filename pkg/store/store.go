@@ -111,7 +111,7 @@ type SQLQuery struct {
 // ExecutionDetail includes execution with related logs and SQL analysis
 type ExecutionDetail struct {
 	Execution   Execution      `json:"execution"`
-	Request     Request        `json:"request"`
+	Request     *Request       `json:"request,omitempty"`
 	Logs        []ExecutionLog `json:"logs"`
 	SQLQueries  []SQLQuery     `json:"sqlQueries"`
 	SQLAnalysis *SQLAnalysis   `json:"sqlAnalysis,omitempty"`
@@ -426,7 +426,7 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 
 	detail := &ExecutionDetail{
 		Execution:  *exec,
-		Request:    *req,
+		Request:    req,
 		Logs:       logs,
 		SQLQueries: sqlQueries,
 	}

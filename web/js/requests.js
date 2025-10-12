@@ -56,6 +56,21 @@ class RequestManager {
       this.hideRequestDetailModal();
     });
 
+    // EXPLAIN plan modal
+    document.getElementById('closeExplainPlanModal').addEventListener('click', () => {
+      this.hideExplainPlanModal();
+    });
+
+    // Comparison modal
+    document.getElementById('closeComparisonModal').addEventListener('click', () => {
+      this.hideComparisonModal();
+    });
+
+    // Compare button
+    document.getElementById('compareRequestsBtn').addEventListener('click', () => {
+      this.compareSelectedRequests();
+    });
+
     // Sample query actions
     document.getElementById('executeBtn').addEventListener('click', () => {
       this.showExecuteQueryModal();
@@ -136,7 +151,7 @@ class RequestManager {
     });
   }
 
-  renderAllRequestsList() {
+  async renderAllRequestsList() {
     const container = document.getElementById('requestsList');
     
     if (this.allRequests.length === 0) {
@@ -144,28 +159,84 @@ class RequestManager {
       return;
     }
 
-    container.innerHTML = this.allRequests.map(req => {
+    // Fetch additional details for each request to get logs
+    const requestsWithDetails = await Promise.all(
+      this.allRequests.slice(0, 20).map(async req => {
+        try {
+          const response = await fetch(`/api/executions/${req.id}`);
+          const detail = await response.json();
+          const lastLog = detail.logs.length > 0 ? detail.logs[detail.logs.length - 1] : null;
+          
+          // Extract operation name from request data
+          let operationName = 'Unknown';
+          if (detail.execution.requestData) {
+            try {
+              const requestData = JSON.parse(detail.execution.requestData);
+              operationName = requestData.operationName || 'Unknown';
+            } catch (e) {
+              console.warn('Failed to parse request data:', e);
+            }
+          }
+          
+          return { ...req, lastLog, operationName };
+        } catch (e) {
+          return { ...req, lastLog: null, operationName: 'Unknown' };
+        }
+      })
+    );
+
+    container.innerHTML = requestsWithDetails.map(req => {
       const statusClass = req.statusCode >= 200 && req.statusCode < 300 ? 'success' : 'error';
       const time = new Date(req.executedAt);
       const timeStr = time.toLocaleTimeString();
+      const serverUrl = req.server ? req.server.url : 'N/A';
+      const lastLogMsg = req.lastLog ? (req.lastLog.message || req.lastLog.rawLog || '').substring(0, 100) : 'No logs';
       
       return `
-        <div class="execution-item-compact" data-id="${req.id}">
-          <span class="exec-status ${statusClass}">${req.statusCode || 'ERR'}</span>
-          <span class="exec-time">${timeStr}</span>
-          <span class="exec-duration">${req.durationMs}ms</span>
-          <span class="exec-id">req_id=${req.requestIdHeader}</span>
+        <div class="execution-item-detailed" data-id="${req.id}">
+          <div class="exec-header">
+            <input type="checkbox" class="exec-compare-checkbox" data-id="${req.id}">
+            <span class="exec-status ${statusClass}">${req.statusCode || 'ERR'}</span>
+            <span class="exec-name">${this.escapeHtml(req.operationName)}</span>
+            <span class="exec-duration">${req.durationMs}ms</span>
+          </div>
+          <div class="exec-details">
+            <span class="exec-time">${timeStr}</span>
+            <span class="exec-server">${this.escapeHtml(serverUrl)}</span>
+            <span class="exec-id">req_id=${req.requestIdHeader}</span>
+          </div>
+          <div class="exec-last-log">${this.escapeHtml(lastLogMsg)}</div>
         </div>
       `;
     }).join('');
 
     // Add click handlers
-    container.querySelectorAll('.execution-item-compact').forEach(item => {
-      item.addEventListener('click', () => {
-        const id = parseInt(item.dataset.id);
-        this.showRequestDetail(id);
+    container.querySelectorAll('.execution-item-detailed').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.type !== 'checkbox') {
+          const id = parseInt(item.dataset.id);
+          this.showRequestDetail(id);
+        }
       });
     });
+
+    // Handle checkbox changes
+    container.querySelectorAll('.exec-compare-checkbox').forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        this.updateCompareButton();
+      });
+    });
+  }
+
+  updateCompareButton() {
+    const checkedBoxes = document.querySelectorAll('.exec-compare-checkbox:checked');
+    const compareBtn = document.getElementById('compareRequestsBtn');
+    
+    if (checkedBoxes.length === 2) {
+      compareBtn.style.display = 'block';
+    } else {
+      compareBtn.style.display = 'none';
+    }
   }
 
   async selectSampleQuery(id) {
@@ -278,6 +349,18 @@ class RequestManager {
     document.getElementById('reqRequestID').textContent = detail.execution.requestIdHeader;
     document.getElementById('reqTime').textContent = new Date(detail.execution.executedAt).toLocaleString();
 
+    // Request Body
+    if (detail.execution.requestData) {
+      try {
+        const data = JSON.parse(detail.execution.requestData);
+        document.getElementById('reqRequestBody').textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        document.getElementById('reqRequestBody').textContent = detail.execution.requestData;
+      }
+    } else {
+      document.getElementById('reqRequestBody').textContent = '(no request data)';
+    }
+
     // Response
     if (detail.execution.responseBody) {
       try {
@@ -318,7 +401,7 @@ class RequestManager {
             </div>
             <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
             <div class="query-actions">
-              <button class="btn-explain" data-query-idx="${idx}">Run EXPLAIN</button>
+              ${!hasPlan ? `<button class="btn-explain" data-query-idx="${idx}">Run EXPLAIN</button>` : ''}
               ${hasPlan ? `<button class="btn-explain btn-secondary" data-query-idx="${idx}" data-show-plan="true">View Saved Plan</button>` : ''}
             </div>
           </div>
@@ -335,8 +418,7 @@ class RequestManager {
             // Show saved plan
             try {
               const plan = JSON.parse(query.explainPlan);
-              console.log('Saved EXPLAIN Plan:', plan);
-              alert('Saved EXPLAIN plan logged to console. Check browser console for details.');
+              this.showExplainPlan(plan, query.query);
             } catch (err) {
               alert('Error parsing saved plan: ' + err.message);
             }
@@ -374,6 +456,50 @@ class RequestManager {
 
   hideRequestDetailModal() {
     document.getElementById('requestDetailModal').classList.add('hidden');
+  }
+
+  showExplainPlan(planData, query) {
+    const modal = document.getElementById('explainPlanModal');
+    const errorDiv = document.getElementById('explainPlanError');
+    const pev2Container = document.getElementById('pev2ExplainApp');
+    
+    errorDiv.style.display = 'none';
+    
+    try {
+      // Unmount any existing Vue app
+      if (this.pev2App) {
+        this.pev2App.unmount();
+      }
+      
+      // Create new Vue app with PEV2
+      const { createApp } = Vue;
+      this.pev2App = createApp({
+        data() {
+          return {
+            planSource: JSON.stringify(planData, null, 2),
+            planQuery: query
+          };
+        },
+        template: '<pev2 :plan-source="planSource" :plan-query="planQuery"></pev2>'
+      });
+      
+      this.pev2App.component('pev2', pev2.Plan);
+      this.pev2App.mount(pev2Container);
+      
+      modal.classList.remove('hidden');
+    } catch (err) {
+      errorDiv.textContent = `Failed to display plan: ${err.message}`;
+      errorDiv.style.display = 'block';
+      modal.classList.remove('hidden');
+    }
+  }
+
+  hideExplainPlanModal() {
+    document.getElementById('explainPlanModal').classList.add('hidden');
+    if (this.pev2App) {
+      this.pev2App.unmount();
+      this.pev2App = null;
+    }
   }
 
   showNewSampleQueryModal() {
@@ -621,6 +747,101 @@ class RequestManager {
     } catch (error) {
       alert(`Failed to run EXPLAIN: ${error.message}`);
     }
+  }
+
+  async compareSelectedRequests() {
+    const checkedBoxes = Array.from(document.querySelectorAll('.exec-compare-checkbox:checked'));
+    if (checkedBoxes.length !== 2) return;
+
+    const ids = checkedBoxes.map(cb => parseInt(cb.dataset.id));
+    
+    // Fetch details for both requests
+    const [detail1, detail2] = await Promise.all(
+      ids.map(async id => {
+        const response = await fetch(`/api/executions/${id}`);
+        return await response.json();
+      })
+    );
+
+    this.showComparison(detail1, detail2);
+  }
+
+  showComparison(detail1, detail2) {
+    const modal = document.getElementById('comparisonModal');
+    const content = document.getElementById('comparisonContent');
+
+    const exec1 = detail1.execution;
+    const exec2 = detail2.execution;
+    
+    const timeDiff = exec2.durationMs - exec1.durationMs;
+    const timeDiffPercent = ((timeDiff / exec1.durationMs) * 100).toFixed(1);
+
+    content.innerHTML = `
+      <div class="comparison-grid">
+        <div class="comparison-column">
+          <h3>Request 1</h3>
+          <div class="comparison-stats">
+            <div><strong>Status:</strong> ${exec1.statusCode}</div>
+            <div><strong>Duration:</strong> ${exec1.durationMs}ms</div>
+            <div><strong>Request ID:</strong> ${exec1.requestIdHeader}</div>
+            <div><strong>Executed:</strong> ${new Date(exec1.executedAt).toLocaleString()}</div>
+          </div>
+          <div class="comparison-section">
+            <h4>Response</h4>
+            <pre class="json-display">${this.escapeHtml(exec1.responseBody || 'No response')}</pre>
+          </div>
+          <div class="comparison-section">
+            <h4>SQL Queries (${detail1.sqlQueries.length})</h4>
+            <div class="comparison-queries">
+              ${detail1.sqlQueries.map(q => `
+                <div class="comparison-query">
+                  <div><strong>${q.tableName}</strong> - ${q.durationMs.toFixed(2)}ms</div>
+                  <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="comparison-divider">
+          <div class="comparison-diff">
+            <div>Time Difference</div>
+            <div class="${timeDiff > 0 ? 'diff-slower' : 'diff-faster'}">${timeDiff > 0 ? '+' : ''}${timeDiff}ms (${timeDiff > 0 ? '+' : ''}${timeDiffPercent}%)</div>
+          </div>
+        </div>
+
+        <div class="comparison-column">
+          <h3>Request 2</h3>
+          <div class="comparison-stats">
+            <div><strong>Status:</strong> ${exec2.statusCode}</div>
+            <div><strong>Duration:</strong> ${exec2.durationMs}ms</div>
+            <div><strong>Request ID:</strong> ${exec2.requestIdHeader}</div>
+            <div><strong>Executed:</strong> ${new Date(exec2.executedAt).toLocaleString()}</div>
+          </div>
+          <div class="comparison-section">
+            <h4>Response</h4>
+            <pre class="json-display">${this.escapeHtml(exec2.responseBody || 'No response')}</pre>
+          </div>
+          <div class="comparison-section">
+            <h4>SQL Queries (${detail2.sqlQueries.length})</h4>
+            <div class="comparison-queries">
+              ${detail2.sqlQueries.map(q => `
+                <div class="comparison-query">
+                  <div><strong>${q.tableName}</strong> - ${q.durationMs.toFixed(2)}ms</div>
+                  <div class="sql-query-text">${this.escapeHtml(q.query)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    modal.classList.remove('hidden');
+  }
+
+  hideComparisonModal() {
+    document.getElementById('comparisonModal').classList.add('hidden');
   }
 
   escapeHtml(text) {
