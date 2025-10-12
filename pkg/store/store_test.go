@@ -144,13 +144,14 @@ func TestStore(t *testing.T) {
 	normalizedQuery := "SELECT * FROM users WHERE id = ?"
 	sqlQueries := []SQLQuery{
 		{
-			Query:           "SELECT * FROM users WHERE id = $1",
-			NormalizedQuery: normalizedQuery,
-			QueryHash:       ComputeQueryHash(normalizedQuery),
-			DurationMS:      15.5,
-			TableName:       "users",
-			Operation:       "SELECT",
-			Rows:            1,
+			Query:            "SELECT * FROM users WHERE id = $1",
+			NormalizedQuery:  normalizedQuery,
+			QueryHash:        ComputeQueryHash(normalizedQuery),
+			DurationMS:       15.5,
+			TableName:        "users",
+			Operation:        "SELECT",
+			Rows:             1,
+			GraphQLOperation: "FetchUsers",
 		},
 	}
 
@@ -166,6 +167,9 @@ func TestStore(t *testing.T) {
 	}
 	if len(retrievedQueries) != 1 {
 		t.Errorf("Expected 1 query, got %d", len(retrievedQueries))
+	}
+	if retrievedQueries[0].GraphQLOperation != "FetchUsers" {
+		t.Errorf("Expected GraphQL operation 'FetchUsers', got '%s'", retrievedQueries[0].GraphQLOperation)
 	}
 
 	// Test execution detail
