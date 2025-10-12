@@ -167,7 +167,7 @@ func handleRequest(db *store.Store, config Config) error {
 	}
 
 	// Create request
-	req := &store.Request{
+	req := &store.SampleQuery{
 		Name:        name,
 		ServerID:    serverID,
 		RequestData: string(data),
@@ -277,7 +277,7 @@ func handleDirectory(db *store.Store, config Config) error {
 			}
 
 			// Create request
-			req := &store.Request{
+			req := &store.SampleQuery{
 				Name:        name,
 				ServerID:    serverID,
 				RequestData: string(data),
@@ -359,7 +359,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	// Execute request
-	execution := &store.Execution{
+	execution := &store.ExecutedRequest{
 		RequestID:       uint(requestID),
 		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
