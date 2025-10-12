@@ -643,10 +643,14 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		devID = devIDOverride
 	}
 
+	// Convert requestID to pointer for SampleID
+	sampleID := uint(requestID)
+	
 	execution := &store.ExecutedRequest{
-		RequestID:       uint(requestID),
+		SampleID:        &sampleID,
 		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
+		RequestBody:     req.RequestData,
 		ExecutedAt:      time.Now(),
 	}
 

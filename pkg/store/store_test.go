@@ -87,10 +87,12 @@ func TestStore(t *testing.T) {
 	}
 
 	// Test creating execution
+	sampleID := uint(reqID)
 	exec := &ExecutedRequest{
-		RequestID:       uint(reqID),
+		SampleID:        &sampleID,
 		ServerID:        &serverIDUint,
 		RequestIDHeader: "test-req-id",
+		RequestBody:     `{"query": "{ test }"}`,
 		StatusCode:      200,
 		DurationMS:      150,
 		ResponseBody:    `{"data": {}}`,
