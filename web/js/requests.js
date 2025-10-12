@@ -134,14 +134,14 @@ const app = createApp({
                   ? detail.logs[detail.logs.length - 1]
                   : null;
 
-              // Extract operation name from request data
+              // Extract operation name from request body
               let operationName = "Unknown";
-              if (detail.execution.requestData) {
+              if (detail.execution.requestBody) {
                 try {
-                  const requestData = JSON.parse(detail.execution.requestData);
+                  const requestData = JSON.parse(detail.execution.requestBody);
                   operationName = requestData.operationName || "Unknown";
                 } catch (e) {
-                  console.warn("Failed to parse request data:", e);
+                  console.warn("Failed to parse request body:", e);
                 }
               }
 
@@ -243,15 +243,15 @@ const app = createApp({
     },
 
     getDetailRequestData() {
-      if (!this.selectedRequestDetail?.execution.requestData)
+      if (!this.selectedRequestDetail?.execution.requestBody)
         return "(no request data)";
       try {
         const data = JSON.parse(
-          this.selectedRequestDetail.execution.requestData
+          this.selectedRequestDetail.execution.requestBody
         );
         return JSON.stringify(data, null, 2);
       } catch (e) {
-        return this.selectedRequestDetail.execution.requestData;
+        return this.selectedRequestDetail.execution.requestBody;
       }
     },
 
