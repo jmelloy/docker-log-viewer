@@ -631,6 +631,11 @@ button:disabled {
     max-height: 90vh;
 }
 
+.explain-modal-content .modal-body {
+    padding: 0;
+    overflow: hidden;
+}
+
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -845,6 +850,8 @@ button:disabled {
 #pev2App {
     background: #0d1117;
     color: #c9d1d9;
+    min-height: 0;
+    overflow: hidden;
 }
 
 #pev2App .alert {
