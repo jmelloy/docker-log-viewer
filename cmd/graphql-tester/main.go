@@ -385,6 +385,9 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 
 	log.Printf("Request ID: %s, Status: %d, Duration: %dms", requestIDHeader, statusCode, execution.DurationMS)
 
+	// Wait a bit for logs to arrive from Docker
+	time.Sleep(500 * time.Millisecond)
+
 	// Collect logs
 	collectedLogs := collectLogs(requestIDHeader, logChan, config.Timeout)
 	log.Printf("Collected %d logs for request %s", len(collectedLogs), requestIDHeader)

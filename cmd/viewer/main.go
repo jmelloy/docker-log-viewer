@@ -692,19 +692,21 @@ func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID stri
 }
 
 func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration) []logs.LogMessage {
+	// Wait for logs to arrive
+	time.Sleep(timeout)
+	
+	// Scan stored logs for matching request ID
 	collected := []logs.LogMessage{}
-	deadline := time.After(timeout)
-
-	for {
-		select {
-		case msg := <-wa.logChan:
-			if matchesRequestID(msg, requestID) {
-				collected = append(collected, msg)
-			}
-		case <-deadline:
-			return collected
+	wa.logsMutex.RLock()
+	defer wa.logsMutex.RUnlock()
+	
+	for _, msg := range wa.logs {
+		if matchesRequestID(msg, requestID) {
+			collected = append(collected, msg)
 		}
 	}
+	
+	return collected
 }
 
 func matchesRequestID(msg logs.LogMessage, requestID string) bool {
