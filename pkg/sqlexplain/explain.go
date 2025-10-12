@@ -12,8 +12,9 @@ import (
 )
 
 type Request struct {
-	Query     string            `json:"query"`
-	Variables map[string]string `json:"variables,omitempty"`
+	Query            string            `json:"query"`
+	Variables        map[string]string `json:"variables,omitempty"`
+	ConnectionString string            `json:"connectionString,omitempty"` // Optional: use specific connection instead of default
 }
 
 type Response struct {
@@ -85,9 +86,38 @@ func Explain(req Request) Response {
 		Query: req.Query,
 	}
 
-	if db == nil {
-		resp.Error = "Database connection not configured. Set DATABASE_URL environment variable."
-		return resp
+	// Use connection string from request if provided, otherwise use default db
+	var targetDB *sql.DB
+	var shouldCloseDB bool
+
+	if req.ConnectionString != "" {
+		// Open a temporary connection for this request
+		tempDB, err := sql.Open("postgres", req.ConnectionString)
+		if err != nil {
+			resp.Error = fmt.Sprintf("Error connecting to database: %v", err)
+			return resp
+		}
+		// Test the connection
+		if err := tempDB.Ping(); err != nil {
+			tempDB.Close()
+			resp.Error = fmt.Sprintf("Error connecting to database: %v", err)
+			return resp
+		}
+		targetDB = tempDB
+		shouldCloseDB = true
+	} else {
+		// Use default connection
+		if db == nil {
+			resp.Error = "Database connection not configured. Set DATABASE_URL environment variable or provide connectionString."
+			return resp
+		}
+		targetDB = db
+		shouldCloseDB = false
+	}
+
+	// Close temporary connection if we opened one
+	if shouldCloseDB {
+		defer targetDB.Close()
 	}
 
 	query := req.Query
@@ -116,9 +146,9 @@ func Explain(req Request) Response {
 			}
 			args = append(args, val)
 		}
-		rows, err = db.Query(explainQuery, args...)
+		rows, err = targetDB.Query(explainQuery, args...)
 	} else {
-		rows, err = db.Query(explainQuery)
+		rows, err = targetDB.Query(explainQuery)
 	}
 
 	if err != nil {

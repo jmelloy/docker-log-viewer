@@ -201,3 +201,104 @@ func TestStore(t *testing.T) {
 		t.Errorf("Expected 0 requests after delete, got %d", len(requests))
 	}
 }
+
+func TestDatabaseURL(t *testing.T) {
+	// Create temporary database
+	dbPath := "/tmp/test_database_url.db"
+	defer os.Remove(dbPath)
+
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	// Test creating a database URL
+	dbURL := &DatabaseURL{
+		Name:             "Production DB",
+		ConnectionString: "postgresql://user:pass@localhost:5432/prod",
+		DatabaseType:     "postgresql",
+	}
+
+	dbURLID, err := store.CreateDatabaseURL(dbURL)
+	if err != nil {
+		t.Fatalf("Failed to create database URL: %v", err)
+	}
+
+	// Test retrieving database URL
+	retrievedDBURL, err := store.GetDatabaseURL(dbURLID)
+	if err != nil {
+		t.Fatalf("Failed to get database URL: %v", err)
+	}
+	if retrievedDBURL.Name != dbURL.Name {
+		t.Errorf("Expected database URL name %s, got %s", dbURL.Name, retrievedDBURL.Name)
+	}
+	if retrievedDBURL.ConnectionString != dbURL.ConnectionString {
+		t.Errorf("Expected connection string %s, got %s", dbURL.ConnectionString, retrievedDBURL.ConnectionString)
+	}
+
+	// Test listing database URLs
+	dbURLs, err := store.ListDatabaseURLs()
+	if err != nil {
+		t.Fatalf("Failed to list database URLs: %v", err)
+	}
+	if len(dbURLs) != 1 {
+		t.Errorf("Expected 1 database URL, got %d", len(dbURLs))
+	}
+
+	// Test updating database URL
+	retrievedDBURL.Name = "Updated Production DB"
+	err = store.UpdateDatabaseURL(retrievedDBURL)
+	if err != nil {
+		t.Fatalf("Failed to update database URL: %v", err)
+	}
+
+	updatedDBURL, err := store.GetDatabaseURL(dbURLID)
+	if err != nil {
+		t.Fatalf("Failed to get updated database URL: %v", err)
+	}
+	if updatedDBURL.Name != "Updated Production DB" {
+		t.Errorf("Expected updated name, got %s", updatedDBURL.Name)
+	}
+
+	// Test creating server with default database
+	dbURLIDUint := uint(dbURLID)
+	server := &Server{
+		Name:              "Test Server",
+		URL:               "https://api.example.com/graphql",
+		BearerToken:       "test-token",
+		DefaultDatabaseID: &dbURLIDUint,
+	}
+
+	serverID, err := store.CreateServer(server)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Test retrieving server with preloaded default database
+	retrievedServer, err := store.GetServer(serverID)
+	if err != nil {
+		t.Fatalf("Failed to get server: %v", err)
+	}
+	if retrievedServer.DefaultDatabaseID == nil {
+		t.Error("Expected server to have a default database ID")
+	} else if *retrievedServer.DefaultDatabaseID != dbURLIDUint {
+		t.Errorf("Expected default database ID %d, got %d", dbURLIDUint, *retrievedServer.DefaultDatabaseID)
+	}
+
+	// Test deleting database URL
+	err = store.DeleteDatabaseURL(dbURLID)
+	if err != nil {
+		t.Fatalf("Failed to delete database URL: %v", err)
+	}
+
+	// Verify deletion
+	dbURLs, err = store.ListDatabaseURLs()
+	if err != nil {
+		t.Fatalf("Failed to list database URLs after delete: %v", err)
+	}
+	if len(dbURLs) != 0 {
+		t.Errorf("Expected 0 database URLs after delete, got %d", len(dbURLs))
+	}
+}
+
