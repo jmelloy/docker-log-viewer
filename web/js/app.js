@@ -2,9 +2,20 @@ const { createApp } = Vue;
 
 const app = createApp({
   data() {
+    // Load persisted container state from localStorage
+    let selectedContainers = new Set();
+    try {
+      const saved = localStorage.getItem('selectedContainers');
+      if (saved) {
+        selectedContainers = new Set(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.warn('Failed to load container state:', e);
+    }
+
     return {
       containers: [],
-      selectedContainers: new Set(),
+      selectedContainers,
       logs: [],
       searchQuery: "",
       traceFilter: null,
@@ -40,6 +51,10 @@ const app = createApp({
         }
         groups[project].push(container);
       });
+      // Sort containers within each project by name
+      Object.keys(groups).forEach(project => {
+        groups[project].sort((a, b) => a.Name.localeCompare(b.Name));
+      });
       return groups;
     },
 
@@ -53,6 +68,18 @@ const app = createApp({
 
     statusColor() {
       return this.wsConnected ? "#7ee787" : "#f85149";
+    },
+
+    filterDisplayType() {
+      return this.traceFilter ? this.traceFilter.type : '';
+    },
+
+    filterDisplayValue() {
+      return this.traceFilter ? this.traceFilter.value : '';
+    },
+
+    logCountText() {
+      return `${this.filteredLogs.length} logs`;
     }
   },
 
@@ -99,7 +126,11 @@ const app = createApp({
       try {
         const response = await fetch("/api/containers");
         this.containers = await response.json();
-        this.containers.forEach(c => this.selectedContainers.add(c.ID));
+        // Only select new containers if there's no saved state
+        if (this.selectedContainers.size === 0) {
+          this.containers.forEach(c => this.selectedContainers.add(c.ID));
+          this.saveContainerState();
+        }
       } catch (error) {
         console.error("Failed to load containers:", error);
       }
@@ -242,6 +273,7 @@ const app = createApp({
       } else {
         this.selectedContainers.add(containerId);
       }
+      this.saveContainerState();
     },
 
     isContainerSelected(containerId) {
@@ -259,6 +291,7 @@ const app = createApp({
           this.selectedContainers.add(c.ID);
         }
       });
+      this.saveContainerState();
     },
 
     isProjectSelected(project) {
@@ -595,6 +628,14 @@ const app = createApp({
         return JSON.stringify(parsed, null, 2);
       } catch (e) {
         return value;
+      }
+    },
+
+    saveContainerState() {
+      try {
+        localStorage.setItem('selectedContainers', JSON.stringify([...this.selectedContainers]));
+      } catch (e) {
+        console.warn('Failed to save container state:', e);
       }
     }
   },

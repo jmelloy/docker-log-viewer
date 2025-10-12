@@ -101,6 +101,7 @@ type SQLQuery struct {
 	TableName       string  `gorm:"column:table_name" json:"tableName"`
 	Operation       string  `json:"operation"`
 	Rows            int     `json:"rows"`
+	Variables       string  `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
 	ExplainPlan     string  `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
@@ -372,6 +373,19 @@ func (s *Store) SaveSQLQueries(executionID int64, queries []SQLQuery) error {
 		return fmt.Errorf("failed to insert queries: %w", result.Error)
 	}
 
+	return nil
+}
+
+// UpdateQueryExplainPlan updates the explain plan for a query by its hash
+func (s *Store) UpdateQueryExplainPlan(executionID int64, queryHash string, explainPlan string) error {
+	result := s.db.Model(&SQLQuery{}).
+		Where("execution_id = ? AND query_hash = ?", executionID, queryHash).
+		Update("explain_plan", explainPlan)
+	
+	if result.Error != nil {
+		return fmt.Errorf("failed to update explain plan: %w", result.Error)
+	}
+	
 	return nil
 }
 

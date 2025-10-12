@@ -42,6 +42,7 @@ body {
     padding: 0;
     overflow-y: auto;
     background: #0d1117;
+    order: 1;
 }
 
 /* Header */
@@ -99,12 +100,13 @@ header input[type="text"] {
 .sidebar {
     width: 300px;
     background: #161b22;
-    border-right: 1px solid #30363d;
+    border-left: 1px solid #30363d;
     padding: 1rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    order: 2;
 }
 
 .sidebar-footer {
@@ -501,25 +503,24 @@ button:disabled {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: margin-right 0.3s ease;
-}
-
-.log-viewer.with-analyzer {
-    margin-right: 400px;
+    position: relative;
 }
 
 .logs {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 0;
     font-size: 0.85rem;
     line-height: 1.6;
 }
 
 .log-line {
-    padding: 0.25rem 0;
+    padding: 0.25rem 0.5rem;
     border-bottom: 1px solid #21262d;
     cursor: pointer;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .log-line:hover {
@@ -767,11 +768,12 @@ button:disabled {
     border: 1px solid #30363d;
     border-radius: 4px;
     padding: 1rem;
-    overflow-x: auto;
+    overflow: auto;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.875rem;
     line-height: 1.5;
     color: #c9d1d9;
+    max-height: 15em; /* ~10 lines at 1.5 line-height */
 }
 
 .error-display {
@@ -1278,6 +1280,65 @@ button:disabled {
     color: #58a6ff;
 }
 
+.execution-item-compact {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #161b22;
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.execution-item-compact:hover {
+    border-color: #58a6ff;
+    box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
+}
+
+.exec-status {
+    min-width: 40px;
+    text-align: center;
+    font-weight: 600;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+}
+
+.exec-status.success {
+    background: #1f6f42;
+    color: #7ee787;
+}
+
+.exec-status.error {
+    background: #5a1e1e;
+    color: #f85149;
+}
+
+.exec-time {
+    color: #8b949e;
+    font-size: 0.8rem;
+    min-width: 80px;
+}
+
+.exec-duration {
+    color: #58a6ff;
+    font-weight: 500;
+    min-width: 50px;
+}
+
+.exec-id {
+    color: #8b949e;
+    font-size: 0.75rem;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .execution-overview {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1330,6 +1391,12 @@ button:disabled {
     margin-bottom: 0.5rem;
     background: #0d1117;
     font-size: 0.875rem;
+}
+
+.log-message {
+    max-height: 4.5em; /* ~3 lines at 1.5 line-height */
+    overflow: auto;
+    line-height: 1.5;
 }
 
 .log-entry-header {

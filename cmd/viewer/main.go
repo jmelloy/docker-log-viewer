@@ -644,6 +644,47 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
 			log.Printf("Failed to save SQL queries: %v", err)
 		}
+
+		// Auto-execute EXPLAIN for queries taking longer than 2ms
+		for i, q := range sqlQueries {
+			if q.DurationMS > 2.0 {
+				log.Printf("Auto-executing EXPLAIN for slow query (%.2fms): %s", q.DurationMS, q.Query)
+				
+				// Parse db.vars to extract parameters
+				variables := make(map[string]string)
+				if q.Variables != "" {
+					var varsArray []interface{}
+					if err := json.Unmarshal([]byte(q.Variables), &varsArray); err == nil {
+						// Convert array values to map with 1-based indices
+						for idx, val := range varsArray {
+							variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
+						}
+					} else {
+						log.Printf("Failed to parse db.vars for query %d: %v", i, err)
+					}
+				}
+				
+				// Execute EXPLAIN
+				req := sqlexplain.Request{
+					Query:     q.Query,
+					Variables: variables,
+				}
+				resp := sqlexplain.Explain(req)
+				
+				if resp.Error != "" {
+					log.Printf("Auto-EXPLAIN failed for query %d: %s", i, resp.Error)
+					continue
+				}
+				
+				// Save the EXPLAIN plan to database
+				planJSON, _ := json.Marshal(resp.QueryPlan)
+				if err := wa.store.UpdateQueryExplainPlan(execID, q.QueryHash, string(planJSON)); err != nil {
+					log.Printf("Failed to save EXPLAIN plan for query %d: %v", i, err)
+				} else {
+					log.Printf("Saved EXPLAIN plan for slow query (%.2fms)", q.DurationMS)
+				}
+			}
+		}
 	}
 }
 
@@ -762,6 +803,10 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 							rowsVal, _ = strconv.Atoi(rows)
 							query.Rows = rowsVal
 						}
+					}
+					// Store db.vars as JSON for later use in EXPLAIN
+					if vars, ok := msg.Entry.Fields["db.vars"]; ok {
+						query.Variables = vars
 					}
 				}
 
