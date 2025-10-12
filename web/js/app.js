@@ -909,8 +909,8 @@ const app = createApp({
           <button @click="showExplainModal = false">✕</button>
         </div>
         <div class="modal-body">
-          <div v-if="explainData.error" class="alert alert-danger m-3">{{ explainData.error }}</div>
-          <div id="pev2App" class="d-flex flex-column" style="height: 70vh;">
+          <div v-if="explainData.error" class="alert alert-danger" style="margin: 1rem;">{{ explainData.error }}</div>
+          <div v-else id="pev2App" class="d-flex flex-column">
             <pev2 :plan-source="explainData.planSource" :plan-query="explainData.planQuery"></pev2>
           </div>
         </div>
