@@ -697,6 +697,7 @@ const app = createApp({
           <nav style="display: flex; gap: 1rem; align-items: center">
             <a href="/">Log Viewer</a>
             <a href="/requests.html" class="active">Request Manager</a>
+            <a href="/settings.html">Settings</a>
           </nav>
         </div>
       </header>
