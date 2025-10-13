@@ -257,19 +257,19 @@ const app = createApp({
   },
 
   template: `
-    <div>
-      <header style="background: #2c3e50; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center">
-        <div style="display: flex; gap: 2rem; align-items: center">
+    <div class="app-container">
+      <header class="app-header">
+        <div style="display: flex; align-items: center; gap: 1rem">
           <h1 style="margin: 0">🔱 Logseidon</h1>
           <nav style="display: flex; gap: 1rem; align-items: center">
-            <a href="/" style="color: white; text-decoration: none">Log Viewer</a>
-            <a href="/requests.html" style="color: white; text-decoration: none">Request Manager</a>
-            <a href="/settings.html" style="color: white; text-decoration: none; font-weight: bold">Settings</a>
+            <a href="/">Log Viewer</a>
+            <a href="/requests.html">Request Manager</a>
+            <a href="/settings.html" class="active">Settings</a>
           </nav>
         </div>
       </header>
 
-      <div class="container" style="max-width: 1200px; margin: 2rem auto; padding: 0 1rem">
+      <div class="container" style="max-width: 1200px; margin: 2rem auto; padding: 0 2rem">
         <!-- Servers Section -->
         <section style="margin-bottom: 3rem">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem">

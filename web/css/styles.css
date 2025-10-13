@@ -39,7 +39,7 @@ body {
 
 .content {
     flex: 1;
-    padding: 0;
+    padding: 0 1rem;
     overflow-y: auto;
     background: #0d1117;
     order: 1;
@@ -510,7 +510,7 @@ button:disabled {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 0;
+    padding: 0 1rem;
     font-size: 0.85rem;
     line-height: 1.6;
 }
