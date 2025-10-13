@@ -521,6 +521,9 @@ button:disabled {
     cursor: pointer;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
 }
 
 .log-line:hover {
@@ -530,41 +533,48 @@ button:disabled {
 .log-container {
     color: #8b949e;
     margin-right: 0.5rem;
-    display: inline-block;
+    display: inline;
     min-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 0.85rem;
 }
 
 .log-timestamp {
     color: #f0883e;
     margin-right: 0.5rem;
+    font-size: 0.85rem;
 }
 
 .log-file {
     color: #58a6ff;
     margin-right: 0.5rem;
+    font-size: 0.85rem;
 }
 
 .log-message {
     color: #c9d1d9;
     white-space: pre-wrap;
-    display: inline-block;
+    display: inline;
+    font-size: 0.85rem;
 }
 
 .log-field {
     color: #8b949e;
     margin-left: 0.5rem;
+    font-size: 0.85rem;
 }
 
 .log-field-key {
     color: #79c0ff;
+    font-size: 0.85rem;
 }
 
 .log-field-value {
     color: #a5d6ff;
     cursor: pointer;
+    font-size: 0.85rem;
 }
 
 .log-field-value:hover {
@@ -573,6 +583,7 @@ button:disabled {
 
 .log-field span:not(.log-field-value) {
     color: #8b949e;
+    font-size: 0.85rem;
 }
 
 /* Status */
