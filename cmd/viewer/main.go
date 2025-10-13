@@ -539,19 +539,81 @@ func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		servers, err := wa.store.ListServers()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(servers)
+	case http.MethodPost:
+		var server store.Server
+		if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		id, err := wa.store.CreateServer(&server)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int64{"id": id})
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (wa *WebApp) handleServerDetail(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	servers, err := wa.store.ListServers()
+	// Extract ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/servers/")
+	id, err := strconv.ParseInt(path, 10, 64)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Invalid server ID", http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(servers)
+	switch r.Method {
+	case http.MethodGet:
+		server, err := wa.store.GetServer(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if server == nil {
+			http.Error(w, "Server not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(server)
+	case http.MethodPut:
+		var server store.Server
+		if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		server.ID = uint(id)
+		if err := wa.store.UpdateServer(&server); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodDelete:
+		if err := wa.store.DeleteServer(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (wa *WebApp) handleDatabaseURLs(w http.ResponseWriter, r *http.Request) {
@@ -596,6 +658,56 @@ func (wa *WebApp) createDatabaseURL(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
+}
+
+func (wa *WebApp) handleDatabaseURLDetail(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract ID from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/database-urls/")
+	id, err := strconv.ParseInt(path, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid database URL ID", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		dbURL, err := wa.store.GetDatabaseURL(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if dbURL == nil {
+			http.Error(w, "Database URL not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(dbURL)
+	case http.MethodPut:
+		var dbURL store.DatabaseURL
+		if err := json.NewDecoder(r.Body).Decode(&dbURL); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		dbURL.ID = uint(id)
+		if err := wa.store.UpdateDatabaseURL(&dbURL); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case http.MethodDelete:
+		if err := wa.store.DeleteDatabaseURL(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 
@@ -918,7 +1030,9 @@ func (wa *WebApp) Run(addr string) error {
 	
 	// Request management endpoints
 	http.HandleFunc("/api/servers", wa.handleServers)
+	http.HandleFunc("/api/servers/", wa.handleServerDetail)
 	http.HandleFunc("/api/database-urls", wa.handleDatabaseURLs)
+	http.HandleFunc("/api/database-urls/", wa.handleDatabaseURLDetail)
 	http.HandleFunc("/api/requests", wa.handleRequests)
 	http.HandleFunc("/api/requests/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/execute") {
