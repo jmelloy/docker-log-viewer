@@ -1,7 +1,4 @@
-# Built binaries
-docker-log-viewer
-compare
-graphql-tester
+
 
 # Test binaries
 *.test

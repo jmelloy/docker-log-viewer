@@ -211,6 +211,21 @@ func handleDirectory(db *store.Store, config Config) error {
 
 	log.Printf("Found %d JSON files in directory: %s", len(jsonFiles), config.DataDir)
 
+	// Create or get server
+
+	server := &store.Server{
+		Name:        config.URL,
+		URL:         config.URL,
+		BearerToken: config.BearerToken,
+		DevID:       config.DevID,
+	}
+
+	_, err = db.CreateServer(server)
+	if err != nil {
+		log.Printf("Failed to create server for file %s: %v", config.DataDir, err)
+		panic(err)
+	}
+
 	// Process each JSON file
 	var requestIDs []int64
 	for _, jsonFile := range jsonFiles {
@@ -243,55 +258,30 @@ func handleDirectory(db *store.Store, config Config) error {
 			}{singleOp}
 		}
 
-		// Create or get server
-		var serverID *uint
-		server := &store.Server{
-			Name:        config.URL,
-			URL:         config.URL,
-			BearerToken: config.BearerToken,
-			DevID:       config.DevID,
+		operationNames := []string{}
+		for _, operation := range operations {
+			operationNames = append(operationNames, operation.OperationName)
 		}
 
-		sid, err := db.CreateServer(server)
+		operationName := strings.Join(operationNames, ":")
+		// Process each operation
+
+		// Create request
+		req := &store.SampleQuery{
+			Name:        operationName,
+			ServerID:    &server.ID,
+			RequestData: string(data),
+		}
+
+		reqID, err := db.CreateRequest(req)
 		if err != nil {
-			log.Printf("Failed to create server for file %s: %v", jsonFile, err)
+			log.Printf("Failed to create request for file %s, operation %s: %v", jsonFile, operationName, err)
 			continue
 		}
-		sidUint := uint(sid)
-		serverID = &sidUint
 
-		// Process each operation
-		for i, operation := range operations {
-			// Determine name from operation name or filename
-			name := operation.OperationName
-			if name == "" {
-				name = filepath.Base(jsonFile)
-				if idx := strings.LastIndex(name, "."); idx >= 0 {
-					name = name[:idx]
-				}
-				if len(operations) > 1 {
-					name = fmt.Sprintf("%s_%d", name, i+1)
-				}
-			} else if len(operations) > 1 {
-				name = fmt.Sprintf("%s_%d", name, i+1)
-			}
+		log.Printf("Saved request '%s' with ID %d", operationName, reqID)
+		requestIDs = append(requestIDs, reqID)
 
-			// Create request
-			req := &store.SampleQuery{
-				Name:        name,
-				ServerID:    serverID,
-				RequestData: string(data),
-			}
-
-			reqID, err := db.CreateRequest(req)
-			if err != nil {
-				log.Printf("Failed to create request for file %s, operation %d: %v", jsonFile, i+1, err)
-				continue
-			}
-
-			log.Printf("Saved request '%s' with ID %d", name, reqID)
-			requestIDs = append(requestIDs, reqID)
-		}
 	}
 
 	log.Printf("Successfully processed %d files, created %d requests", len(jsonFiles), len(requestIDs))

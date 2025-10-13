@@ -29,12 +29,9 @@ go.work.sum
 
 # Editor/IDE
 # .idea/
-# .vscode/
+.vscode/
 
-# Built binaries
-docker-log-viewer
-compare
-graphql-tester
+bin/
 
 # Generated output files
 *.html
