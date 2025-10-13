@@ -1,0 +1,92 @@
+=================================================
+       SQL Query Analysis Report
+=================================================
+
+EXECUTION DETAILS
+--------------------------------------------------
+Execution 1 (ID: 1)
+  Request ID: req-001-before-optimization
+  Duration: 250ms
+  Status: 200
+  SQL Queries: 5
+  Request Name: GetUserWithPosts
+  Server: Production API
+
+Execution 2 (ID: 2)
+  Request ID: req-002-after-optimization
+  Duration: 120ms
+  Status: 200
+  SQL Queries: 5
+  Request Name: GetUserWithPosts
+  Server: Production API
+
+
+QUERY COMPARISON SUMMARY
+--------------------------------------------------
+Total Queries:
+  Execution 1: 5 queries (avg: 42.50ms)
+  Execution 2: 5 queries (avg: 18.30ms)
+
+Unique Queries:
+  Execution 1: 3 unique queries
+  Execution 2: 3 unique queries
+  Common queries: 3
+  Queries with plan changes: 1
+
+
+PERFORMANCE DIFFERENCES
+--------------------------------------------------
+
+1. Query: SELECT * FROM posts WHERE user_id = $N
+   Duration: 85.50ms → 28.40ms (66.8% faster)
+   Count: 1 → 1
+
+2. Query: SELECT * FROM comments WHERE post_id = $N
+   Duration: 45.30ms → 18.20ms (59.8% faster)
+   Count: 1 → 1
+
+3. Query: SELECT * FROM users WHERE id = $N
+   Duration: 35.20ms → 12.10ms (65.6% faster)
+   Count: 1 → 1
+
+
+INDEX ANALYSIS - EXECUTION 1
+--------------------------------------------------
+Sequential Scans: 2
+Index Scans: 1
+Recommendations: 2 (1 high priority)
+
+Sequential Scan Issues:
+  1. Table: posts
+     Occurrences: 1, Cost: 15234.00, Duration: 85.50ms
+     Filter: (user_id = 5)
+  2. Table: comments
+     Occurrences: 1, Cost: 8567.00, Duration: 45.30ms
+     Filter: (post_id = 123)
+
+
+INDEX ANALYSIS - EXECUTION 2
+--------------------------------------------------
+Sequential Scans: 0
+Index Scans: 3
+Recommendations: 0 (0 high priority)
+
+
+INDEX RECOMMENDATIONS
+--------------------------------------------------
+For Execution 1:
+  1. [HIGH] posts
+     Columns: [user_id]
+     Reason: Sequential scan detected with filter on user_id
+     Impact: High - Could improve query performance by 50-80%
+     SQL: CREATE INDEX idx_posts_user_id ON posts(user_id);
+
+  2. [MEDIUM] comments
+     Columns: [post_id]
+     Reason: Sequential scan with filter on post_id
+     Impact: Medium - Could improve query performance by 30-50%
+     SQL: CREATE INDEX idx_comments_post_id ON comments(post_id);
+
+=================================================
+              End of Report
+=================================================
