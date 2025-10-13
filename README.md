@@ -12,6 +12,7 @@ Real-time Docker container log viewer with SQL query analysis and GraphQL reques
 go build -o docker-log-viewer cmd/viewer/main.go
 go build -o compare cmd/compare/main.go
 go build -o graphql-tester cmd/graphql-tester/main.go
+go build -o analyze cmd/analyze/main.go
 
 # Run viewer
 ./docker-log-viewer
@@ -78,6 +79,24 @@ go build -o compare cmd/compare/main.go
 ```
 
 Generates HTML report with SQL statistics and performance comparison.
+
+### Query Analysis Tool
+
+Compare SQL queries from two saved execution IDs.
+
+```bash
+go build -o analyze cmd/analyze/main.go
+./analyze -exec1 1 -exec2 2
+
+# Save to file
+./analyze -exec1 1 -exec2 2 -output report.txt
+
+# Verbose mode with all queries
+./analyze -exec1 1 -exec2 2 -verbose
+```
+
+Analyzes query performance, identifies regressions, and provides index recommendations.
+See [cmd/analyze/README.md](cmd/analyze/README.md) for full documentation.
 
 ## Requirements
 
