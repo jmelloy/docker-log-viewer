@@ -439,22 +439,22 @@ const app = createApp({
       this.showExecuteNewModal = true;
     },
 
-    selectSampleQueryForExecution(sqId) {
-      this.selectedSampleQuery = this.sampleQueries.find(
-        (sq) => sq.id === sqId
-      );
-      if (this.selectedSampleQuery && this.selectedSampleQuery.server) {
+    selectSampleQueryForExecution() {
+      if (!this.selectedSampleQuery) {
+        this.executeForm.requestDataOverride = "";
+        return;
+      }
+      
+      if (this.selectedSampleQuery.server) {
         this.executeForm.serverId =
           this.selectedSampleQuery.server.id.toString();
       }
       // Populate the request data override field with the selected sample query's data
-      if (this.selectedSampleQuery) {
-        try {
-          const data = JSON.parse(this.selectedSampleQuery.requestData);
-          this.executeForm.requestDataOverride = JSON.stringify(data, null, 2);
-        } catch (e) {
-          this.executeForm.requestDataOverride = this.selectedSampleQuery.requestData;
-        }
+      try {
+        const data = JSON.parse(this.selectedSampleQuery.requestData);
+        this.executeForm.requestDataOverride = JSON.stringify(data, null, 2);
+      } catch (e) {
+        this.executeForm.requestDataOverride = this.selectedSampleQuery.requestData;
       }
     },
 
@@ -853,7 +853,7 @@ const app = createApp({
         <div class="modal-body">
           <div class="form-group">
             <label for="executeNewQuery">Sample Query:</label>
-            <select id="executeNewQuery" v-model="selectedSampleQuery" @change="selectSampleQueryForExecution($event.target.value)">
+            <select id="executeNewQuery" v-model="selectedSampleQuery" @change="selectSampleQueryForExecution">
               <option :value="null">-- Select Sample Query --</option>
               <option v-for="sq in sampleQueries" :key="sq.id" :value="sq">
                 {{ getSampleQueryDisplayName(sq) }}
