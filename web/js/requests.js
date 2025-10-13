@@ -26,6 +26,8 @@ const app = createApp({
       },
       executeForm: {
         serverId: "",
+        requestDataOverride: "",
+        urlOverride: "",
         tokenOverride: "",
         devIdOverride: "",
       },
@@ -416,6 +418,8 @@ const app = createApp({
         serverId: this.selectedSampleQuery.server
           ? this.selectedSampleQuery.server.id.toString()
           : "",
+        requestDataOverride: "",
+        urlOverride: "",
         tokenOverride: "",
         devIdOverride: "",
       };
@@ -426,6 +430,8 @@ const app = createApp({
     openExecuteNewModal() {
       this.executeForm = {
         serverId: "",
+        requestDataOverride: "",
+        urlOverride: "",
         tokenOverride: "",
         devIdOverride: "",
       };
@@ -441,6 +447,15 @@ const app = createApp({
         this.executeForm.serverId =
           this.selectedSampleQuery.server.id.toString();
       }
+      // Populate the request data override field with the selected sample query's data
+      if (this.selectedSampleQuery) {
+        try {
+          const data = JSON.parse(this.selectedSampleQuery.requestData);
+          this.executeForm.requestDataOverride = JSON.stringify(data, null, 2);
+        } catch (e) {
+          this.executeForm.requestDataOverride = this.selectedSampleQuery.requestData;
+        }
+      }
     },
 
     async executeSelectedQuery() {
@@ -449,17 +464,33 @@ const app = createApp({
         return;
       }
 
-      const { serverId, tokenOverride, devIdOverride } = this.executeForm;
+      const { serverId, requestDataOverride, urlOverride, tokenOverride, devIdOverride } = this.executeForm;
 
       if (!serverId) {
         alert("Please select a server");
         return;
       }
 
+      // Validate request data if provided
+      if (requestDataOverride) {
+        try {
+          JSON.parse(requestDataOverride);
+        } catch (e) {
+          alert("Invalid JSON in request data");
+          return;
+        }
+      }
+
       const payload = {
         serverId: parseInt(serverId),
       };
 
+      if (requestDataOverride) {
+        payload.requestDataOverride = requestDataOverride;
+      }
+      if (urlOverride) {
+        payload.urlOverride = urlOverride;
+      }
       if (tokenOverride) {
         payload.bearerTokenOverride = tokenOverride;
       }
@@ -829,9 +860,15 @@ const app = createApp({
               </option>
             </select>
           </div>
-          <div v-if="selectedSampleQuery" class="form-group">
-            <label>Request Data:</label>
-            <pre class="json-display" style="max-height: 200px; overflow: auto;">{{ selectedSampleQueryData }}</pre>
+          <div class="form-group">
+            <label for="executeRequestData">Request Data:</label>
+            <textarea 
+              id="executeRequestData" 
+              v-model="executeForm.requestDataOverride" 
+              placeholder="Enter or edit request data (JSON)"
+              rows="10"
+              style="font-family: monospace; font-size: 0.875rem;"
+            ></textarea>
           </div>
           <div class="form-group">
             <label for="executeServer">Server:</label>
@@ -841,6 +878,10 @@ const app = createApp({
                 {{ server.name }} ({{ server.url }})
               </option>
             </select>
+          </div>
+          <div class="form-group">
+            <label for="executeUrl">URL Override (optional):</label>
+            <input type="text" id="executeUrl" v-model="executeForm.urlOverride" placeholder="Override server URL" />
           </div>
           <div class="form-group">
             <label for="executeToken">Bearer Token Override (optional):</label>

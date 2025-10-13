@@ -439,9 +439,11 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body for overrides
 	var input struct {
-		ServerID           *uint  `json:"serverId,omitempty"`
+		ServerID            *uint  `json:"serverId,omitempty"`
+		URLOverride         string `json:"urlOverride,omitempty"`
 		BearerTokenOverride string `json:"bearerTokenOverride,omitempty"`
 		DevIDOverride       string `json:"devIdOverride,omitempty"`
+		RequestDataOverride string `json:"requestDataOverride,omitempty"`
 	}
 	
 	if r.Body != nil {
@@ -452,7 +454,7 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute request in background with overrides
-	go wa.executeRequestWithOverrides(id, input.ServerID, input.BearerTokenOverride, input.DevIDOverride)
+	go wa.executeRequestWithOverrides(id, input.ServerID, input.URLOverride, input.BearerTokenOverride, input.DevIDOverride, input.RequestDataOverride)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
@@ -597,7 +599,7 @@ func (wa *WebApp) createDatabaseURL(w http.ResponseWriter, r *http.Request) {
 }
 
 
-func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, bearerTokenOverride, devIDOverride string) {
+func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, urlOverride, bearerTokenOverride, devIDOverride, requestDataOverride string) {
 	req, err := wa.store.GetRequest(requestID)
 	if err != nil {
 		log.Printf("Failed to get request %d: %v", requestID, err)
@@ -636,11 +638,20 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	}
 
 	// Apply overrides
+	if urlOverride != "" {
+		url = urlOverride
+	}
 	if bearerTokenOverride != "" {
 		bearerToken = bearerTokenOverride
 	}
 	if devIDOverride != "" {
 		devID = devIDOverride
+	}
+
+	// Determine request data to use
+	requestData := req.RequestData
+	if requestDataOverride != "" {
+		requestData = requestDataOverride
 	}
 
 	// Convert requestID to pointer for SampleID
@@ -650,13 +661,13 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		SampleID:        &sampleID,
 		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
-		RequestBody:     req.RequestData,
+		RequestBody:     requestData,
 		ExecutedAt:      time.Now(),
 	}
 
 	// Execute HTTP request
 	startTime := time.Now()
-	statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID)
+	statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(requestData), requestIDHeader, bearerToken, devID)
 	execution.DurationMS = time.Since(startTime).Milliseconds()
 	execution.StatusCode = statusCode
 	execution.ResponseBody = responseBody
@@ -738,7 +749,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 }
 
 func (wa *WebApp) executeRequest(requestID int64) {
-	wa.executeRequestWithOverrides(requestID, nil, "", "")
+	wa.executeRequestWithOverrides(requestID, nil, "", "", "", "")
 }
 
 func generateRequestID() string {
