@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -53,8 +54,10 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		ShowStderr: true,
 		Follow:     true,
 		Timestamps: false,
-		Tail:       "100",
+		Tail:       "10000",
 	}
+
+	slog.Info("Starting log stream for container", "container_id", containerID[:12], "tail", options.Tail)
 
 	reader, err := dc.cli.ContainerLogs(ctx, containerID, options)
 	if err != nil {
@@ -65,14 +68,17 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		defer reader.Close()
 		buf := make([]byte, 8192)
 		var leftover []byte
+		lineCount := 0
 
 		for {
 			select {
 			case <-ctx.Done():
+				slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12])
 				return
 			default:
 				n, err := reader.Read(buf)
 				if n > 0 {
+					slog.Debug("Container read bytes from Docker", "container_id", containerID[:12], "bytes", n)
 					data := buf[:n]
 
 					cleanedData := make([]byte, 0, len(data))
@@ -90,7 +96,10 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 					leftover = nil
 
 					lines := strings.Split(string(allData), "\n")
-					
+					slog.Debug("Container split into lines", "container_id", containerID[:12], "lines", len(lines))
+
+					emptyCount := 0
+					sentCount := 0
 					for i, line := range lines {
 						if i == len(lines)-1 && !strings.HasSuffix(string(allData), "\n") {
 							leftover = []byte(line)
@@ -103,11 +112,25 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 								Timestamp:   time.Now(),
 								Entry:       entry,
 							}
+							lineCount++
+							sentCount++
+						} else {
+							emptyCount++
 						}
+					}
+					if sentCount > 0 {
+						slog.Debug("Container sent messages to logChan", "container_id", containerID[:12], "messages", sentCount)
+					}
+					if emptyCount > 0 {
+						slog.Debug("Container skipped empty lines", "container_id", containerID[:12], "lines", emptyCount)
+					}
+					if lineCount > 0 && lineCount%100 == 0 {
+						slog.Info("Container processed log lines", "container_id", containerID[:12], "lines", lineCount)
 					}
 				}
 
 				if err == io.EOF {
+					slog.Debug("Container reached EOF, total lines processed", "container_id", containerID[:12], "lines", lineCount)
 					return
 				}
 				if err != nil {

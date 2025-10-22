@@ -34,6 +34,10 @@ type DatabaseURL struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+func (DatabaseURL) TableName() string {
+	return "databases"
+}
+
 // Server represents a server configuration with URL and authentication
 type Server struct {
 	ID                uint           `gorm:"primaryKey" json:"id"`
@@ -41,6 +45,7 @@ type Server struct {
 	URL               string         `gorm:"not null" json:"url"`
 	BearerToken       string         `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
 	DevID             string         `gorm:"column:dev_id" json:"devId,omitempty"`
+	ExperimentalMode  string         `gorm:"column:experimental_mode" json:"experimentalMode,omitempty"`
 	DefaultDatabaseID *uint          `gorm:"column:default_database_id;index" json:"defaultDatabaseId,omitempty"`
 	DefaultDatabase   *DatabaseURL   `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
 	CreatedAt         time.Time      `json:"createdAt"`
@@ -58,6 +63,10 @@ type SampleQuery struct {
 	CreatedAt   time.Time      `json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+func (SampleQuery) TableName() string {
+	return "sample_requests"
 }
 
 // ExecutedRequest represents a single execution of a request (executed request)
@@ -79,6 +88,10 @@ type ExecutedRequest struct {
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+func (ExecutedRequest) TableName() string {
+	return "requests"
+}
+
 // ExecutionLog represents a log entry from an execution
 type ExecutionLog struct {
 	ID          uint           `gorm:"primaryKey" json:"id"`
@@ -94,6 +107,10 @@ type ExecutionLog struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+func (ExecutionLog) TableName() string {
+	return "request_log_messages"
+}
+
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
@@ -102,7 +119,7 @@ type SQLQuery struct {
 	NormalizedQuery  string         `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
 	QueryHash        string         `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
 	DurationMS       float64        `gorm:"column:duration_ms" json:"durationMs"`
-	TableName        string         `gorm:"column:table_name" json:"tableName"`
+	QueriedTable     string         `gorm:"column:table_name" json:"tableName"`
 	Operation        string         `json:"operation"`
 	Rows             int            `json:"rows"`
 	Variables        string         `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
@@ -113,6 +130,10 @@ type SQLQuery struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
+func (SQLQuery) TableName() string {
+	return "request_sql_statements"
+}
+
 // ExecutionDetail includes execution with related logs and SQL analysis
 type ExecutionDetail struct {
 	Execution   ExecutedRequest `json:"execution"`
@@ -120,6 +141,7 @@ type ExecutionDetail struct {
 	Logs        []ExecutionLog  `json:"logs"`
 	SQLQueries  []SQLQuery      `json:"sqlQueries"`
 	SQLAnalysis *SQLAnalysis    `json:"sqlAnalysis,omitempty"`
+	Server      *Server         `json:"server,omitempty"`
 }
 
 // SQLAnalysis provides statistics about SQL queries
@@ -206,7 +228,7 @@ func (s *Store) GetRequest(id int64) (*SampleQuery, error) {
 // ListRequests retrieves all requests
 func (s *Store) ListRequests() ([]SampleQuery, error) {
 	var requests []SampleQuery
-	result := s.db.Preload("Server").Order("created_at DESC").Find(&requests)
+	result := s.db.Preload("Server").Order("updated_at DESC").Find(&requests)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
 	}
@@ -328,6 +350,12 @@ func (s *Store) CreateExecution(exec *ExecutedRequest) (int64, error) {
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to create execution: %w", result.Error)
 	}
+
+	// Update the SampleQuery's updated_at timestamp if this execution is linked to a sample query
+	if exec.SampleID != nil {
+		s.db.Model(&SampleQuery{}).Where("id = ?", *exec.SampleID).Update("updated_at", time.Now())
+	}
+
 	return int64(exec.ID), nil
 }
 
@@ -472,6 +500,14 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		}
 	}
 
+	var server *Server
+	if exec.ServerID != nil {
+		server, err = s.GetServer(int64(*exec.ServerID))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	logs, err := s.GetExecutionLogs(executionID)
 	if err != nil {
 		return nil, err
@@ -487,6 +523,7 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		Request:    req,
 		Logs:       logs,
 		SQLQueries: sqlQueries,
+		Server:     server,
 	}
 
 	// Calculate SQL analysis
@@ -513,8 +550,8 @@ func (s *Store) analyzeSQLQueries(queries []SQLQuery) *SQLAnalysis {
 	// Calculate totals
 	for _, q := range queries {
 		analysis.TotalDuration += q.DurationMS
-		if q.TableName != "" {
-			analysis.TablesAccessed[q.TableName]++
+		if q.QueriedTable != "" {
+			analysis.TablesAccessed[q.QueriedTable]++
 		}
 	}
 	analysis.AvgDuration = analysis.TotalDuration / float64(len(queries))

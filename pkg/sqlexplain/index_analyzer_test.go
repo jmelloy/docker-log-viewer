@@ -36,21 +36,21 @@ func TestAnalyzeIndexUsage(t *testing.T) {
 			Query:           "SELECT * FROM users WHERE email = $1",
 			NormalizedQuery: "SELECT * FROM users WHERE email = $N",
 			DurationMS:      125.5,
-			TableName:       "users",
+			QueriedTable:    "users",
 			ExplainPlan:     seqScanPlan,
 		},
 		{
 			Query:           "SELECT * FROM users WHERE email = $1",
 			NormalizedQuery: "SELECT * FROM users WHERE email = $N",
 			DurationMS:      130.0,
-			TableName:       "users",
+			QueriedTable:    "users",
 			ExplainPlan:     seqScanPlan,
 		},
 		{
 			Query:           "SELECT * FROM posts WHERE user_id = $1",
 			NormalizedQuery: "SELECT * FROM posts WHERE user_id = $N",
 			DurationMS:      15.0,
-			TableName:       "posts",
+			QueriedTable:    "posts",
 			ExplainPlan:     indexScanPlan,
 		},
 	}
@@ -76,8 +76,8 @@ func TestAnalyzeIndexUsage(t *testing.T) {
 		t.Fatalf("Expected 1 sequential scan issue, got %d", len(analysis.SequentialScans))
 	}
 	seqScan := analysis.SequentialScans[0]
-	if seqScan.TableName != "users" {
-		t.Errorf("Expected TableName = 'users', got '%s'", seqScan.TableName)
+	if seqScan.QueriedTable != "users" {
+		t.Errorf("Expected QueriedTable = 'users', got '%s'", seqScan.QueriedTable)
 	}
 	if seqScan.Occurrences != 2 {
 		t.Errorf("Expected Occurrences = 2, got %d", seqScan.Occurrences)
@@ -343,7 +343,7 @@ func TestDeduplicateStrings(t *testing.T) {
 func TestGenerateRecommendations(t *testing.T) {
 	seqScans := map[string]*SequentialScanIssue{
 		"query1": {
-			TableName:       "users",
+			QueriedTable:    "users",
 			EstimatedRows:   10000,
 			Cost:            5000,
 			Occurrences:     10,
@@ -351,7 +351,7 @@ func TestGenerateRecommendations(t *testing.T) {
 			FilterCondition: "(email = $1)",
 		},
 		"query2": {
-			TableName:       "posts",
+			QueriedTable:    "posts",
 			EstimatedRows:   100,
 			Cost:            50,
 			Occurrences:     1,
@@ -381,8 +381,8 @@ func TestGenerateRecommendations(t *testing.T) {
 
 	// Verify recommendation fields
 	for _, rec := range recs {
-		if rec.TableName == "" {
-			t.Error("Recommendation missing TableName")
+		if rec.QueriedTable == "" {
+			t.Error("Recommendation missing QueriedTable")
 		}
 		if rec.Reason == "" {
 			t.Error("Recommendation missing Reason")
@@ -398,10 +398,10 @@ func TestGenerateRecommendations(t *testing.T) {
 
 func TestSortRecommendations(t *testing.T) {
 	recs := []IndexRecommendation{
-		{Priority: "low", TableName: "table1"},
-		{Priority: "high", TableName: "table2"},
-		{Priority: "medium", TableName: "table3"},
-		{Priority: "high", TableName: "table4"},
+		{Priority: "low", QueriedTable: "table1"},
+		{Priority: "high", QueriedTable: "table2"},
+		{Priority: "medium", QueriedTable: "table3"},
+		{Priority: "high", QueriedTable: "table4"},
 	}
 
 	sortRecommendations(recs)

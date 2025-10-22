@@ -116,7 +116,7 @@ func convertToQueryWithPlan(queries []store.SQLQuery, operationName string) []sq
 			OperationName:   operationName,
 			Timestamp:       q.CreatedAt.Unix(),
 			DurationMS:      q.DurationMS,
-			TableName:       q.TableName,
+			QueriedTable:    q.QueriedTable,
 			Operation:       q.Operation,
 			Rows:            q.Rows,
 			ExplainPlan:     q.ExplainPlan,
@@ -210,7 +210,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 				break
 			}
 			sb.WriteString(fmt.Sprintf("%d. %s (table: %s, duration: %.2fms)\n",
-				i+1, q.NormalizedQuery, q.TableName, q.DurationMS))
+				i+1, q.NormalizedQuery, q.QueriedTable, q.DurationMS))
 		}
 		if len(comparison.QueriesOnlyInSet1) > 10 {
 			sb.WriteString(fmt.Sprintf("... and %d more\n", len(comparison.QueriesOnlyInSet1)-10))
@@ -227,7 +227,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 				break
 			}
 			sb.WriteString(fmt.Sprintf("%d. %s (table: %s, duration: %.2fms)\n",
-				i+1, q.NormalizedQuery, q.TableName, q.DurationMS))
+				i+1, q.NormalizedQuery, q.QueriedTable, q.DurationMS))
 		}
 		if len(comparison.QueriesOnlyInSet2) > 10 {
 			sb.WriteString(fmt.Sprintf("... and %d more\n", len(comparison.QueriesOnlyInSet2)-10))
@@ -250,7 +250,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 				if i >= 5 { // Show top 5
 					break
 				}
-				sb.WriteString(fmt.Sprintf("  %d. Table: %s\n", i+1, issue.TableName))
+				sb.WriteString(fmt.Sprintf("  %d. Table: %s\n", i+1, issue.QueriedTable))
 				sb.WriteString(fmt.Sprintf("     Occurrences: %d, Cost: %.2f, Duration: %.2fms\n",
 					issue.Occurrences, issue.Cost, issue.DurationMS))
 				if issue.FilterCondition != "" {
@@ -276,7 +276,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 				if i >= 5 { // Show top 5
 					break
 				}
-				sb.WriteString(fmt.Sprintf("  %d. Table: %s\n", i+1, issue.TableName))
+				sb.WriteString(fmt.Sprintf("  %d. Table: %s\n", i+1, issue.QueriedTable))
 				sb.WriteString(fmt.Sprintf("     Occurrences: %d, Cost: %.2f, Duration: %.2fms\n",
 					issue.Occurrences, issue.Cost, issue.DurationMS))
 				if issue.FilterCondition != "" {
@@ -298,7 +298,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 				if i >= 3 { // Show top 3
 					break
 				}
-				sb.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, rec.Priority, rec.TableName))
+				sb.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, rec.Priority, rec.QueriedTable))
 				sb.WriteString(fmt.Sprintf("     Columns: %v\n", rec.Columns))
 				sb.WriteString(fmt.Sprintf("     Reason: %s\n", rec.Reason))
 				sb.WriteString(fmt.Sprintf("     Impact: %s\n", rec.EstimatedImpact))
@@ -313,7 +313,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 				if i >= 3 { // Show top 3
 					break
 				}
-				sb.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, rec.Priority, rec.TableName))
+				sb.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, rec.Priority, rec.QueriedTable))
 				sb.WriteString(fmt.Sprintf("     Columns: %v\n", rec.Columns))
 				sb.WriteString(fmt.Sprintf("     Reason: %s\n", rec.Reason))
 				sb.WriteString(fmt.Sprintf("     Impact: %s\n", rec.EstimatedImpact))
@@ -330,7 +330,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 		for i, q := range exec1.SQLQueries {
 			sb.WriteString(fmt.Sprintf("\n%d. Query:\n", i+1))
 			sb.WriteString(fmt.Sprintf("   %s\n", q.Query))
-			sb.WriteString(fmt.Sprintf("   Table: %s, Operation: %s\n", q.TableName, q.Operation))
+			sb.WriteString(fmt.Sprintf("   Table: %s, Operation: %s\n", q.QueriedTable, q.Operation))
 			sb.WriteString(fmt.Sprintf("   Duration: %.2fms, Rows: %d\n", q.DurationMS, q.Rows))
 			if q.GraphQLOperation != "" {
 				sb.WriteString(fmt.Sprintf("   GraphQL Op: %s\n", q.GraphQLOperation))
@@ -343,7 +343,7 @@ func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.
 		for i, q := range exec2.SQLQueries {
 			sb.WriteString(fmt.Sprintf("\n%d. Query:\n", i+1))
 			sb.WriteString(fmt.Sprintf("   %s\n", q.Query))
-			sb.WriteString(fmt.Sprintf("   Table: %s, Operation: %s\n", q.TableName, q.Operation))
+			sb.WriteString(fmt.Sprintf("   Table: %s, Operation: %s\n", q.QueriedTable, q.Operation))
 			sb.WriteString(fmt.Sprintf("   Duration: %.2fms, Rows: %d\n", q.DurationMS, q.Rows))
 			if q.GraphQLOperation != "" {
 				sb.WriteString(fmt.Sprintf("   GraphQL Op: %s\n", q.GraphQLOperation))

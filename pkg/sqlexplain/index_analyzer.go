@@ -7,7 +7,7 @@ import (
 
 // IndexRecommendation represents a suggestion to add or modify an index
 type IndexRecommendation struct {
-	TableName       string   `json:"tableName"`
+	QueriedTable    string   `json:"tableName"`
 	Columns         []string `json:"columns"`
 	Reason          string   `json:"reason"`
 	EstimatedImpact string   `json:"estimatedImpact"`
@@ -29,7 +29,7 @@ type IndexAnalysis struct {
 type SequentialScanIssue struct {
 	Query           string  `json:"query"`
 	NormalizedQuery string  `json:"normalizedQuery"`
-	TableName       string  `json:"tableName"`
+	QueriedTable    string  `json:"tableName"`
 	EstimatedRows   float64 `json:"estimatedRows"`
 	ActualRows      float64 `json:"actualRows"`
 	Cost            float64 `json:"cost"`
@@ -40,11 +40,11 @@ type SequentialScanIssue struct {
 
 // IndexUsageStat tracks which indexes are being used
 type IndexUsageStat struct {
-	IndexName   string  `json:"indexName"`
-	TableName   string  `json:"tableName"`
-	UseCount    int     `json:"useCount"`
-	AvgCost     float64 `json:"avgCost"`
-	ScanType    string  `json:"scanType"` // "Index Scan", "Index Only Scan", "Bitmap Index Scan"
+	IndexName    string  `json:"indexName"`
+	QueriedTable string  `json:"tableName"`
+	UseCount     int     `json:"useCount"`
+	AvgCost      float64 `json:"avgCost"`
+	ScanType     string  `json:"scanType"` // "Index Scan", "Index Only Scan", "Bitmap Index Scan"
 }
 
 // IndexAnalysisSummary provides high-level statistics
@@ -141,7 +141,7 @@ func analyzeNode(plan *ParsedExplainPlan, query QueryWithPlan, seqScanMap map[st
 			seqScanMap[key] = &SequentialScanIssue{
 				Query:           query.Query,
 				NormalizedQuery: query.NormalizedQuery,
-				TableName:       plan.RelationName,
+				QueriedTable:    plan.RelationName,
 				EstimatedRows:   plan.PlanRows,
 				ActualRows:      plan.ActualRows,
 				Cost:            plan.TotalCost,
@@ -163,11 +163,11 @@ func analyzeNode(plan *ParsedExplainPlan, query QueryWithPlan, seqScanMap map[st
 				stat.AvgCost = (stat.AvgCost*float64(stat.UseCount-1) + plan.TotalCost) / float64(stat.UseCount)
 			} else {
 				indexUsageMap[key] = &IndexUsageStat{
-					IndexName: plan.IndexName,
-					TableName: plan.RelationName,
-					UseCount:  1,
-					AvgCost:   plan.TotalCost,
-					ScanType:  plan.NodeType,
+					IndexName:    plan.IndexName,
+					QueriedTable: plan.RelationName,
+					UseCount:     1,
+					AvgCost:      plan.TotalCost,
+					ScanType:     plan.NodeType,
 				}
 			}
 		}
@@ -205,7 +205,7 @@ func generateRecommendations(seqScans map[string]*SequentialScanIssue,
 
 	// Recommend indexes for frequent sequential scans
 	for _, issue := range seqScans {
-		if issue.TableName == "" {
+		if issue.QueriedTable == "" {
 			continue
 		}
 
@@ -221,29 +221,29 @@ func generateRecommendations(seqScans map[string]*SequentialScanIssue,
 		if len(columns) == 0 {
 			// Generic recommendation if we can't determine columns
 			rec := IndexRecommendation{
-				TableName:       issue.TableName,
+				QueriedTable:    issue.QueriedTable,
 				Columns:         []string{"<filter_column>"},
 				Reason:          fmt.Sprintf("Sequential scan detected on table '%s' (occurred %d times, avg cost: %.2f)", 
-					issue.TableName, issue.Occurrences, issue.Cost),
+					issue.QueriedTable, issue.Occurrences, issue.Cost),
 				EstimatedImpact: estimateImpact(issue),
 				Priority:        priority,
 				SQLCommand:      fmt.Sprintf("CREATE INDEX idx_%s_<column> ON %s (<filter_column>);", 
-					issue.TableName, issue.TableName),
+					issue.QueriedTable, issue.QueriedTable),
 				AffectedQueries: issue.Occurrences,
 			}
 			recommendations = append(recommendations, rec)
 		} else {
 			// Specific recommendation with detected columns
-			indexName := fmt.Sprintf("idx_%s_%s", issue.TableName, strings.Join(columns, "_"))
+			indexName := fmt.Sprintf("idx_%s_%s", issue.QueriedTable, strings.Join(columns, "_"))
 			rec := IndexRecommendation{
-				TableName:       issue.TableName,
+				QueriedTable:    issue.QueriedTable,
 				Columns:         columns,
 				Reason:          fmt.Sprintf("Sequential scan on '%s' filtering by %s (occurred %d times)", 
-					issue.TableName, strings.Join(columns, ", "), issue.Occurrences),
+					issue.QueriedTable, strings.Join(columns, ", "), issue.Occurrences),
 				EstimatedImpact: estimateImpact(issue),
 				Priority:        priority,
 				SQLCommand:      fmt.Sprintf("CREATE INDEX %s ON %s (%s);", 
-					indexName, issue.TableName, strings.Join(columns, ", ")),
+					indexName, issue.QueriedTable, strings.Join(columns, ", ")),
 				AffectedQueries: issue.Occurrences,
 			}
 			recommendations = append(recommendations, rec)

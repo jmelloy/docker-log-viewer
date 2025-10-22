@@ -45,8 +45,8 @@ func TestConvertToQueryWithPlan(t *testing.T) {
 	if result[0].DurationMS != 25.5 {
 		t.Errorf("DurationMS should be 25.5, got %f", result[0].DurationMS)
 	}
-	if result[0].TableName != "users" {
-		t.Errorf("TableName should be 'users', got %s", result[0].TableName)
+	if result[0].QueriedTable != "users" {
+		t.Errorf("QueriedTable should be 'users', got %s", result[0].QueriedTable)
 	}
 
 	// Check ordering
@@ -127,7 +127,7 @@ func TestFormatIndexRecommendations(t *testing.T) {
 		},
 		Recommendations: []sqlexplain.IndexRecommendation{
 			{
-				TableName:       "users",
+				QueriedTable:    "users",
 				Columns:         []string{"email"},
 				Reason:          "Frequent sequential scan",
 				EstimatedImpact: "High - Could significantly reduce query time",
@@ -136,7 +136,7 @@ func TestFormatIndexRecommendations(t *testing.T) {
 				AffectedQueries: 10,
 			},
 			{
-				TableName:       "posts",
+				QueriedTable:    "posts",
 				Columns:         []string{"user_id"},
 				Reason:          "Sequential scan detected",
 				EstimatedImpact: "Medium - Should improve query performance",

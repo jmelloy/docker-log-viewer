@@ -14,7 +14,7 @@ type QueryWithPlan struct {
 	OperationName    string  // GraphQL operation or other grouping identifier
 	Timestamp        int64   // Unix timestamp for ordering
 	DurationMS       float64
-	TableName        string
+	QueriedTable     string
 	Operation        string
 	Rows             int
 	ExplainPlan      string // JSON string of the explain plan

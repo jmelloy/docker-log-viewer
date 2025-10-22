@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Explain Plan Analyzer Example ===\n")
+	fmt.Println("=== Explain Plan Analyzer Example ===")
 
 	// Example 1: Compare two query sets
 	fmt.Println("1. Comparing Query Sets:")
@@ -21,7 +21,7 @@ func main() {
 			OperationName:   "GetUser",
 			Timestamp:       1000,
 			DurationMS:      125.5,
-			TableName:       "users",
+			QueriedTable:    "users",
 			ExplainPlan: `[{
 				"Plan": {
 					"Node Type": "Seq Scan",
@@ -42,7 +42,7 @@ func main() {
 			OperationName:   "GetPosts",
 			Timestamp:       2000,
 			DurationMS:      50.0,
-			TableName:       "posts",
+			QueriedTable:    "posts",
 		},
 	}
 
@@ -54,7 +54,7 @@ func main() {
 			OperationName:   "GetUser",
 			Timestamp:       1000,
 			DurationMS:      25.5,
-			TableName:       "users",
+			QueriedTable:    "users",
 			ExplainPlan: `[{
 				"Plan": {
 					"Node Type": "Index Scan",
@@ -75,7 +75,7 @@ func main() {
 			OperationName:   "GetComments",
 			Timestamp:       3000,
 			DurationMS:      30.0,
-			TableName:       "comments",
+			QueriedTable:    "comments",
 		},
 	}
 
@@ -110,14 +110,14 @@ func main() {
 	if len(comparison.QueriesOnlyInSet1) > 0 {
 		fmt.Printf("\nQueries only in Set 1: %d\n", len(comparison.QueriesOnlyInSet1))
 		for _, q := range comparison.QueriesOnlyInSet1 {
-			fmt.Printf("  - %s (table: %s)\n", q.NormalizedQuery, q.TableName)
+			fmt.Printf("  - %s (table: %s)\n", q.NormalizedQuery, q.QueriedTable)
 		}
 	}
 
 	if len(comparison.QueriesOnlyInSet2) > 0 {
 		fmt.Printf("\nQueries only in Set 2: %d\n", len(comparison.QueriesOnlyInSet2))
 		for _, q := range comparison.QueriesOnlyInSet2 {
-			fmt.Printf("  - %s (table: %s)\n", q.NormalizedQuery, q.TableName)
+			fmt.Printf("  - %s (table: %s)\n", q.NormalizedQuery, q.QueriedTable)
 		}
 	}
 
@@ -138,7 +138,7 @@ func main() {
 	if len(analysis.SequentialScans) > 0 {
 		fmt.Printf("\nSequential Scan Issues:\n")
 		for _, issue := range analysis.SequentialScans {
-			fmt.Printf("  Table: %s\n", issue.TableName)
+			fmt.Printf("  Table: %s\n", issue.QueriedTable)
 			fmt.Printf("    Occurrences: %d\n", issue.Occurrences)
 			fmt.Printf("    Cost: %.2f\n", issue.Cost)
 			fmt.Printf("    Estimated rows: %.0f\n", issue.EstimatedRows)
@@ -152,7 +152,7 @@ func main() {
 	if len(analysis.Recommendations) > 0 {
 		fmt.Printf("\nIndex Recommendations:\n")
 		for i, rec := range analysis.Recommendations {
-			fmt.Printf("\n%d. [%s] %s\n", i+1, rec.Priority, rec.TableName)
+			fmt.Printf("\n%d. [%s] %s\n", i+1, rec.Priority, rec.QueriedTable)
 			fmt.Printf("   Columns: %v\n", rec.Columns)
 			fmt.Printf("   Reason: %s\n", rec.Reason)
 			fmt.Printf("   Impact: %s\n", rec.EstimatedImpact)

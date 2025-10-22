@@ -150,7 +150,7 @@ func TestStore(t *testing.T) {
 			NormalizedQuery:  normalizedQuery,
 			QueryHash:        ComputeQueryHash(normalizedQuery),
 			DurationMS:       15.5,
-			TableName:        "users",
+			QueriedTable:     "users",
 			Operation:        "SELECT",
 			Rows:             1,
 			GraphQLOperation: "FetchUsers",
