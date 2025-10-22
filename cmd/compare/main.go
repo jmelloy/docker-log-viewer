@@ -131,6 +131,9 @@ type MatchedQuery struct {
 }
 
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime)
+	log.SetPrefix("INFO: ")
+
 	config := parseFlags()
 
 	if err := runComparison(config); err != nil {
@@ -183,19 +186,19 @@ func runComparison(config CompareConfig) error {
 
 	for _, c := range containers {
 		if err := docker.StreamLogs(ctx, c.ID, logChan); err != nil {
-			log.Printf("Failed to stream logs for container %s: %v", c.ID, err)
+			log.Printf("failed to stream logs for container %s: %v", c.ID, err)
 		}
 	}
 
 	// Test URL1 multiple times
-	log.Printf("Testing URL1: %s (5 runs)", config.URL1)
+	log.Printf("testing URL1: %s (5 runs)", config.URL1)
 	multiResult1 := testURLMultipleTimes(config.URL1, data, logChan, config.Timeout, &config, 5)
 
 	// Wait a bit between endpoint tests
 	time.Sleep(2 * time.Second)
 
 	// Test URL2 multiple times
-	log.Printf("Testing URL2: %s (5 runs)", config.URL2)
+	log.Printf("testing URL2: %s (5 runs)", config.URL2)
 	multiResult2 := testURLMultipleTimes(config.URL2, data, logChan, config.Timeout, &config, 5)
 
 	// Generate HTML report
@@ -203,7 +206,7 @@ func runComparison(config CompareConfig) error {
 		return fmt.Errorf("failed to generate HTML: %w", err)
 	}
 
-	log.Printf("Comparison report generated: %s", config.Output)
+	log.Printf("comparison report generated: %s", config.Output)
 	return nil
 }
 
@@ -222,7 +225,6 @@ func testURLMultipleTimes(url string, data []byte, logChan <-chan logs.LogMessag
 	var totalDuration time.Duration
 
 	for i := 0; i < numRuns; i++ {
-		log.Printf("  Run %d/%d for %s", i+1, numRuns, url)
 		run := testURL(url, data, logChan, timeout, config)
 		result.Runs = append(result.Runs, run)
 		totalDuration += run.Duration
@@ -297,11 +299,8 @@ func testURL(url string, data []byte, logChan <-chan logs.LogMessage, timeout ti
 	// Read response body
 	io.Copy(io.Discard, resp.Body)
 
-	log.Printf("Request ID: %s, Status: %d, Duration: %v", result.RequestID, result.StatusCode, result.Duration)
-
 	// Collect logs for this request ID
 	result.Logs = collectLogs(result.RequestID, logChan, timeout)
-	log.Printf("Collected %d logs for request %s", len(result.Logs), result.RequestID)
 
 	// Analyze SQL queries
 	result.SQLAnalysis = analyzeSQLQueries(result.Logs)
@@ -1027,7 +1026,7 @@ NormalizedQuery: q.Normalized,
 OperationName:   operationName,
 Timestamp:       int64(i), // Use index as timestamp for ordering
 DurationMS:      q.Duration,
-TableName:       q.Table,
+QueriedTable:    q.Table,
 Operation:       q.Operation,
 Rows:            q.Rows,
 ExplainPlan:     "", // Not available in basic compare tool queries
@@ -1063,7 +1062,7 @@ sb.WriteString(fmt.Sprintf("Index Recommendations (%d total, %d high priority):\
 analysis.Summary.TotalRecommendations, analysis.Summary.HighPriorityRecs))
 
 for i, rec := range analysis.Recommendations {
-sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", i+1, strings.ToUpper(rec.Priority), rec.TableName))
+sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", i+1, strings.ToUpper(rec.Priority), rec.QueriedTable))
 sb.WriteString(fmt.Sprintf("   Columns: %s\n", strings.Join(rec.Columns, ", ")))
 sb.WriteString(fmt.Sprintf("   Reason: %s\n", rec.Reason))
 sb.WriteString(fmt.Sprintf("   Impact: %s\n", rec.EstimatedImpact))

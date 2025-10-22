@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strings"
@@ -18,9 +19,10 @@ type Request struct {
 }
 
 type Response struct {
-	QueryPlan []map[string]interface{} `json:"queryPlan"`
-	Error     string                   `json:"error,omitempty"`
-	Query     string                   `json:"query"`
+	QueryPlan      []map[string]interface{} `json:"queryPlan"`
+	Error          string                   `json:"error,omitempty"`
+	Query          string                   `json:"query"`
+	FormattedQuery string                   `json:"formattedQuery"`
 }
 
 var db *sql.DB
@@ -59,25 +61,73 @@ func substituteVariables(query string, variables map[string]string) string {
 		// Extract the number
 		num := match[1:]
 		if val, ok := variables[num]; ok {
-			// Handle NULL
-			if strings.ToUpper(val) == "NULL" || val == "" {
+			// Handle NULL (but only if it's exactly "NULL" or empty, case-insensitive)
+			trimmedVal := strings.TrimSpace(val)
+			if trimmedVal == "" || strings.EqualFold(trimmedVal, "NULL") {
 				return "NULL"
 			}
 			// Handle booleans
 			if val == "true" || val == "false" || val == "TRUE" || val == "FALSE" {
 				return val
 			}
-			// Handle numbers
-			if regexp.MustCompile(`^\d+(\.\d+)?$`).MatchString(val) {
+			// Handle numbers (integers and floats)
+			if regexp.MustCompile(`^-?\d+(\.\d+)?$`).MatchString(val) {
 				return val
 			}
-			// Quote strings
+			// Quote strings (including timestamps, UUIDs, etc.)
 			return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
 		}
 		return match
 	})
 
 	return result
+}
+
+// postgres://username:password@host:port/dbname
+func noPasswordConnectionString(connectionString string) string {
+	parts := strings.Split(connectionString, "@")
+	if len(parts) != 2 {
+		return connectionString
+	}
+
+	return fmt.Sprintf("postgres://%s", parts[1])
+}
+
+// formatSQL applies basic SQL formatting with indentation and newlines
+func formatSQL(query string) string {
+	// Remove leading/trailing whitespace
+	query = strings.TrimSpace(query)
+	
+	// Keywords that should start on a new line
+	keywords := []string{
+		"SELECT", "FROM", "WHERE", "AND", "OR", "JOIN", "INNER JOIN", "LEFT JOIN", "RIGHT JOIN",
+		"GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "UNION", "UNION ALL",
+		"INSERT INTO", "UPDATE", "DELETE FROM", "VALUES", "SET",
+	}
+	
+	// Add newlines before major keywords
+	for _, keyword := range keywords {
+		// Match keyword with word boundaries
+		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(keyword) + `\b`)
+		query = re.ReplaceAllStringFunc(query, func(match string) string {
+			if strings.HasPrefix(strings.ToUpper(match), "AND") || strings.HasPrefix(strings.ToUpper(match), "OR") {
+				return "\n  " + strings.ToUpper(match)
+			}
+			return "\n" + strings.ToUpper(match)
+		})
+	}
+	
+	// Clean up multiple newlines and trim each line
+	lines := strings.Split(query, "\n")
+	var formatted []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			formatted = append(formatted, trimmed)
+		}
+	}
+	
+	return strings.Join(formatted, "\n")
 }
 
 // Explain runs EXPLAIN (ANALYZE, FORMAT JSON) on the given query
@@ -88,7 +138,6 @@ func Explain(req Request) Response {
 
 	// Use connection string from request if provided, otherwise use default db
 	var targetDB *sql.DB
-	var shouldCloseDB bool
 
 	if req.ConnectionString != "" {
 		// Open a temporary connection for this request
@@ -97,14 +146,13 @@ func Explain(req Request) Response {
 			resp.Error = fmt.Sprintf("Error connecting to database: %v", err)
 			return resp
 		}
+		defer tempDB.Close()
 		// Test the connection
 		if err := tempDB.Ping(); err != nil {
-			tempDB.Close()
 			resp.Error = fmt.Sprintf("Error connecting to database: %v", err)
 			return resp
 		}
 		targetDB = tempDB
-		shouldCloseDB = true
 	} else {
 		// Use default connection
 		if db == nil {
@@ -112,14 +160,9 @@ func Explain(req Request) Response {
 			return resp
 		}
 		targetDB = db
-		shouldCloseDB = false
 	}
 
-	// Close temporary connection if we opened one
-	if shouldCloseDB {
-		defer targetDB.Close()
-	}
-
+	var err error
 	query := req.Query
 	displayQuery := query
 
@@ -128,12 +171,27 @@ func Explain(req Request) Response {
 		displayQuery = substituteVariables(query, req.Variables)
 	}
 	resp.Query = displayQuery
+	resp.FormattedQuery = formatSQL(displayQuery)
 
-	// Run EXPLAIN ANALYZE (FORMAT JSON)
-	explainQuery := fmt.Sprintf("EXPLAIN (ANALYZE, FORMAT JSON) %s", query)
+	// Detect if query modifies data (INSERT, UPDATE, DELETE)
+	// For those, use EXPLAIN without ANALYZE to avoid actually executing them
+	queryUpper := strings.ToUpper(strings.TrimSpace(query))
+	useAnalyze := true
+	if strings.Contains(queryUpper, "INSERT INTO") ||
+		strings.Contains(queryUpper, "UPDATE ") ||
+		strings.Contains(queryUpper, "DELETE FROM") {
+		useAnalyze = false
+	}
+
+	// Run EXPLAIN with or without ANALYZE based on query type
+	var explainQuery string
+	if useAnalyze {
+		explainQuery = fmt.Sprintf("EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) %s", query)
+	} else {
+		explainQuery = fmt.Sprintf("EXPLAIN (COSTS, VERBOSE, FORMAT JSON) %s", query)
+	}
 
 	var rows *sql.Rows
-	var err error
 
 	// If we have variables, use them as bind parameters
 	if len(req.Variables) > 0 {
@@ -146,8 +204,10 @@ func Explain(req Request) Response {
 			}
 			args = append(args, val)
 		}
+		slog.Info("EXPLAIN query", "query", explainQuery, "args", args, "connection", noPasswordConnectionString(req.ConnectionString))
 		rows, err = targetDB.Query(explainQuery, args...)
 	} else {
+		slog.Debug("EXPLAIN query", "query", explainQuery)
 		rows, err = targetDB.Query(explainQuery)
 	}
 

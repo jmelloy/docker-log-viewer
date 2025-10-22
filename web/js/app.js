@@ -2,7 +2,7 @@ const { createApp } = Vue;
 
 const app = createApp({
   data() {
-    // Load persisted container state from localStorage
+    // Load persisted container state from localStorage (by name, not ID)
     let selectedContainers = new Set();
     try {
       const saved = localStorage.getItem("selectedContainers");
@@ -18,7 +18,7 @@ const app = createApp({
       selectedContainers,
       logs: [],
       searchQuery: "",
-      traceFilter: null,
+      traceFilters: new Map(), // Map<fieldName, fieldValue>
       selectedLevels: new Set([
         "DBG",
         "DEBUG",
@@ -43,16 +43,23 @@ const app = createApp({
         planSource: "",
         planQuery: "",
         error: null,
+        metadata: null,
       },
       sqlAnalysis: null,
       collapsedProjects: new Set(),
     };
   },
 
+  watch: {
+    searchQuery() {
+      this.sendFilterUpdate();
+    },
+  },
+
   computed: {
     filteredLogs() {
-      const startIdx = Math.max(0, this.logs.length - 1000);
-      return this.logs.slice(startIdx).filter((log) => this.shouldShowLog(log));
+      // Backend now does filtering, just return all logs
+      return this.logs;
     },
 
     containersByProject() {
@@ -83,12 +90,8 @@ const app = createApp({
       return this.wsConnected ? "#7ee787" : "#f85149";
     },
 
-    filterDisplayType() {
-      return this.traceFilter ? this.traceFilter.type : "";
-    },
-
-    filterDisplayValue() {
-      return this.traceFilter ? this.traceFilter.value : "";
+    hasTraceFilters() {
+      return this.traceFilters.size > 0;
     },
 
     logCountText() {
@@ -104,7 +107,7 @@ const app = createApp({
     async init() {
       await this.loadContainers();
       this.connectWebSocket();
-      await this.loadInitialLogs();
+      // Initial logs will come via WebSocket after filter is sent
     },
 
     getLevelVariants(level) {
@@ -128,6 +131,7 @@ const app = createApp({
       } else {
         levelVariants.forEach((v) => this.selectedLevels.add(v));
       }
+      this.sendFilterUpdate();
     },
 
     isLevelSelected(level) {
@@ -139,11 +143,33 @@ const app = createApp({
       try {
         const response = await fetch("/api/containers");
         this.containers = await response.json();
-        // Only select new containers if there's no saved state
+        
+        // Get valid container names
+        const validNames = new Set(this.containers.map(c => c.Name));
+        
         if (this.selectedContainers.size === 0) {
-          this.containers.forEach((c) => this.selectedContainers.add(c.ID));
+          // No saved state, select all
+          this.containers.forEach((c) => this.selectedContainers.add(c.Name));
+          this.saveContainerState();
+        } else {
+          // Validate saved state - remove invalid entries (old IDs)
+          const validSelections = new Set();
+          for (const name of this.selectedContainers) {
+            if (validNames.has(name)) {
+              validSelections.add(name);
+            }
+          }
+          
+          // If everything was invalid, select all
+          if (validSelections.size === 0) {
+            this.containers.forEach((c) => validSelections.add(c.Name));
+          }
+          
+          this.selectedContainers = validSelections;
           this.saveContainerState();
         }
+        
+        this.sendFilterUpdate();
       } catch (error) {
         console.error("Failed to load containers:", error);
       }
@@ -168,12 +194,17 @@ const app = createApp({
 
       this.ws.onopen = () => {
         this.wsConnected = true;
+        this.sendFilterUpdate();
       };
 
       this.ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "log") {
           this.handleNewLog(message.data);
+        } else if (message.type === "logs") {
+          this.handleNewLogs(message.data);
+        } else if (message.type === "logs_initial") {
+          this.handleInitialLogs(message.data);
         } else if (message.type === "containers") {
           this.handleContainerUpdate(message.data);
         }
@@ -191,79 +222,83 @@ const app = createApp({
 
     handleNewLog(log) {
       this.logs.push(log);
-      if (this.logs.length > 10000) {
-        this.logs = this.logs.slice(-1000);
+      if (this.logs.length > 100000) {
+        this.logs = this.logs.slice(-50000);
       }
       this.$nextTick(() => this.scrollToBottom());
     },
 
+    handleNewLogs(logs) {
+      // Handle batched logs from backend
+      this.logs.push(...logs);
+      if (this.logs.length > 100000) {
+        this.logs = this.logs.slice(-50000);
+      }
+      this.$nextTick(() => this.scrollToBottom());
+    },
+
+    handleInitialLogs(logs) {
+      // Replace all logs with initial filtered set
+      console.log(`Received ${logs.length} initial filtered logs`);
+      this.logs = logs;
+      this.$nextTick(() => this.scrollToBottom());
+    },
+
+    sendFilterUpdate() {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        console.log("Cannot send filter update - WebSocket not connected");
+        return;
+      }
+
+      const filter = {
+        selectedContainers: Array.from(this.selectedContainers),
+        selectedLevels: Array.from(this.selectedLevels),
+        searchQuery: this.searchQuery,
+        traceFilters: Array.from(this.traceFilters.entries()).map(([type, value]) => ({ type, value })),
+      };
+
+      console.log("Sending filter update:", filter);
+
+      this.ws.send(
+        JSON.stringify({
+          type: "filter",
+          data: filter,
+        })
+      );
+    },
+
     handleContainerUpdate(data) {
       const newContainers = data.containers;
-      const oldIDs = new Set(this.containers.map((c) => c.ID));
-      const newIDs = new Set(newContainers.map((c) => c.ID));
+      const oldNames = new Set(this.containers.map((c) => c.Name));
+      const newNames = new Set(newContainers.map((c) => c.Name));
 
-      const added = newContainers.filter((c) => !oldIDs.has(c.ID));
-      const removed = this.containers.filter((c) => !newIDs.has(c.ID));
+      const added = newContainers.filter((c) => !oldNames.has(c.Name));
+      const removed = this.containers.filter((c) => !newNames.has(c.Name));
 
       if (added.length > 0) {
         added.forEach((c) => {
-          this.selectedContainers.add(c.ID);
+          this.selectedContainers.add(c.Name);
           console.log(`Container started: ${c.Name} (${c.ID})`);
         });
+        this.sendFilterUpdate();
       }
 
       if (removed.length > 0) {
         removed.forEach((c) => {
-          this.selectedContainers.delete(c.ID);
+          this.selectedContainers.delete(c.Name);
           console.log(`Container stopped: ${c.Name} (${c.ID})`);
         });
+        this.sendFilterUpdate();
       }
 
       this.containers = newContainers;
 
-      if (this.traceFilter) {
+      if (this.hasTraceFilters) {
         this.analyzeTrace();
       }
     },
 
-    shouldShowLog(log) {
-      if (!this.selectedContainers.has(log.containerId)) {
-        return false;
-      }
 
-      const logLevel = log.entry?.level
-        ? log.entry.level.toUpperCase()
-        : "NONE";
-      if (!this.selectedLevels.has(logLevel)) {
-        return false;
-      }
-
-      if (this.searchQuery && !this.matchesSearch(log)) {
-        return false;
-      }
-
-      if (this.traceFilter) {
-        const val = log.entry?.fields?.[this.traceFilter.type];
-        if (val !== this.traceFilter.value) {
-          return false;
-        }
-      }
-
-      return true;
-    },
-
-    matchesSearch(log) {
-      const searchable = [
-        log.entry?.raw,
-        log.entry?.message,
-        log.entry?.level,
-        ...Object.values(log.entry?.fields || {}),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return searchable.includes(this.searchQuery.toLowerCase());
-    },
 
     getProjectName(containerName) {
       const parts = containerName.split(/-/);
@@ -282,47 +317,49 @@ const app = createApp({
       return containerName;
     },
 
-    toggleContainer(containerId) {
-      if (this.selectedContainers.has(containerId)) {
-        this.selectedContainers.delete(containerId);
+    toggleContainer(containerName) {
+      if (this.selectedContainers.has(containerName)) {
+        this.selectedContainers.delete(containerName);
       } else {
-        this.selectedContainers.add(containerId);
+        this.selectedContainers.add(containerName);
       }
       this.saveContainerState();
+      this.sendFilterUpdate();
     },
 
-    isContainerSelected(containerId) {
-      return this.selectedContainers.has(containerId);
+    isContainerSelected(containerName) {
+      return this.selectedContainers.has(containerName);
     },
 
     toggleProject(project) {
       const projectContainers = this.containersByProject[project];
       const allSelected = projectContainers.every((c) =>
-        this.selectedContainers.has(c.ID)
+        this.selectedContainers.has(c.Name)
       );
 
       projectContainers.forEach((c) => {
         if (allSelected) {
-          this.selectedContainers.delete(c.ID);
+          this.selectedContainers.delete(c.Name);
         } else {
-          this.selectedContainers.add(c.ID);
+          this.selectedContainers.add(c.Name);
         }
       });
       this.saveContainerState();
+      this.sendFilterUpdate();
     },
 
     isProjectSelected(project) {
       const projectContainers = this.containersByProject[project];
-      return projectContainers.every((c) => this.selectedContainers.has(c.ID));
+      return projectContainers.every((c) => this.selectedContainers.has(c.Name));
     },
 
     isProjectIndeterminate(project) {
       const projectContainers = this.containersByProject[project];
       const someSelected = projectContainers.some((c) =>
-        this.selectedContainers.has(c.ID)
+        this.selectedContainers.has(c.Name)
       );
       const allSelected = projectContainers.every((c) =>
-        this.selectedContainers.has(c.ID)
+        this.selectedContainers.has(c.Name)
       );
       return someSelected && !allSelected;
     },
@@ -347,13 +384,78 @@ const app = createApp({
 
     setTraceFilter(type, value, event) {
       if (event) event.stopPropagation();
-      this.traceFilter = { type, value };
+      this.traceFilters.set(type, value);
+      this.sendFilterUpdate();
       this.analyzeTrace();
     },
 
-    clearTraceFilter() {
-      this.traceFilter = null;
+    removeTraceFilter(type) {
+      this.traceFilters.delete(type);
+      this.sendFilterUpdate();
+      if (this.traceFilters.size === 0) {
+        this.showAnalyzer = false;
+      } else {
+        this.analyzeTrace();
+      }
+    },
+
+    clearTraceFilters() {
+      this.traceFilters.clear();
+      this.sendFilterUpdate();
       this.showAnalyzer = false;
+    },
+
+    async saveTrace() {
+      if (this.traceFilters.size === 0) return;
+
+      const filterDesc = Array.from(this.traceFilters.entries()).map(([k, v]) => `${k}: ${v}`).join(', ');
+      const name = prompt(`Save trace as:`, filterDesc);
+      if (!name) return;
+
+      try {
+        // Get all logs for this trace
+        const traceLogs = this.logs.filter((log) => {
+          const containerName = this.getContainerName(log.containerId);
+          if (!this.selectedContainers.has(containerName)) {
+            return false;
+          }
+          // Match ALL filters
+          for (const [type, value] of this.traceFilters.entries()) {
+            const val = log.entry?.fields?.[type];
+            if (val !== value) return false;
+          }
+          return true;
+        });
+
+        // Extract SQL queries
+        const sqlQueries = this.extractSQLQueries(traceLogs);
+
+        const payload = {
+          traceId: this.traceFilters.get('trace_id') || null,
+          requestId: this.traceFilters.get('request_id') || null,
+          name: name,
+          logs: traceLogs,
+          sqlQueries: sqlQueries,
+        };
+
+        const response = await fetch('/api/save-trace', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          alert(`Trace saved successfully! ID: ${result.id}`);
+        } else {
+          alert('Failed to save trace');
+        }
+      } catch (error) {
+        console.error('Error saving trace:', error);
+        alert(`Failed to save trace: ${error.message}`);
+      }
     },
 
     clearLogs() {
@@ -361,17 +463,22 @@ const app = createApp({
     },
 
     analyzeTrace() {
-      if (!this.traceFilter) {
+      if (this.traceFilters.size === 0) {
         this.showAnalyzer = false;
         return;
       }
 
       const traceLogs = this.logs.filter((log) => {
-        if (!this.selectedContainers.has(log.containerId)) {
+        const containerName = this.getContainerName(log.containerId);
+        if (!this.selectedContainers.has(containerName)) {
           return false;
         }
-        const val = log.entry?.fields?.[this.traceFilter.type];
-        return val === this.traceFilter.value;
+        // Match ALL filters
+        for (const [type, value] of this.traceFilters.entries()) {
+          const val = log.entry?.fields?.[type];
+          if (val !== value) return false;
+        }
+        return true;
       });
 
       const sqlQueries = this.extractSQLQueries(traceLogs);
@@ -582,7 +689,7 @@ const app = createApp({
       return parts.join("");
     },
 
-    async runExplain(query, variables = {}) {
+    async runExplain(query, variables = {}, metadata = null) {
       try {
         const payload = {
           query: query,
@@ -603,6 +710,7 @@ const app = createApp({
           this.explainData.error = result.error;
           this.explainData.planSource = "";
           this.explainData.planQuery = result.query || "";
+          this.explainData.metadata = metadata;
         } else {
           let planText = "";
           if (result.queryPlan && result.queryPlan.length > 0) {
@@ -612,6 +720,7 @@ const app = createApp({
           this.explainData.error = null;
           this.explainData.planSource = planText;
           this.explainData.planQuery = result.query || "";
+          this.explainData.metadata = metadata;
         }
 
         this.showExplainModal = true;
@@ -619,7 +728,60 @@ const app = createApp({
         this.explainData.error = `Failed to run EXPLAIN: ${error.message}`;
         this.explainData.planSource = "";
         this.explainData.planQuery = query;
+        this.explainData.metadata = metadata;
         this.showExplainModal = true;
+      }
+    },
+
+    async shareExplainPlan() {
+      try {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://explain.dalibo.com/new';
+        form.target = '_blank';
+        
+        // Build descriptive title from metadata
+        let title = 'Query Plan from Logseidon';
+        if (this.explainData.metadata) {
+          const parts = [];
+          if (this.explainData.metadata.type) {
+            parts.push(this.explainData.metadata.type);
+          }
+          if (this.explainData.metadata.operation) {
+            parts.push(this.explainData.metadata.operation.toUpperCase());
+          }
+          if (this.explainData.metadata.table) {
+            parts.push(`on ${this.explainData.metadata.table}`);
+          }
+          if (parts.length > 0) {
+            title = parts.join(' ') + ' - Logseidon';
+          }
+        }
+        
+        const titleInput = document.createElement('input');
+        titleInput.type = 'hidden';
+        titleInput.name = 'title';
+        titleInput.value = title;
+        form.appendChild(titleInput);
+        
+        const planInput = document.createElement('input');
+        planInput.type = 'hidden';
+        planInput.name = 'plan';
+        planInput.value = this.explainData.planSource;
+        form.appendChild(planInput);
+        
+        const queryInput = document.createElement('input');
+        queryInput.type = 'hidden';
+        queryInput.name = 'query';
+        queryInput.value = this.explainData.planQuery;
+        form.appendChild(queryInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+      } catch (error) {
+        console.error('Error sharing plan:', error);
+        alert(`Failed to share plan: ${error.message}`);
       }
     },
 
@@ -682,9 +844,13 @@ const app = createApp({
               <input type="text" v-model="searchQuery" placeholder="Search logs...">
               <button @click="searchQuery = ''" class="clear-btn" title="Clear search">✕</button>
             </div>
-            <div class="trace-filter-display">
-              <span>{{ filterDisplayType }}</span>: <span>{{ filterDisplayValue }}</span>
-              <button @click="clearTraceFilter" class="clear-btn" :disabled="!traceFilter" title="Clear filter">✕</button>
+            <div class="trace-filter-display" v-if="hasTraceFilters">
+              <span v-for="([key, value], index) in Array.from(traceFilters.entries())" :key="key" class="trace-filter-badge">
+                <span class="filter-key">{{ key }}</span>=<span class="filter-value">{{ value }}</span>
+                <button @click="removeTraceFilter(key)" class="filter-remove" title="Remove filter">×</button>
+              </span>
+              <button @click="saveTrace" class="btn-star" title="Save trace to request manager">⭐</button>
+              <button @click="clearTraceFilters" class="clear-btn" title="Clear all filters">✕</button>
             </div>
           </div>
         </div>
@@ -692,6 +858,88 @@ const app = createApp({
       
       <div class="main-layout">
         <aside class="sidebar">
+          <!-- SQL Query Analyzer Section -->
+          <div v-if="showAnalyzer" class="section analyzer-section-container">
+            <div class="section-header">
+              <h3>SQL Query Analyzer</h3>
+              <button @click="showAnalyzer = false" class="close-analyzer-btn">✕</button>
+            </div>
+            <div v-if="sqlAnalysis" class="analyzer-content-compact">
+              <div class="analyzer-subsection">
+                <h4>Overview</h4>
+                <div class="stats-grid-compact">
+                  <div class="stat-item">
+                    <span class="stat-label">Total Queries</span>
+                    <span class="stat-value">{{ sqlAnalysis.totalQueries }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Unique</span>
+                    <span class="stat-value">{{ sqlAnalysis.uniqueQueries }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Avg Duration</span>
+                    <span class="stat-value">{{ sqlAnalysis.avgDuration.toFixed(2) }}ms</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Total Duration</span>
+                    <span class="stat-value">{{ sqlAnalysis.totalDuration.toFixed(2) }}ms</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="analyzer-subsection">
+                <h4>Slowest Queries</h4>
+                <div class="query-list-compact">
+                  <div v-if="sqlAnalysis.slowestQueries.length === 0" class="query-item-compact">No SQL queries</div>
+                  <div v-for="(q, index) in sqlAnalysis.slowestQueries.slice(0, 3)" :key="index" class="query-item-compact">
+                    <div class="query-header-compact">
+                      <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }">{{ q.duration.toFixed(2) }}ms</span>
+                      <span class="query-meta-inline">{{ q.table }} · {{ q.operation }}</span>
+                    </div>
+                    <div class="query-text-compact">{{ q.query.substring(0, 60) }}{{ q.query.length > 60 ? '...' : '' }}</div>
+                    <button class="btn-explain-compact" @click="runExplain(q.query, q.variables, { table: q.table, operation: q.operation, type: 'slowest' })">EXPLAIN</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="analyzer-subsection">
+                <h4>Most Frequent</h4>
+                <div class="query-list-compact">
+                  <div v-for="(item, index) in sqlAnalysis.frequentQueries.slice(0, 3)" :key="index" class="query-item-compact">
+                    <div class="query-header-compact">
+                      <span class="query-count">{{ item.count }}x</span>
+                      <span class="query-meta-inline">{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span>
+                    </div>
+                    <div class="query-text-compact">{{ item.example.query.substring(0, 60) }}{{ item.example.query.length > 60 ? '...' : '' }}</div>
+                    <button class="btn-explain-compact" @click="runExplain(item.example.query, item.example.variables, { table: item.example.table, operation: item.example.operation, type: 'frequent' })">EXPLAIN</button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="sqlAnalysis.nPlusOne.length > 0" class="analyzer-subsection">
+                <h4>N+1 Issues ({{ sqlAnalysis.nPlusOne.length }})</h4>
+                <div class="query-list-compact">
+                  <div v-for="(item, index) in sqlAnalysis.nPlusOne.slice(0, 2)" :key="index" class="query-item-compact nplusone">
+                    <div class="query-header-compact">
+                      <span class="query-count">{{ item.count }}x</span>
+                      <span class="query-meta-inline">{{ item.example.table }}</span>
+                    </div>
+                    <div class="query-text-compact">{{ item.example.query.substring(0, 60) }}...</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="analyzer-subsection">
+                <h4>Tables</h4>
+                <div class="table-list-compact">
+                  <span v-for="(item, index) in sqlAnalysis.tables" :key="index" class="table-badge-compact">
+                    {{ item.table }}<span class="table-count">({{ item.count }})</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="section">
             <h3>Containers</h3>
             <div class="container-list">
@@ -706,11 +954,11 @@ const app = createApp({
                 </div>
                 <div class="project-containers" :class="{ collapsed: isProjectCollapsed(project) }">
                   <div v-for="container in containersByProject[project]" 
-                       :key="container.ID"
+                       :key="container.Name"
                        class="container-item"
-                       :class="{ selected: isContainerSelected(container.ID) }"
-                       @click="toggleContainer(container.ID)">
-                    <div class="checkbox" :class="{ checked: isContainerSelected(container.ID) }"></div>
+                       :class="{ selected: isContainerSelected(container.Name) }"
+                       @click="toggleContainer(container.Name)">
+                    <div class="checkbox" :class="{ checked: isContainerSelected(container.Name) }"></div>
                     <div class="container-info">
                       <div class="container-name">{{ container.Name }}</div>
                       <div class="container-id">{{ container.ID }}</div>
@@ -764,7 +1012,7 @@ const app = createApp({
           </div>
         </aside>
 
-        <main class="log-viewer" :class="{ 'with-analyzer': showAnalyzer }">
+        <main class="log-viewer">
           <div ref="logsContainer" class="logs">
             <div v-for="(log, index) in filteredLogs" 
                  :key="index"
@@ -786,102 +1034,7 @@ const app = createApp({
           </div>
         </main>
 
-        <aside v-if="showAnalyzer" class="analyzer-panel">
-          <div class="analyzer-header">
-            <h3>SQL Query Analyzer</h3>
-            <button @click="showAnalyzer = false">✕</button>
-          </div>
-          <div v-if="sqlAnalysis" class="analyzer-content">
-            <div class="analyzer-section">
-              <h4>Overview</h4>
-              <div class="stats-grid">
-                <div class="stat-item">
-                  <span class="stat-label">Total Queries</span>
-                  <span class="stat-value">{{ sqlAnalysis.totalQueries }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Unique Queries</span>
-                  <span class="stat-value">{{ sqlAnalysis.uniqueQueries }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Avg Duration</span>
-                  <span class="stat-value">{{ sqlAnalysis.avgDuration.toFixed(2) }}ms</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Total Duration</span>
-                  <span class="stat-value">{{ sqlAnalysis.totalDuration.toFixed(2) }}ms</span>
-                </div>
-              </div>
-            </div>
 
-            <div class="analyzer-section">
-              <h4>Slowest Queries</h4>
-              <div class="query-list">
-                <div v-if="sqlAnalysis.slowestQueries.length === 0" class="query-item">No SQL queries found</div>
-                <div v-for="(q, index) in sqlAnalysis.slowestQueries" :key="index" class="query-item">
-                  <div class="query-header">
-                    <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }">{{ q.duration.toFixed(2) }}ms</span>
-                  </div>
-                  <div class="query-text">{{ q.query }}</div>
-                  <div class="query-meta">
-                    <span>Table: {{ q.table }}</span>
-                    <span>Op: {{ q.operation }}</span>
-                    <span>Rows: {{ q.rows }}</span>
-                  </div>
-                  <div class="query-actions">
-                    <button class="btn-explain" @click="runExplain(q.query, q.variables)">Run EXPLAIN</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="analyzer-section">
-              <h4>Most Frequent Queries</h4>
-              <div class="query-list">
-                <div v-for="(item, index) in sqlAnalysis.frequentQueries" :key="index" class="query-item">
-                  <div class="query-header">
-                    <span class="query-count">{{ item.count }}x</span>
-                    <span class="query-duration">{{ item.avgDuration.toFixed(2) }}ms avg</span>
-                  </div>
-                  <div class="query-text">{{ item.example.query }}</div>
-                  <div class="query-meta">
-                    <span>Table: {{ item.example.table }}</span>
-                    <span>Op: {{ item.example.operation }}</span>
-                  </div>
-                  <div class="query-actions">
-                    <button class="btn-explain" @click="runExplain(item.example.query, item.example.variables)">Run EXPLAIN</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="analyzer-section">
-              <h4>Potential N+1 Issues</h4>
-              <div class="query-list">
-                <div v-if="sqlAnalysis.nPlusOne.length === 0" class="query-item">No potential N+1 issues detected</div>
-                <div v-for="(item, index) in sqlAnalysis.nPlusOne" :key="index" class="query-item">
-                  <div class="query-header">
-                    <span class="query-count">{{ item.count }}x executions</span>
-                  </div>
-                  <div class="query-text">{{ item.example.query }}</div>
-                  <div class="query-meta">
-                    <span>Table: {{ item.example.table }}</span>
-                    <span>Consider batching or eager loading</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="analyzer-section">
-              <h4>Tables Accessed</h4>
-              <div class="table-list">
-                <span v-for="(item, index) in sqlAnalysis.tables" :key="index" class="table-badge">
-                  {{ item.table }}<span class="table-count">({{ item.count }})</span>
-                </span>
-              </div>
-            </div>
-          </div>
-        </aside>
       </div>
     </div>
 
@@ -934,7 +1087,10 @@ const app = createApp({
       <div class="modal-content explain-modal-content" @click.stop>
         <div class="modal-header">
           <h3>SQL Query Explain Plan (PEV2)</h3>
-          <button @click="showExplainModal = false">✕</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button v-if="!explainData.error" @click="shareExplainPlan" class="btn-share" title="Share on explain.dalibo.com">🔗 Share</button>
+            <button @click="showExplainModal = false">✕</button>
+          </div>
         </div>
         <div class="modal-body">
           <div v-if="explainData.error" class="alert alert-danger" style="margin: 1rem;">{{ explainData.error }}</div>

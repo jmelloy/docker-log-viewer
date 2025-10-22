@@ -8,8 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,21 +20,45 @@ import (
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/sqlexplain"
 	"docker-log-parser/pkg/store"
+
 	"github.com/gorilla/websocket"
 )
 
+type ClientFilter struct {
+	SelectedContainers []string           `json:"selectedContainers"`
+	SelectedLevels     []string           `json:"selectedLevels"`
+	SearchQuery        string             `json:"searchQuery"`
+	TraceFilters       []TraceFilterValue `json:"traceFilters"`
+}
+
+type TraceFilterValue struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
+type Client struct {
+	conn   *websocket.Conn
+	filter ClientFilter
+	mu     sync.RWMutex
+}
+
 type WebApp struct {
-	docker       *logs.DockerClient
-	logs         []logs.LogMessage
-	logsMutex    sync.RWMutex
-	containers   []logs.Container
-	clients      map[*websocket.Conn]bool
-	clientsMutex sync.RWMutex
-	logChan      chan logs.LogMessage
-	ctx          context.Context
-	cancel       context.CancelFunc
-	upgrader     websocket.Upgrader
-	store        *store.Store
+	docker           *logs.DockerClient
+	logs             []logs.LogMessage
+	logsMutex        sync.RWMutex
+	containers       []logs.Container
+	containerIDNames map[string]string // Maps container ID to name
+	containerMutex   sync.RWMutex
+	clients          map[*Client]bool
+	clientsMutex     sync.RWMutex
+	logChan          chan logs.LogMessage
+	batchChan        chan struct{}
+	logBatch         []logs.LogMessage
+	batchMutex       sync.Mutex
+	ctx              context.Context
+	cancel           context.CancelFunc
+	upgrader         websocket.Upgrader
+	store            *store.Store
 }
 
 type WSMessage struct {
@@ -52,6 +77,11 @@ type LogWSMessage struct {
 }
 
 func NewWebApp() (*WebApp, error) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	docker, err := logs.NewDockerClient()
 	if err != nil {
 		return nil, err
@@ -62,17 +92,20 @@ func NewWebApp() (*WebApp, error) {
 	// Open store
 	db, err := store.NewStore("graphql-requests.db")
 	if err != nil {
-		log.Printf("Warning: Failed to open database: %v", err)
+		slog.Warn("failed to open database", "error", err)
 		db = nil
 	}
 
 	app := &WebApp{
-		docker:  docker,
-		logs:    make([]logs.LogMessage, 0),
-		clients: make(map[*websocket.Conn]bool),
-		logChan: make(chan logs.LogMessage, 1000),
-		ctx:     ctx,
-		cancel:  cancel,
+		docker:           docker,
+		logs:             make([]logs.LogMessage, 0),
+		containerIDNames: make(map[string]string),
+		clients:          make(map[*Client]bool),
+		logChan:          make(chan logs.LogMessage, 1000),
+		batchChan:        make(chan struct{}),
+		logBatch:         make([]logs.LogMessage, 0, 100),
+		ctx:              ctx,
+		cancel:           cancel,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -118,71 +151,331 @@ func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(logs)
 }
 
+func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
+	wa.logsMutex.RLock()
+	totalLogs := len(wa.logs)
+
+	// Count logs by container
+	logsByContainer := make(map[string]int)
+	for _, msg := range wa.logs {
+		logsByContainer[msg.ContainerID]++
+	}
+	wa.logsMutex.RUnlock()
+
+	wa.containerMutex.RLock()
+	containers := make([]map[string]string, 0)
+	for id, name := range wa.containerIDNames {
+		containers = append(containers, map[string]string{
+			"id":    id[:12],
+			"name":  name,
+			"count": fmt.Sprintf("%d", logsByContainer[id]),
+		})
+	}
+	wa.containerMutex.RUnlock()
+
+	wa.clientsMutex.RLock()
+	clientCount := len(wa.clients)
+	clientFilters := make([]map[string]interface{}, 0)
+	for client := range wa.clients {
+		clientFilters = append(clientFilters, map[string]interface{}{
+			"selectedContainers": client.filter.SelectedContainers,
+			"selectedLevels":     client.filter.SelectedLevels,
+			"searchQuery":        client.filter.SearchQuery,
+			"traceFilterCount":   len(client.filter.TraceFilters),
+		})
+	}
+	wa.clientsMutex.RUnlock()
+
+	debugInfo := map[string]interface{}{
+		"totalLogsInMemory": totalLogs,
+		"containerCount":    len(containers),
+		"containers":        containers,
+		"connectedClients":  clientCount,
+		"clientFilters":     clientFilters,
+		"logChannelSize":    len(wa.logChan),
+		"logChannelCap":     cap(wa.logChan),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(debugInfo)
+}
+
 func (wa *WebApp) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := wa.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+		slog.Error("websocket upgrade error", "error", err)
 		return
 	}
 
+	client := &Client{
+		conn: conn,
+		filter: ClientFilter{
+			SelectedContainers: []string{},
+			SelectedLevels:     []string{},
+			SearchQuery:        "",
+			TraceFilters:       []TraceFilterValue{},
+		},
+	}
+
 	wa.clientsMutex.Lock()
-	wa.clients[conn] = true
+	wa.clients[client] = true
 	wa.clientsMutex.Unlock()
 
 	defer func() {
 		wa.clientsMutex.Lock()
-		delete(wa.clients, conn)
+		delete(wa.clients, client)
 		wa.clientsMutex.Unlock()
 		conn.Close()
 	}()
 
+	// Read filter updates from client
 	for {
-		_, _, err := conn.ReadMessage()
+		var msg struct {
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		}
+		err := conn.ReadJSON(&msg)
 		if err != nil {
 			break
+		}
+
+		if msg.Type == "filter" {
+			var filter ClientFilter
+			if err := json.Unmarshal(msg.Data, &filter); err != nil {
+				slog.Error("failed to parse filter", "error", err)
+				continue
+			}
+			client.mu.Lock()
+			client.filter = filter
+			client.mu.Unlock()
+
+			// Send initial filtered logs to the client
+			go wa.sendInitialLogs(client)
 		}
 	}
 }
 
-func (wa *WebApp) broadcastLog(msg logs.LogMessage) {
+func (wa *WebApp) sendInitialLogs(client *Client) {
+	client.mu.RLock()
+	filter := client.filter
+	client.mu.RUnlock()
+
+	wa.logsMutex.RLock()
+	allLogs := make([]logs.LogMessage, len(wa.logs))
+	copy(allLogs, wa.logs)
+	wa.logsMutex.RUnlock()
+
+	// Filter logs for this client
+	filteredLogs := []LogWSMessage{}
+
+	for _, msg := range allLogs {
+		if wa.matchesFilter(msg, filter) {
+			filteredLogs = append(filteredLogs, LogWSMessage{
+				ContainerID: msg.ContainerID,
+				Timestamp:   msg.Timestamp,
+				Entry:       msg.Entry,
+			})
+		}
+	}
+
+	// Limit to last 1000 logs
+	startIdx := 0
+	if len(filteredLogs) > 1000 {
+		startIdx = len(filteredLogs) - 1000
+	}
+	if len(filteredLogs) > 0 {
+		filteredLogs = filteredLogs[startIdx:]
+	}
+
+	// Send clear message to replace all logs
+	wsMsg := WSMessage{
+		Type: "logs_initial",
+	}
+	data, _ := json.Marshal(filteredLogs)
+	wsMsg.Data = data
+
+	client.conn.WriteJSON(wsMsg)
+}
+
+// matchesFilter checks if a log matches the client's filter criteria
+func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
+	// Container filter
+	if len(filter.SelectedContainers) > 0 {
+		wa.containerMutex.RLock()
+		containerName := wa.containerIDNames[msg.ContainerID]
+		wa.containerMutex.RUnlock()
+
+		found := false
+		for _, name := range filter.SelectedContainers {
+			if containerName == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	// Level filter
+	if len(filter.SelectedLevels) > 0 {
+		if msg.Entry == nil {
+			return false
+		}
+
+		// Check if log has a level
+		if msg.Entry.Level == "" {
+			// No level parsed - check if NONE is selected
+			found := false
+			for _, level := range filter.SelectedLevels {
+				if level == "NONE" {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		} else {
+			// Has a level - check if it matches
+			found := false
+			for _, level := range filter.SelectedLevels {
+				if msg.Entry.Level == level {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+	}
+
+	// Search query filter
+	if filter.SearchQuery != "" {
+		query := strings.ToLower(filter.SearchQuery)
+		found := false
+
+		if msg.Entry != nil {
+			// Search in message
+			if strings.Contains(strings.ToLower(msg.Entry.Message), query) {
+				found = true
+			}
+
+			// Search in raw log
+			if !found && strings.Contains(strings.ToLower(msg.Entry.Raw), query) {
+				found = true
+			}
+
+			// Search in fields
+			if !found && msg.Entry.Fields != nil {
+				for key, value := range msg.Entry.Fields {
+					if strings.Contains(strings.ToLower(key), query) || strings.Contains(strings.ToLower(value), query) {
+						found = true
+						break
+					}
+				}
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	// Trace filters - all must match
+	if len(filter.TraceFilters) > 0 && msg.Entry != nil && msg.Entry.Fields != nil {
+		for _, tf := range filter.TraceFilters {
+			if val, ok := msg.Entry.Fields[tf.Type]; !ok || val != tf.Value {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func (wa *WebApp) broadcastBatch(batch []logs.LogMessage) {
 	wa.clientsMutex.RLock()
 	defer wa.clientsMutex.RUnlock()
 
-	logMsg := LogWSMessage{
-		ContainerID: msg.ContainerID,
-		Timestamp:   msg.Timestamp,
-		Entry:       msg.Entry,
+	if len(batch) == 0 {
+		return
 	}
-
-	wsMsg := WSMessage{
-		Type: "log",
-	}
-	data, _ := json.Marshal(logMsg)
-	wsMsg.Data = data
 
 	for client := range wa.clients {
-		err := client.WriteJSON(wsMsg)
+		client.mu.RLock()
+		filter := client.filter
+		client.mu.RUnlock()
+
+		// Filter logs for this client
+		filteredLogs := []LogWSMessage{}
+		for _, msg := range batch {
+			if wa.matchesFilter(msg, filter) {
+				filteredLogs = append(filteredLogs, LogWSMessage{
+					ContainerID: msg.ContainerID,
+					Timestamp:   msg.Timestamp,
+					Entry:       msg.Entry,
+				})
+			}
+		}
+
+		if len(filteredLogs) == 0 {
+			continue
+		}
+
+		wsMsg := WSMessage{
+			Type: "logs",
+		}
+		data, _ := json.Marshal(filteredLogs)
+		wsMsg.Data = data
+
+		err := client.conn.WriteJSON(wsMsg)
 		if err != nil {
-			client.Close()
+			client.conn.Close()
 			delete(wa.clients, client)
 		}
 	}
 }
 
 func (wa *WebApp) processLogs() {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	logCount := 0
+	receivedCount := 0
+
 	for {
 		select {
 		case <-wa.ctx.Done():
 			return
 		case msg := <-wa.logChan:
+			receivedCount++
+
 			wa.logsMutex.Lock()
 			wa.logs = append(wa.logs, msg)
 			if len(wa.logs) > 10000 {
 				wa.logs = wa.logs[1000:]
 			}
+			logCount++
 			wa.logsMutex.Unlock()
 
-			wa.broadcastLog(msg)
+			// Add to batch
+			wa.batchMutex.Lock()
+			wa.logBatch = append(wa.logBatch, msg)
+			wa.batchMutex.Unlock()
+
+		case <-ticker.C:
+			// Send batch if non-empty
+			wa.batchMutex.Lock()
+			if len(wa.logBatch) > 0 {
+				batch := make([]logs.LogMessage, len(wa.logBatch))
+				copy(batch, wa.logBatch)
+				wa.logBatch = wa.logBatch[:0]
+				wa.batchMutex.Unlock()
+				wa.broadcastBatch(batch)
+			} else {
+				wa.batchMutex.Unlock()
+			}
 		}
 	}
 }
@@ -195,9 +488,16 @@ func (wa *WebApp) loadContainers() error {
 
 	wa.containers = containers
 
+	// Update container ID to name mapping
+	wa.containerMutex.Lock()
+	for _, c := range containers {
+		wa.containerIDNames[c.ID] = c.Name
+	}
+	wa.containerMutex.Unlock()
+
 	for _, c := range containers {
 		if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan); err != nil {
-			log.Printf("Failed to stream logs for container %s: %v", c.ID, err)
+			slog.Error("failed to stream logs", "container_id", c.ID, "error", err)
 		}
 	}
 
@@ -220,7 +520,7 @@ func (wa *WebApp) monitorContainers() {
 		case <-ticker.C:
 			containers, err := wa.docker.ListRunningContainers(wa.ctx)
 			if err != nil {
-				log.Printf("Failed to list containers: %v", err)
+				slog.Error("failed to list containers", "error", err)
 				continue
 			}
 
@@ -231,16 +531,26 @@ func (wa *WebApp) monitorContainers() {
 
 			for _, c := range containers {
 				if !previousIDs[c.ID] {
-					log.Printf("New container detected: %s (%s)", c.ID, c.Name)
+
+					// Add to container name map
+					wa.containerMutex.Lock()
+					wa.containerIDNames[c.ID] = c.Name
+					wa.containerMutex.Unlock()
+
 					if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan); err != nil {
-						log.Printf("Failed to stream logs for new container %s: %v", c.ID, err)
+						slog.Error("failed to stream logs for new container", "container_id", c.ID, "error", err)
 					}
 				}
 			}
 
 			for id := range previousIDs {
 				if !currentIDs[id] {
-					log.Printf("Container stopped: %s", id)
+					slog.Info("container stopped", "container_id", id)
+
+					// Remove from container name map
+					wa.containerMutex.Lock()
+					delete(wa.containerIDNames, id)
+					wa.containerMutex.Unlock()
 				}
 			}
 
@@ -269,9 +579,9 @@ func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 	defer wa.clientsMutex.RUnlock()
 
 	for client := range wa.clients {
-		err := client.WriteJSON(wsMsg)
+		err := client.conn.WriteJSON(wsMsg)
 		if err != nil {
-			client.Close()
+			client.conn.Close()
 			delete(wa.clients, client)
 		}
 	}
@@ -293,6 +603,77 @@ func (wa *WebApp) handleExplain(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var input struct {
+		TraceID    string                   `json:"traceId"`
+		RequestID  string                   `json:"requestId"`
+		Name       string                   `json:"name"`
+		Logs       []logs.LogMessage        `json:"logs"`
+		SQLQueries []map[string]interface{} `json:"sqlQueries"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Create an execution entry with the trace data
+	requestIDHeader := input.RequestID
+	if requestIDHeader == "" {
+		requestIDHeader = input.TraceID
+	}
+	if requestIDHeader == "" {
+		requestIDHeader = input.Name
+	}
+
+	// Calculate duration from logs
+	var durationMS int64
+	if len(input.Logs) > 1 {
+		firstTime := input.Logs[0].Timestamp
+		lastTime := input.Logs[len(input.Logs)-1].Timestamp
+		if !firstTime.IsZero() && !lastTime.IsZero() {
+			durationMS = lastTime.Sub(firstTime).Milliseconds()
+		}
+	}
+
+	exec := &store.ExecutedRequest{
+		RequestIDHeader: requestIDHeader,
+		RequestBody:     fmt.Sprintf(`{"name":"%s","traceId":"%s","requestId":"%s"}`, input.Name, input.TraceID, input.RequestID),
+		StatusCode:      200,
+		DurationMS:      durationMS,
+		ExecutedAt:      time.Now(),
+	}
+
+	id, err := wa.store.CreateExecution(exec)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Save logs for this execution
+	if len(input.Logs) > 0 {
+		if err := wa.store.SaveExecutionLogs(id, input.Logs); err != nil {
+			slog.Error("failed to save execution logs", "error", err)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":      id,
+		"message": "Trace saved successfully as execution",
+	})
 }
 
 // Request management handlers
@@ -326,14 +707,14 @@ func (wa *WebApp) listRequests(w http.ResponseWriter, r *http.Request) {
 func (wa *WebApp) createRequest(w http.ResponseWriter, r *http.Request) {
 	// Parse the incoming request which may have server fields or a serverID
 	var input struct {
-		Name        string  `json:"name"`
-		ServerID    *uint   `json:"serverId,omitempty"`
-		URL         string  `json:"url,omitempty"`
-		BearerToken string  `json:"bearerToken,omitempty"`
-		DevID       string  `json:"devId,omitempty"`
-		RequestData string  `json:"requestData"`
+		Name        string `json:"name"`
+		ServerID    *uint  `json:"serverId,omitempty"`
+		URL         string `json:"url,omitempty"`
+		BearerToken string `json:"bearerToken,omitempty"`
+		DevID       string `json:"devId,omitempty"`
+		RequestData string `json:"requestData"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -352,7 +733,7 @@ func (wa *WebApp) createRequest(w http.ResponseWriter, r *http.Request) {
 			BearerToken: input.BearerToken,
 			DevID:       input.DevID,
 		}
-		
+
 		sid, err := wa.store.CreateServer(server)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to create server: %v", err), http.StatusInternalServerError)
@@ -445,11 +826,11 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		DevIDOverride       string `json:"devIdOverride,omitempty"`
 		RequestDataOverride string `json:"requestDataOverride,omitempty"`
 	}
-	
+
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			// Ignore decode errors for backward compatibility
-			log.Printf("Warning: failed to decode execute request body: %v", err)
+			slog.Warn("failed to decode execute request body", "error", err)
 		}
 	}
 
@@ -710,15 +1091,14 @@ func (wa *WebApp) handleDatabaseURLDetail(w http.ResponseWriter, r *http.Request
 	}
 }
 
-
 func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, urlOverride, bearerTokenOverride, devIDOverride, requestDataOverride string) {
 	req, err := wa.store.GetRequest(requestID)
 	if err != nil {
-		log.Printf("Failed to get request %d: %v", requestID, err)
+		slog.Error("failed to get request", "request_id", requestID, "error", err)
 		return
 	}
 	if req == nil {
-		log.Printf("Request %d not found", requestID)
+		slog.Warn("request not found", "request_id", requestID)
 		return
 	}
 
@@ -726,27 +1106,37 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	requestIDHeader := generateRequestID()
 
 	// Get server info for execution
-	var url, bearerToken, devID string
+	var url, bearerToken, devID, experimentalMode, connectionString string
 	var serverIDForExec *uint
-	
+
 	// Use override server if provided, otherwise use sample query's server
 	if serverIDOverride != nil {
 		server, err := wa.store.GetServer(int64(*serverIDOverride))
 		if err != nil {
-			log.Printf("Failed to get override server %d: %v", *serverIDOverride, err)
+			slog.Error("failed to get override server", "server_id", *serverIDOverride, "error", err)
 			return
 		}
 		if server != nil {
 			url = server.URL
 			bearerToken = server.BearerToken
 			devID = server.DevID
+			experimentalMode = server.ExperimentalMode
 			serverIDForExec = serverIDOverride
+
+			if server.DefaultDatabase != nil {
+				connectionString = server.DefaultDatabase.ConnectionString
+			}
 		}
 	} else if req.Server != nil {
 		url = req.Server.URL
 		bearerToken = req.Server.BearerToken
 		devID = req.Server.DevID
+		experimentalMode = req.Server.ExperimentalMode
 		serverIDForExec = &req.Server.ID
+
+		if req.Server.DefaultDatabase != nil {
+			connectionString = req.Server.DefaultDatabase.ConnectionString
+		}
 	}
 
 	// Apply overrides
@@ -768,7 +1158,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 
 	// Convert requestID to pointer for SampleID
 	sampleID := uint(requestID)
-	
+
 	execution := &store.ExecutedRequest{
 		SampleID:        &sampleID,
 		ServerID:        serverIDForExec,
@@ -779,7 +1169,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 
 	// Execute HTTP request
 	startTime := time.Now()
-	statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(requestData), requestIDHeader, bearerToken, devID)
+	statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(requestData), requestIDHeader, bearerToken, devID, experimentalMode)
 	execution.DurationMS = time.Since(startTime).Milliseconds()
 	execution.StatusCode = statusCode
 	execution.ResponseBody = responseBody
@@ -792,36 +1182,32 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	// Save execution
 	execID, err := wa.store.CreateExecution(execution)
 	if err != nil {
-		log.Printf("Failed to save execution: %v", err)
+		slog.Error("failed to save execution", "error", err)
 		return
 	}
 
-	log.Printf("Request %d executed: ID=%s, Status=%d, Duration=%dms", requestID, requestIDHeader, statusCode, execution.DurationMS)
+	slog.Info("request executed", "request_id", requestID, "header_id", requestIDHeader, "status", statusCode, "duration_ms", execution.DurationMS)
 
 	// Collect logs
 	collectedLogs := wa.collectLogsForRequest(requestIDHeader, 10*time.Second)
-	log.Printf("Collected %d logs for execution %d", len(collectedLogs), execID)
 
 	// Save logs
 	if len(collectedLogs) > 0 {
 		if err := wa.store.SaveExecutionLogs(execID, collectedLogs); err != nil {
-			log.Printf("Failed to save logs: %v", err)
+			slog.Error("failed to save logs", "error", err)
 		}
 	}
 
 	// Extract and save SQL queries
 	sqlQueries := extractSQLQueries(collectedLogs)
 	if len(sqlQueries) > 0 {
-		log.Printf("Found %d SQL queries for execution %d", len(sqlQueries), execID)
 		if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
-			log.Printf("Failed to save SQL queries: %v", err)
+			slog.Error("failed to save SQL queries", "error", err)
 		}
 
 		// Auto-execute EXPLAIN for queries taking longer than 2ms
 		for i, q := range sqlQueries {
 			if q.DurationMS > 2.0 {
-				log.Printf("Auto-executing EXPLAIN for slow query (%.2fms): %s", q.DurationMS, q.Query)
-				
 				// Parse db.vars to extract parameters
 				variables := make(map[string]string)
 				if q.Variables != "" {
@@ -832,28 +1218,27 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 							variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
 						}
 					} else {
-						log.Printf("Failed to parse db.vars for query %d: %v", i, err)
+						slog.Warn("failed to parse db.vars", "query_index", i, "error", err)
 					}
 				}
-				
+
 				// Execute EXPLAIN
 				req := sqlexplain.Request{
-					Query:     q.Query,
-					Variables: variables,
+					Query:            q.Query,
+					Variables:        variables,
+					ConnectionString: connectionString,
 				}
 				resp := sqlexplain.Explain(req)
-				
+
 				if resp.Error != "" {
-					log.Printf("Auto-EXPLAIN failed for query %d: %s", i, resp.Error)
+					slog.Warn("auto-EXPLAIN failed", "query_index", i, "error", resp.Error)
 					continue
 				}
-				
+
 				// Save the EXPLAIN plan to database
 				planJSON, _ := json.Marshal(resp.QueryPlan)
 				if err := wa.store.UpdateQueryExplainPlan(execID, q.QueryHash, string(planJSON)); err != nil {
-					log.Printf("Failed to save EXPLAIN plan for query %d: %v", i, err)
-				} else {
-					log.Printf("Saved EXPLAIN plan for slow query (%.2fms)", q.DurationMS)
+					slog.Error("failed to save EXPLAIN plan", "query_index", i, "error", err)
 				}
 			}
 		}
@@ -870,7 +1255,7 @@ func generateRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID string) (int, string, string, error) {
+func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
 		return 0, "", "", err
@@ -884,6 +1269,9 @@ func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID stri
 	}
 	if devID != "" {
 		req.Header.Set("X-GlueDev-UserID", devID)
+	}
+	if experimentalMode != "" {
+		req.Header.Set("x-glue-experimental-mode", experimentalMode)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -907,18 +1295,18 @@ func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID stri
 func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration) []logs.LogMessage {
 	// Wait for logs to arrive
 	time.Sleep(timeout)
-	
+
 	// Scan stored logs for matching request ID
 	collected := []logs.LogMessage{}
 	wa.logsMutex.RLock()
 	defer wa.logsMutex.RUnlock()
-	
+
 	for _, msg := range wa.logs {
 		if matchesRequestID(msg, requestID) {
 			collected = append(collected, msg)
 		}
 	}
-	
+
 	return collected
 }
 
@@ -964,7 +1352,7 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 						}
 					}
 					if table, ok := msg.Entry.Fields["db.table"]; ok {
-						query.TableName = table
+						query.QueriedTable = table
 					}
 					if op, ok := msg.Entry.Fields["db.operation"]; ok {
 						query.Operation = op
@@ -1015,9 +1403,9 @@ func (wa *WebApp) Run(addr string) error {
 
 	// Try to initialize database connection for EXPLAIN queries
 	if err := sqlexplain.Init(); err != nil {
-		log.Printf("Database connection not available (EXPLAIN feature disabled): %v", err)
+		slog.Warn("database connection not available (EXPLAIN feature disabled)", "error", err)
 	} else {
-		log.Printf("Database connection established for EXPLAIN queries")
+		slog.Info("database connection established for EXPLAIN queries")
 	}
 
 	go wa.processLogs()
@@ -1027,7 +1415,9 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/logs", wa.handleLogs)
 	http.HandleFunc("/api/ws", wa.handleWebSocket)
 	http.HandleFunc("/api/explain", wa.handleExplain)
-	
+	http.HandleFunc("/api/save-trace", wa.handleSaveTrace)
+	http.HandleFunc("/debug", wa.handleDebug)
+
 	// Request management endpoints
 	http.HandleFunc("/api/servers", wa.handleServers)
 	http.HandleFunc("/api/servers/", wa.handleServerDetail)
@@ -1044,17 +1434,18 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/executions", wa.handleExecutions)
 	http.HandleFunc("/api/all-executions", wa.handleAllExecutions)
 	http.HandleFunc("/api/executions/", wa.handleExecutionDetail)
-	
+
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 
-	log.Printf("Server starting on http://localhost:%s", addr)
+	slog.Info("server starting", "address", "http://localhost"+addr)
 	return http.ListenAndServe(addr, nil)
 }
 
 func main() {
 	app, err := NewWebApp()
 	if err != nil {
-		log.Fatalf("Failed to create app: %v", err)
+		slog.Error("failed to create app", "error", err)
+		os.Exit(1)
 	}
 
 	defer sqlexplain.Close()
@@ -1063,6 +1454,7 @@ func main() {
 	}
 
 	if err := app.Run(":9000"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+		slog.Error("failed to run server", "error", err)
+		os.Exit(1)
 	}
 }

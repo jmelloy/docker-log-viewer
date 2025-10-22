@@ -22,21 +22,25 @@ import (
 )
 
 type Config struct {
-	DBPath      string
-	URL         string
-	DataFile    string
-	DataDir     string
-	Name        string
-	Timeout     time.Duration
-	BearerToken string
-	DevID       string
-	Execute     bool
-	List        bool
-	Delete      int64
-	BatchMode   bool
+	DBPath           string
+	URL              string
+	DataFile         string
+	DataDir          string
+	Name             string
+	Timeout          time.Duration
+	BearerToken      string
+	DevID            string
+	ExperimentalMode string
+	Execute          bool
+	List             bool
+	Delete           int64
+	BatchMode        bool
 }
 
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime)
+	log.SetPrefix("INFO: ")
+
 	config := parseFlags()
 
 	// Open database
@@ -83,14 +87,15 @@ func parseFlags() Config {
 	var config Config
 
 	flag.StringVar(&config.DBPath, "db", "graphql-requests.db", "Path to SQLite database")
-	flag.StringVar(&config.URL, "url", "", "GraphQL/API endpoint URL")
+	flag.StringVar(&config.URL, "url", "http://localhost:8080/graphql", "GraphQL/API endpoint URL")
 	flag.StringVar(&config.DataFile, "data", "", "GraphQL or JSON data file")
 	flag.StringVar(&config.DataDir, "dir", "", "Directory containing JSON files to process")
 	flag.StringVar(&config.Name, "name", "", "Name for this request (defaults to filename)")
 	flag.DurationVar(&config.Timeout, "timeout", 10*time.Second, "Timeout for log collection")
 	flag.StringVar(&config.BearerToken, "token", os.Getenv("BEARER_TOKEN"), "Bearer token for authentication")
 	flag.StringVar(&config.DevID, "dev-id", os.Getenv("X_GLUE_DEV_USER_ID"), "X-GlueDev-UserID header value")
-	flag.BoolVar(&config.Execute, "execute", false, "Execute the request immediately after saving")
+	flag.StringVar(&config.ExperimentalMode, "experimental", os.Getenv("X_GLUE_EXPERIMENTAL_MODE"), "x-glue-experimental-mode header value")
+	flag.BoolVar(&config.Execute, "execute", true, "Execute the request immediately (default: true)")
 	flag.BoolVar(&config.BatchMode, "batch", false, "Execute all requests in batch mode (for directory processing)")
 	flag.BoolVar(&config.List, "list", false, "List all saved requests")
 	flag.Int64Var(&config.Delete, "delete", 0, "Delete request by ID")
@@ -106,25 +111,25 @@ func listRequests(db *store.Store) {
 	}
 
 	if len(requests) == 0 {
-		fmt.Println("No saved requests")
+		log.Println("No saved requests")
 		return
 	}
 
-	fmt.Printf("Found %d request(s):\n\n", len(requests))
+	log.Printf("Found %d request(s):\n\n", len(requests))
 	for _, req := range requests {
-		fmt.Printf("ID: %d\n", req.ID)
-		fmt.Printf("Name: %s\n", req.Name)
+		log.Printf("ID: %d", req.ID)
+		log.Printf("Name: %s", req.Name)
 		if req.Server != nil {
-			fmt.Printf("Server: %s (%s)\n", req.Server.Name, req.Server.URL)
+			log.Printf("Server: %s (%s)", req.Server.Name, req.Server.URL)
 		} else {
-			fmt.Printf("Server: (none)\n")
+			log.Printf("Server: (none)")
 		}
-		fmt.Printf("Created: %s\n", req.CreatedAt.Format(time.RFC3339))
+		log.Printf("Created: %s", req.CreatedAt.Format(time.RFC3339))
 
 		// Count executions
 		executions, _ := db.ListExecutions(int64(req.ID))
-		fmt.Printf("Executions: %d\n", len(executions))
-		fmt.Println("---")
+		log.Printf("Executions: %d", len(executions))
+		log.Println("---")
 	}
 }
 
@@ -152,10 +157,11 @@ func handleRequest(db *store.Store, config Config) error {
 	var serverID *uint
 	if config.URL != "" {
 		server := &store.Server{
-			Name:        config.URL, // Use URL as server name for now
-			URL:         config.URL,
-			BearerToken: config.BearerToken,
-			DevID:       config.DevID,
+			Name:             config.URL, // Use URL as server name for now
+			URL:              config.URL,
+			BearerToken:      config.BearerToken,
+			DevID:            config.DevID,
+			ExperimentalMode: config.ExperimentalMode,
 		}
 
 		sid, err := db.CreateServer(server)
@@ -178,25 +184,23 @@ func handleRequest(db *store.Store, config Config) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	log.Printf("Saved request '%s' with ID %d", name, reqID)
-
-	// Execute if requested
+	// Execute if requested (default is true)
 	if config.Execute {
-		log.Printf("Executing request...")
+		log.Printf("Executing request '%s' with ID %d...", name, reqID)
 		if err := executeRequest(db, reqID, config); err != nil {
 			return fmt.Errorf("failed to execute request: %w", err)
 		}
 	} else {
-		log.Printf("Request saved. Use -execute flag to run it immediately, or use the web UI.")
+		log.Printf("Saved request '%s' with ID %d (not executing, use -execute=true to run)", name, reqID)
 	}
 
 	return nil
 }
 
 func handleDirectory(db *store.Store, config Config) error {
-	if config.URL == "" {
-		return fmt.Errorf("URL is required when processing a directory")
-	}
+	// if config.URL == "" {
+	// 	return fmt.Errorf("URL is required when processing a directory")
+	// }
 
 	// Read all JSON files from the directory
 	jsonFiles, err := filepath.Glob(filepath.Join(config.DataDir, "*.json"))
@@ -210,21 +214,6 @@ func handleDirectory(db *store.Store, config Config) error {
 	}
 
 	log.Printf("Found %d JSON files in directory: %s", len(jsonFiles), config.DataDir)
-
-	// Create or get server
-
-	server := &store.Server{
-		Name:        config.URL,
-		URL:         config.URL,
-		BearerToken: config.BearerToken,
-		DevID:       config.DevID,
-	}
-
-	_, err = db.CreateServer(server)
-	if err != nil {
-		log.Printf("Failed to create server for file %s: %v", config.DataDir, err)
-		panic(err)
-	}
 
 	// Process each JSON file
 	var requestIDs []int64
@@ -250,7 +239,7 @@ func handleDirectory(db *store.Store, config Config) error {
 				OperationName string `json:"operationName"`
 			}
 			if err := json.Unmarshal(data, &singleOp); err != nil {
-				log.Printf("Failed to parse JSON in file %s: %v", jsonFile, err)
+				log.Printf("failed to parse JSON in file %s: %v", jsonFile, err)
 				continue
 			}
 			operations = []struct {
@@ -269,35 +258,34 @@ func handleDirectory(db *store.Store, config Config) error {
 		// Create request
 		req := &store.SampleQuery{
 			Name:        operationName,
-			ServerID:    &server.ID,
 			RequestData: string(data),
 		}
 
 		reqID, err := db.CreateRequest(req)
 		if err != nil {
-			log.Printf("Failed to create request for file %s, operation %s: %v", jsonFile, operationName, err)
+			log.Printf("failed to create request for file %s, operation %s: %v", jsonFile, operationName, err)
 			continue
 		}
 
-		log.Printf("Saved request '%s' with ID %d", operationName, reqID)
+		log.Printf("saved request '%s' with ID %d", operationName, reqID)
 		requestIDs = append(requestIDs, reqID)
 
 	}
 
-	log.Printf("Successfully processed %d files, created %d requests", len(jsonFiles), len(requestIDs))
+	log.Printf("successfully processed %d files, created %d requests", len(jsonFiles), len(requestIDs))
 
 	// Execute requests if batch mode is enabled
 	if config.BatchMode && len(requestIDs) > 0 {
-		log.Printf("Executing %d requests in batch mode...", len(requestIDs))
+		log.Printf("executing %d requests in batch mode", len(requestIDs))
 		for i, reqID := range requestIDs {
-			log.Printf("Executing request %d/%d (ID: %d)", i+1, len(requestIDs), reqID)
+			log.Printf("executing request %d/%d (ID: %d)", i+1, len(requestIDs), reqID)
 			if err := executeRequest(db, reqID, config); err != nil {
-				log.Printf("Failed to execute request %d: %v", reqID, err)
+				log.Printf("failed to execute request %d: %v", reqID, err)
 			}
 		}
-		log.Printf("Batch execution completed")
+		log.Printf("batch execution completed")
 	} else if len(requestIDs) > 0 {
-		log.Printf("Requests saved. Use -batch flag to execute them immediately, or use the web UI.")
+		log.Printf("requests saved; use -batch flag to execute them immediately, or use the web UI")
 	}
 
 	return nil
@@ -331,7 +319,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 
 	for _, c := range containers {
 		if err := docker.StreamLogs(ctx, c.ID, logChan); err != nil {
-			log.Printf("Failed to stream logs for container %s: %v", c.ID, err)
+			log.Printf("failed to stream logs for container %s: %v", c.ID, err)
 		}
 	}
 
@@ -339,12 +327,13 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	requestIDHeader := generateRequestID()
 
 	// Get server info for execution
-	var url, bearerToken, devID string
+	var url, bearerToken, devID, experimentalMode string
 	var serverIDForExec *uint
 	if req.Server != nil {
 		url = req.Server.URL
 		bearerToken = req.Server.BearerToken
 		devID = req.Server.DevID
+		experimentalMode = req.Server.ExperimentalMode
 		serverIDForExec = &req.Server.ID
 	}
 
@@ -359,7 +348,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	startTime := time.Now()
-	statusCode, responseBody, responseHeaders, err := makeRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID)
+	statusCode, responseBody, responseHeaders, err := makeRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
 	execution.DurationMS = time.Since(startTime).Milliseconds()
 	execution.StatusCode = statusCode
 	execution.ResponseBody = responseBody
@@ -375,14 +364,11 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 		return fmt.Errorf("failed to save execution: %w", err)
 	}
 
-	log.Printf("Request ID: %s, Status: %d, Duration: %dms", requestIDHeader, statusCode, execution.DurationMS)
-
 	// Wait a bit for logs to arrive from Docker
 	time.Sleep(500 * time.Millisecond)
 
 	// Collect logs
 	collectedLogs := collectLogs(requestIDHeader, logChan, config.Timeout)
-	log.Printf("Collected %d logs for request %s", len(collectedLogs), requestIDHeader)
 
 	// Save logs
 	if len(collectedLogs) > 0 {
@@ -394,13 +380,11 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	// Extract and save SQL queries
 	sqlQueries := extractSQLQueries(collectedLogs)
 	if len(sqlQueries) > 0 {
-		log.Printf("Found %d SQL queries", len(sqlQueries))
 		if err := db.SaveSQLQueries(execID, sqlQueries); err != nil {
 			return fmt.Errorf("failed to save SQL queries: %w", err)
 		}
 	}
 
-	log.Printf("Execution saved with ID %d", execID)
 	return nil
 }
 
@@ -410,7 +394,7 @@ func generateRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-func makeRequest(url string, data []byte, requestID, bearerToken, devID string) (int, string, string, error) {
+func makeRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
 		return 0, "", "", err
@@ -425,8 +409,11 @@ func makeRequest(url string, data []byte, requestID, bearerToken, devID string) 
 	if devID != "" {
 		req.Header.Set("X-GlueDev-UserID", devID)
 	}
+	if experimentalMode != "" {
+		req.Header.Set("X-Glue-Experimental-Mode", experimentalMode)
+	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 300 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, "", "", err
@@ -498,7 +485,7 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 						fmt.Sscanf(duration, "%f", &query.DurationMS)
 					}
 					if table, ok := msg.Entry.Fields["db.table"]; ok {
-						query.TableName = table
+						query.QueriedTable = table
 					}
 					if op, ok := msg.Entry.Fields["db.operation"]; ok {
 						query.Operation = op

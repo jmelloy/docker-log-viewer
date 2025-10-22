@@ -8,6 +8,9 @@ require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/gorilla/websocket v1.5.3
 	github.com/lib/pq v1.10.9
+	github.com/pressly/goose/v3 v3.26.0
+	gorm.io/gorm v1.31.0
+	gorm.io/driver/sqlite v1.6.0
 )
 
 require (
@@ -26,7 +29,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pressly/goose/v3 v3.26.0 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -37,7 +39,5 @@ require (
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.37.0 // indirect
-	gorm.io/driver/sqlite v1.6.0 // indirect
-	gorm.io/gorm v1.31.0 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 )

@@ -37,7 +37,7 @@ func TestCompareQuerySets(t *testing.T) {
 			OperationName:   "GetUser",
 			Timestamp:       1000,
 			DurationMS:      125.5,
-			TableName:       "users",
+			QueriedTable:    "users",
 			Operation:       "select",
 			ExplainPlan:     plan1JSON,
 		},
@@ -47,7 +47,7 @@ func TestCompareQuerySets(t *testing.T) {
 			OperationName:   "GetPosts",
 			Timestamp:       2000,
 			DurationMS:      50.0,
-			TableName:       "posts",
+			QueriedTable:    "posts",
 			Operation:       "select",
 		},
 	}
@@ -59,7 +59,7 @@ func TestCompareQuerySets(t *testing.T) {
 			OperationName:   "GetUser",
 			Timestamp:       1000,
 			DurationMS:      25.5,
-			TableName:       "users",
+			QueriedTable:    "users",
 			Operation:       "select",
 			ExplainPlan:     plan2JSON,
 		},
@@ -69,7 +69,7 @@ func TestCompareQuerySets(t *testing.T) {
 			OperationName:   "GetComments",
 			Timestamp:       3000,
 			DurationMS:      30.0,
-			TableName:       "comments",
+			QueriedTable:    "comments",
 			Operation:       "select",
 		},
 	}
@@ -91,16 +91,16 @@ func TestCompareQuerySets(t *testing.T) {
 	if len(result.QueriesOnlyInSet1) != 1 {
 		t.Errorf("Expected 1 query only in set1, got %d", len(result.QueriesOnlyInSet1))
 	}
-	if len(result.QueriesOnlyInSet1) > 0 && result.QueriesOnlyInSet1[0].TableName != "posts" {
-		t.Errorf("Expected posts query in set1, got %s", result.QueriesOnlyInSet1[0].TableName)
+	if len(result.QueriesOnlyInSet1) > 0 && result.QueriesOnlyInSet1[0].QueriedTable != "posts" {
+		t.Errorf("Expected posts query in set1, got %s", result.QueriesOnlyInSet1[0].QueriedTable)
 	}
 
 	// Verify queries only in set2
 	if len(result.QueriesOnlyInSet2) != 1 {
 		t.Errorf("Expected 1 query only in set2, got %d", len(result.QueriesOnlyInSet2))
 	}
-	if len(result.QueriesOnlyInSet2) > 0 && result.QueriesOnlyInSet2[0].TableName != "comments" {
-		t.Errorf("Expected comments query in set2, got %s", result.QueriesOnlyInSet2[0].TableName)
+	if len(result.QueriesOnlyInSet2) > 0 && result.QueriesOnlyInSet2[0].QueriedTable != "comments" {
+		t.Errorf("Expected comments query in set2, got %s", result.QueriesOnlyInSet2[0].QueriedTable)
 	}
 
 	// Verify common query comparison

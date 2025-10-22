@@ -20,6 +20,7 @@ const app = createApp({
         name: "",
         requestData: "",
         serverId: "",
+        createNewServer: false,
         url: "",
         bearerToken: "",
         devId: "",
@@ -36,6 +37,7 @@ const app = createApp({
       explainPlanData: null,
       comparisonData: null,
       pev2App: null,
+      selectedRequestIds: [],
     };
   },
 
@@ -49,14 +51,11 @@ const app = createApp({
     },
 
     showNewServerFields() {
-      return this.newQueryForm.serverId === "";
+      return this.newQueryForm.createNewServer;
     },
 
     compareButtonVisible() {
-      const checkedBoxes = document.querySelectorAll(
-        ".exec-compare-checkbox:checked"
-      );
-      return checkedBoxes.length === 2;
+      return this.selectedRequestIds.length === 2;
     },
 
     selectedSampleQueryName() {
@@ -125,31 +124,29 @@ const app = createApp({
         const response = await fetch("/api/all-executions");
         const executions = await response.json();
 
-        // Fetch additional details for each request to get logs
+        // Fetch additional details for each request to get sample query name
         this.allRequests = await Promise.all(
           executions.slice(0, 20).map(async (req) => {
             try {
               const response = await fetch(`/api/executions/${req.id}`);
               const detail = await response.json();
-              const lastLog =
-                detail.logs.length > 0
-                  ? detail.logs[detail.logs.length - 1]
-                  : null;
 
-              // Extract operation name from request body
-              let operationName = "Unknown";
-              if (detail.execution.requestBody) {
+              // Use sample query name if available, otherwise operation name from request body
+              let displayName = "Unknown";
+              if (detail.request && detail.request.name) {
+                displayName = detail.request.name;
+              } else if (detail.execution.requestBody) {
                 try {
                   const requestData = JSON.parse(detail.execution.requestBody);
-                  operationName = requestData.operationName || "Unknown";
+                  displayName = requestData.operationName || "Unknown";
                 } catch (e) {
                   console.warn("Failed to parse request body:", e);
                 }
               }
 
-              return { ...req, lastLog, operationName };
+              return { ...req, displayName };
             } catch (e) {
-              return { ...req, lastLog: null, operationName: "Unknown" };
+              return { ...req, displayName: "Unknown" };
             }
           })
         );
@@ -161,7 +158,7 @@ const app = createApp({
     getSampleQueryDisplayName(sq) {
       try {
         const data = JSON.parse(sq.requestData);
-        return data.operationName || sq.name;
+        return sq.name || data.operationName;
       } catch (e) {
         return sq.name;
       }
@@ -208,13 +205,7 @@ const app = createApp({
     },
 
     getExecutionServerUrl(req) {
-      return req.server ? req.server.url : "N/A";
-    },
-
-    getExecutionLastLogMsg(req) {
-      return req.lastLog
-        ? (req.lastLog.message || req.lastLog.rawLog || "").substring(0, 100)
-        : "No logs";
+      return req.server ? req.server.name || req.server.url : "N/A";
     },
 
     handleExecutionClick(req, event) {
@@ -223,8 +214,17 @@ const app = createApp({
       }
     },
 
-    updateCompareButton() {
-      // This will be handled by the computed property
+    updateCompareButton(event) {
+      const id = parseInt(event.target.dataset.id);
+      if (event.target.checked) {
+        if (!this.selectedRequestIds.includes(id)) {
+          this.selectedRequestIds.push(id);
+        }
+      } else {
+        this.selectedRequestIds = this.selectedRequestIds.filter(
+          (i) => i !== id
+        );
+      }
     },
 
     async showRequestDetail(requestId) {
@@ -284,7 +284,11 @@ const app = createApp({
       } else {
         // Run new EXPLAIN
         const variables = query.variables ? JSON.parse(query.variables) : {};
-        this.runExplain(query.query, variables);
+        this.runExplain(
+          query.query,
+          variables,
+          this.selectedRequestDetail?.server?.defaultDatabase?.connectionString
+        );
       }
     },
 
@@ -341,12 +345,76 @@ const app = createApp({
       }
     },
 
+    async shareExplainPlan() {
+      if (!this.explainPlanData) return;
+      try {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "https://explain.dalibo.com/new";
+        form.target = "_blank";
+
+        // Build descriptive title from query and request context
+        let title = "Query Plan";
+        if (this.selectedRequestDetail) {
+          const parts = [];
+
+          // Add request name if available
+          if (this.selectedRequestDetail.request?.name) {
+            parts.push(this.selectedRequestDetail.request.name);
+          }
+
+          // Extract table name or operation from the query
+          const query = this.explainPlanData.query.toLowerCase();
+          if (query.includes("from")) {
+            const match = query.match(/from\s+([a-z_][a-z0-9_]*)/i);
+            if (match) {
+              parts.push(`on ${match[1]}`);
+            }
+          }
+
+          if (parts.length > 0) {
+            title = parts.join(" - ");
+          }
+        }
+
+        const titleInput = document.createElement("input");
+        titleInput.type = "hidden";
+        titleInput.name = "title";
+        titleInput.value = title;
+        form.appendChild(titleInput);
+
+        const planInput = document.createElement("input");
+        planInput.type = "hidden";
+        planInput.name = "plan";
+        planInput.value = JSON.stringify(
+          this.explainPlanData.planData,
+          null,
+          2
+        );
+        form.appendChild(planInput);
+
+        const queryInput = document.createElement("input");
+        queryInput.type = "hidden";
+        queryInput.name = "query";
+        queryInput.value = this.explainPlanData.query;
+        form.appendChild(queryInput);
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+      } catch (error) {
+        console.error("Error sharing plan:", error);
+        alert(`Failed to share plan: ${error.message}`);
+      }
+    },
+
     openNewSampleQueryModal() {
       // Reset form
       this.newQueryForm = {
         name: "",
         requestData: "",
         serverId: "",
+        createNewServer: false,
         url: "",
         bearerToken: "",
         devId: "",
@@ -355,8 +423,15 @@ const app = createApp({
     },
 
     async saveNewSampleQuery() {
-      const { name, requestData, serverId, url, bearerToken, devId } =
-        this.newQueryForm;
+      const {
+        name,
+        requestData,
+        serverId,
+        createNewServer,
+        url,
+        bearerToken,
+        devId,
+      } = this.newQueryForm;
 
       if (!name || !requestData) {
         alert("Please fill in all required fields");
@@ -374,19 +449,18 @@ const app = createApp({
       // Build request payload
       const payload = { name, requestData };
 
-      if (serverId) {
+      if (createNewServer) {
+        // Create new server with provided details
+        if (url) {
+          payload.url = url;
+          if (bearerToken) payload.bearerToken = bearerToken;
+          if (devId) payload.devId = devId;
+        }
+      } else if (serverId) {
         // Use existing server
         payload.serverId = parseInt(serverId);
-      } else {
-        // Create new server with provided details
-        if (!url) {
-          alert("Please provide a URL for the new server");
-          return;
-        }
-        payload.url = url;
-        if (bearerToken) payload.bearerToken = bearerToken;
-        if (devId) payload.devId = devId;
       }
+      // If neither option is selected, create without server
 
       try {
         const response = await fetch("/api/requests", {
@@ -439,12 +513,32 @@ const app = createApp({
       this.showExecuteNewModal = true;
     },
 
+    openExecuteModalWithSampleQuery(sampleQuery) {
+      this.selectedSampleQuery = sampleQuery;
+      this.executeForm = {
+        serverId: sampleQuery.server ? sampleQuery.server.id.toString() : "",
+        requestDataOverride: "",
+        urlOverride: "",
+        tokenOverride: "",
+        devIdOverride: "",
+      };
+
+      try {
+        const data = JSON.parse(sampleQuery.requestData);
+        this.executeForm.requestDataOverride = JSON.stringify(data, null, 2);
+      } catch (e) {
+        this.executeForm.requestDataOverride = sampleQuery.requestData;
+      }
+
+      this.showExecuteNewModal = true;
+    },
+
     selectSampleQueryForExecution() {
       if (!this.selectedSampleQuery) {
         this.executeForm.requestDataOverride = "";
         return;
       }
-      
+
       if (this.selectedSampleQuery.server) {
         this.executeForm.serverId =
           this.selectedSampleQuery.server.id.toString();
@@ -454,7 +548,8 @@ const app = createApp({
         const data = JSON.parse(this.selectedSampleQuery.requestData);
         this.executeForm.requestDataOverride = JSON.stringify(data, null, 2);
       } catch (e) {
-        this.executeForm.requestDataOverride = this.selectedSampleQuery.requestData;
+        this.executeForm.requestDataOverride =
+          this.selectedSampleQuery.requestData;
       }
     },
 
@@ -464,7 +559,13 @@ const app = createApp({
         return;
       }
 
-      const { serverId, requestDataOverride, urlOverride, tokenOverride, devIdOverride } = this.executeForm;
+      const {
+        serverId,
+        requestDataOverride,
+        urlOverride,
+        tokenOverride,
+        devIdOverride,
+      } = this.executeForm;
 
       if (!serverId) {
         alert("Please select a server");
@@ -499,6 +600,33 @@ const app = createApp({
       }
 
       try {
+        const selectedServer = this.servers.find(
+          (s) => s.id === parseInt(serverId)
+        );
+        let operationName = "Executing...";
+
+        try {
+          const requestData = JSON.parse(
+            requestDataOverride || this.selectedSampleQuery.requestData
+          );
+          operationName = requestData.operationName || "Executing...";
+        } catch (e) {
+          // Ignore parse errors for operation name
+        }
+
+        const optimisticRequest = {
+          id: Date.now(),
+          statusCode: null,
+          durationMs: null,
+          executedAt: new Date().toISOString(),
+          server: selectedServer,
+          requestIdHeader: "pending",
+          operationName: operationName,
+          lastLog: null,
+        };
+
+        this.allRequests.unshift(optimisticRequest);
+
         const response = await fetch(
           `/api/requests/${this.selectedSampleQuery.id}/execute`,
           {
@@ -511,15 +639,23 @@ const app = createApp({
         );
 
         if (!response.ok) {
+          this.allRequests = this.allRequests.filter(
+            (r) => r.id !== optimisticRequest.id
+          );
           throw new Error("Failed to execute query");
         }
 
-        this.showExecuteNewModal = false;
-        alert("Query execution started. Results will appear in the sidebar.");
+        const result = await response.json();
 
-        setTimeout(() => {
-          this.loadAllRequests();
-        }, 12000);
+        this.allRequests = this.allRequests.filter(
+          (r) => r.id !== optimisticRequest.id
+        );
+
+        this.showExecuteNewModal = false;
+
+        setTimeout(async () => {
+          await this.loadAllRequests();
+        }, 2000);
       } catch (error) {
         console.error("Failed to execute query:", error);
         alert("Failed to execute query: " + error.message);
@@ -612,11 +748,25 @@ const app = createApp({
       }
     },
 
-    async runExplain(query, variables = {}) {
+    async runExplain(query, variables = {}, connectionString) {
       try {
+        console.log("selectedRequestDetail:", this.selectedRequestDetail);
+
+        const vars = {};
+        if (Array.isArray(variables)) {
+          for (let i = 0; i < variables.length; i++) {
+            vars[`${i + 1}`] = variables[i];
+          }
+        } else {
+          for (const [key, value] of Object.entries(variables)) {
+            vars[key] = value;
+          }
+        }
+
         const payload = {
           query: query,
-          variables: variables,
+          variables: vars,
+          connectionString: connectionString,
         };
 
         const response = await fetch("/api/explain", {
@@ -632,13 +782,8 @@ const app = createApp({
         if (result.error) {
           alert(`EXPLAIN Error: ${result.error}`);
         } else {
-          const planText = result.queryPlan
-            ? JSON.stringify(result.queryPlan, null, 2)
-            : "No plan available";
-          console.log("EXPLAIN Plan:", planText);
-          alert(
-            "EXPLAIN plan logged to console. Check browser console for details."
-          );
+          const displayQuery = result.formattedQuery || result.query || query;
+          this.displayExplainPlan(result.queryPlan, displayQuery);
         }
       } catch (error) {
         alert(`Failed to run EXPLAIN: ${error.message}`);
@@ -646,12 +791,9 @@ const app = createApp({
     },
 
     async compareSelectedRequests() {
-      const checkedBoxes = Array.from(
-        document.querySelectorAll(".exec-compare-checkbox:checked")
-      );
-      if (checkedBoxes.length !== 2) return;
+      if (this.selectedRequestIds.length !== 2) return;
 
-      const ids = checkedBoxes.map((cb) => parseInt(cb.dataset.id));
+      const ids = this.selectedRequestIds;
 
       // Fetch details for both requests
       const [detail1, detail2] = await Promise.all(
@@ -705,22 +847,21 @@ const app = createApp({
       <div class="main-layout">
         <aside class="sidebar">
           <div class="section">
-            <h3>Recent Requests</h3>
+            <h3>Sample Queries</h3>
             <button @click="openNewSampleQueryModal" class="btn-primary">
               + New Sample Query
             </button>
             <div class="requests-list">
-              <p v-if="allRequests.length === 0" style="padding: 1rem; color: #6c757d; text-align: center;">No requests yet</p>
-              <div v-for="req in allRequests.slice(0, 10)" 
-                   :key="req.id"
+              <p v-if="sampleQueries.length === 0" style="padding: 1rem; color: #6c757d; text-align: center;">No sample queries yet</p>
+              <div v-for="sq in sampleQueries" 
+                   :key="sq.id"
                    class="request-item"
-                   @click="showRequestDetail(req.id)">
-                <div class="request-item-name">{{ req.operationName }}</div>
+                   :class="{ 'selected': isSampleQuerySelected(sq.id) }"
+                   @click="openExecuteModalWithSampleQuery(sq)">
+                <div class="request-item-name">{{ getSampleQueryDisplayName(sq) }}</div>
                 <div class="request-item-meta">
-                  <span :class="getExecutionStatusClass(req)">{{ req.statusCode || 'ERR' }}</span>
-                  <span>{{ req.durationMs }}ms</span>
+                  <span>{{ sq.server?.url || 'No server' }}</span>
                 </div>
-                <div class="request-item-time">{{ getExecutionTimeString(req) }}</div>
               </div>
             </div>
           </div>
@@ -746,20 +887,15 @@ const app = createApp({
               <p v-if="allRequests.length === 0" style="color: #6c757d;">No requests executed yet. Click "Execute Request" to get started.</p>
               <div v-for="req in allRequests" 
                    :key="req.id"
-                   class="execution-item-detailed"
+                   class="execution-item-compact"
                    @click="handleExecutionClick(req, $event)">
-                <div class="exec-header">
-                  <input type="checkbox" class="exec-compare-checkbox" :data-id="req.id" @change="updateCompareButton">
-                  <span class="exec-status" :class="getExecutionStatusClass(req)">{{ req.statusCode || 'ERR' }}</span>
-                  <span class="exec-name">{{ req.operationName }}</span>
-                  <span class="exec-duration">{{ req.durationMs }}ms</span>
-                </div>
-                <div class="exec-details">
-                  <span class="exec-time">{{ getExecutionTimeString(req) }}</span>
-                  <span class="exec-server">{{ getExecutionServerUrl(req) }}</span>
-                  <span class="exec-id">req_id={{ req.requestIdHeader }}</span>
-                </div>
-                <div class="exec-last-log">{{ getExecutionLastLogMsg(req) }}</div>
+                <input type="checkbox" class="exec-compare-checkbox" :data-id="req.id" :checked="selectedRequestIds.includes(req.id)" @change="updateCompareButton">
+                <span class="exec-status" :class="getExecutionStatusClass(req)">{{ req.statusCode || 'ERR' }}</span>
+                <span class="exec-name">{{ req.displayName }}</span>
+                <span class="exec-time">{{ getExecutionTimeString(req) }}</span>
+                <span class="exec-server">{{ getExecutionServerUrl(req) }}</span>
+                <span class="exec-duration">{{ req.durationMs }}ms</span>
+                <span class="exec-id">{{ req.requestIdHeader }}</span>
               </div>
             </div>
           </div>
@@ -786,17 +922,23 @@ const app = createApp({
             />
           </div>
           <div class="form-group">
-            <label for="newSampleQueryServer">Server:</label>
-            <select id="newSampleQueryServer" v-model="newQueryForm.serverId">
-              <option value="">-- New Server --</option>
+            <label for="newSampleQueryServer">Server (optional):</label>
+            <select id="newSampleQueryServer" v-model="newQueryForm.serverId" :disabled="newQueryForm.createNewServer">
+              <option value="">-- No Server --</option>
               <option v-for="server in servers" :key="server.id" :value="server.id">
                 {{ server.name }} ({{ server.url }})
               </option>
             </select>
           </div>
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" v-model="newQueryForm.createNewServer" @change="newQueryForm.createNewServer && (newQueryForm.serverId = '')">
+              <span>Create New Server</span>
+            </label>
+          </div>
           <div v-if="showNewServerFields">
             <div class="form-group">
-              <label for="newSampleQueryURL">URL:</label>
+              <label for="newSampleQueryURL">URL (optional):</label>
               <input
                 type="text"
                 id="newSampleQueryURL"
@@ -909,11 +1051,12 @@ const app = createApp({
     <div v-if="showRequestDetailModal && selectedRequestDetail" class="modal">
       <div class="modal-content execution-modal-content">
         <div class="modal-header">
-          <h3>Request Details</h3>
+          <h3>{{ selectedRequestDetail.request?.name || '(unnamed)' }} - {{ selectedRequestDetail.server?.name || selectedRequestDetail.execution.server?.name || 'N/A' }}</h3>
           <button @click="showRequestDetailModal = false">✕</button>
         </div>
         <div class="modal-body">
           <div class="execution-overview">
+            
             <div class="stat-item">
               <span class="stat-label">Status Code</span>
               <span class="stat-value" :class="getDetailStatusClass()">{{ selectedRequestDetail.execution.statusCode || 'Error' }}</span>
@@ -929,6 +1072,10 @@ const app = createApp({
             <div class="stat-item">
               <span class="stat-label">Executed At</span>
               <span class="stat-value">{{ new Date(selectedRequestDetail.execution.executedAt).toLocaleString() }}</span>
+            </div>
+            <div class="stat-item" v-if="selectedRequestDetail.server?.devId || selectedRequestDetail.execution.server?.devId">
+              <span class="stat-label">Dev ID</span>
+              <span class="stat-value">{{ selectedRequestDetail.server?.devId || selectedRequestDetail.execution.server?.devId || 'N/A' }}</span>
             </div>
           </div>
 
@@ -962,11 +1109,8 @@ const app = createApp({
                 <span class="stat-label">Avg Duration</span>
                 <span class="stat-value">{{ selectedRequestDetail.sqlAnalysis.avgDuration.toFixed(2) }}ms</span>
               </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Duration</span>
-                <span class="stat-value">{{ selectedRequestDetail.sqlAnalysis.totalDuration.toFixed(2) }}ms</span>
-              </div>
             </div>
+            <br/>
 
             <div class="sql-queries-list">
               <div v-for="(q, idx) in selectedRequestDetail.sqlQueries" :key="idx" class="sql-query-item">
@@ -1009,7 +1153,12 @@ const app = createApp({
       <div class="modal-content explain-modal-content">
         <div class="modal-header">
           <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
-          <button @click="closeExplainPlanModal">✕</button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button @click="shareExplainPlan" class="btn-secondary" style="padding: 0.5rem 1rem;">
+              📋 Share
+            </button>
+            <button @click="closeExplainPlanModal">✕</button>
+          </div>
         </div>
         <div class="modal-body">
           <div
