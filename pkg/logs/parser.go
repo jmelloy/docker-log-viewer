@@ -149,7 +149,7 @@ func ParseLogLine(line string) *LogEntry {
 		// Try multiple common level field names
 		for _, key := range []string{"level", "severity", "log_level", "loglevel", "lvl"} {
 			if lvl, ok := entry.JSONFields[key].(string); ok {
-				entry.Level = lvl
+				entry.Level = strings.ToUpper(lvl)
 				break
 			}
 		}
@@ -161,6 +161,30 @@ func ParseLogLine(line string) *LogEntry {
 				break
 			}
 		}
+
+		// Populate fields map with all JSON fields (excluding already extracted ones)
+		for key, value := range entry.JSONFields {
+			// Skip the ones we already extracted into dedicated fields
+			if key == "level" || key == "severity" || key == "log_level" || key == "loglevel" || key == "lvl" ||
+				key == "message" || key == "msg" || key == "text" || key == "log" || key == "event" ||
+				key == "timestamp" || key == "@timestamp" || key == "time" || key == "ts" || key == "datetime" || key == "date" {
+				continue
+			}
+
+			// Convert value to string for fields map
+			switch v := value.(type) {
+			case string:
+				entry.Fields[key] = v
+			case nil:
+				entry.Fields[key] = ""
+			default:
+				// Convert complex types to JSON string
+				if jsonBytes, err := json.Marshal(v); err == nil {
+					entry.Fields[key] = string(jsonBytes)
+				}
+			}
+		}
+
 		return entry
 	}
 

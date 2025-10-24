@@ -47,6 +47,7 @@ const app = createApp({
       },
       sqlAnalysis: null,
       collapsedProjects: new Set(),
+      portToServerMap: {}, // Map of port -> connectionString
     };
   },
 
@@ -142,7 +143,16 @@ const app = createApp({
     async loadContainers() {
       try {
         const response = await fetch("/api/containers");
-        this.containers = await response.json();
+        const data = await response.json();
+        
+        // Handle both old format (array) and new format (object with containers and portToServerMap)
+        if (Array.isArray(data)) {
+          this.containers = data;
+        } else {
+          this.containers = data.containers || [];
+          this.portToServerMap = data.portToServerMap || {};
+          console.log('Loaded port to server map:', this.portToServerMap);
+        }
         
         // Get valid container names
         const validNames = new Set(this.containers.map(c => c.Name));
@@ -169,7 +179,7 @@ const app = createApp({
           this.saveContainerState();
         }
         
-        this.sendFilterUpdate();
+        // Don't send filter update here - will be sent when WebSocket connects
       } catch (error) {
         console.error("Failed to load containers:", error);
       }
@@ -292,6 +302,12 @@ const app = createApp({
       }
 
       this.containers = newContainers;
+      
+      // Update port to server mapping
+      if (data.portToServerMap) {
+        this.portToServerMap = data.portToServerMap;
+        console.log('Updated port to server map:', this.portToServerMap);
+      }
 
       if (this.hasTraceFilters) {
         this.analyzeTrace();
@@ -689,11 +705,33 @@ const app = createApp({
       return parts.join("");
     },
 
+    getDatabaseConnectionString() {
+      // Find the first container port that maps to a database
+      for (const container of this.containers) {
+        if (!container.Ports) continue;
+        
+        for (const port of container.Ports) {
+          if (port.publicPort && this.portToServerMap[port.publicPort]) {
+            console.log(`Using database for port ${port.publicPort}:`, this.portToServerMap[port.publicPort]);
+            return this.portToServerMap[port.publicPort];
+          }
+        }
+      }
+      
+      // No matching port found, return empty to use default
+      console.log('No port mapping found, using default database connection');
+      return '';
+    },
+
     async runExplain(query, variables = {}, metadata = null) {
       try {
+        // Determine connection string based on container ports
+        const connectionString = this.getDatabaseConnectionString();
+        
         const payload = {
           query: query,
           variables: variables,
+          connectionString: connectionString,
         };
 
         const response = await fetch("/api/explain", {

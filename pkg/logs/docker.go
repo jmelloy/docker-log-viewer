@@ -20,6 +20,13 @@ type Container struct {
 	ID    string
 	Name  string
 	Image string
+	Ports []PortMapping
+}
+
+type PortMapping struct {
+	PrivatePort int    `json:"privatePort"`
+	PublicPort  int    `json:"publicPort"`
+	Type        string `json:"type"`
 }
 
 func NewDockerClient() (*DockerClient, error) {
@@ -39,10 +46,22 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 	result := make([]Container, 0, len(containers))
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
+		
+		// Extract port mappings
+		ports := make([]PortMapping, 0)
+		for _, port := range c.Ports {
+			ports = append(ports, PortMapping{
+				PrivatePort: int(port.PrivatePort),
+				PublicPort:  int(port.PublicPort),
+				Type:        port.Type,
+			})
+		}
+		
 		result = append(result, Container{
 			ID:    c.ID[:12],
 			Name:  name,
 			Image: c.Image,
+			Ports: ports,
 		})
 	}
 	return result, nil
