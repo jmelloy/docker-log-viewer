@@ -67,7 +67,8 @@ type WSMessage struct {
 }
 
 type ContainersUpdateMessage struct {
-	Containers []logs.Container `json:"containers"`
+	Containers       []logs.Container      `json:"containers"`
+	PortToServerMap  map[int]string        `json:"portToServerMap"`
 }
 
 type LogWSMessage struct {
@@ -124,8 +125,15 @@ func (wa *WebApp) handleContainers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	portToServerMap := wa.buildPortToServerMap(containers)
+	
+	response := ContainersUpdateMessage{
+		Containers:      containers,
+		PortToServerMap: portToServerMap,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(containers)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
@@ -337,10 +345,11 @@ func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
 				return false
 			}
 		} else {
-			// Has a level - check if it matches
+			// Has a level - check if it matches (case-insensitive)
 			found := false
+			logLevel := strings.ToUpper(msg.Entry.Level)
 			for _, level := range filter.SelectedLevels {
-				if msg.Entry.Level == level {
+				if logLevel == level {
 					found = true
 					break
 				}
@@ -564,9 +573,72 @@ func (wa *WebApp) monitorContainers() {
 	}
 }
 
+func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]string {
+	portToServerMap := make(map[int]string)
+	
+	if wa.store == nil {
+		return portToServerMap
+	}
+	
+	// Get all servers with default databases
+	servers, err := wa.store.ListServers()
+	if err != nil {
+		slog.Error("failed to list servers for port mapping", "error", err)
+		return portToServerMap
+	}
+	
+	// Build a map of ports exposed by containers
+	containerPorts := make(map[int]bool)
+	for _, container := range containers {
+		for _, port := range container.Ports {
+			if port.PublicPort > 0 {
+				containerPorts[port.PublicPort] = true
+			}
+		}
+	}
+	
+	// Map container ports to servers with matching default database connection strings
+	for _, server := range servers {
+		if server.DefaultDatabase == nil || server.DefaultDatabase.ConnectionString == "" {
+			continue
+		}
+		
+		// Parse connection string to extract port
+		// Format: postgresql://user:pass@host:port/dbname or host=localhost port=5432 ...
+		connStr := server.DefaultDatabase.ConnectionString
+		var dbPort int
+		
+		// Try postgres:// format
+		if strings.Contains(connStr, "://") {
+			re := regexp.MustCompile(`:(\d+)/`)
+			if matches := re.FindStringSubmatch(connStr); len(matches) > 1 {
+				dbPort, _ = strconv.Atoi(matches[1])
+			}
+		} else {
+			// Try key=value format
+			re := regexp.MustCompile(`port=(\d+)`)
+			if matches := re.FindStringSubmatch(connStr); len(matches) > 1 {
+				dbPort, _ = strconv.Atoi(matches[1])
+			}
+		}
+		
+		// If we found a port and it matches a container port, map it
+		if dbPort > 0 && containerPorts[dbPort] {
+			// Only map if not already mapped (first server wins)
+			if _, exists := portToServerMap[dbPort]; !exists {
+				portToServerMap[dbPort] = server.DefaultDatabase.ConnectionString
+				slog.Info("mapped container port to database", "port", dbPort, "server", server.Name)
+			}
+		}
+	}
+	
+	return portToServerMap
+}
+
 func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 	update := ContainersUpdateMessage{
-		Containers: containers,
+		Containers:      containers,
+		PortToServerMap: wa.buildPortToServerMap(containers),
 	}
 
 	wsMsg := WSMessage{
