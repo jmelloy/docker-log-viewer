@@ -286,14 +286,7 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 		}
 	}
 
-	// Limit to last 1000 logs
-	startIdx := 0
-	if len(filteredLogs) > 1000 {
-		startIdx = len(filteredLogs) - 1000
-	}
-	if len(filteredLogs) > 0 {
-		filteredLogs = filteredLogs[startIdx:]
-	}
+
 
 	// Send clear message to replace all logs
 	wsMsg := WSMessage{
