@@ -59,7 +59,6 @@ const app = createApp({
 
   computed: {
     filteredLogs() {
-      // Backend now does filtering, just return all logs
       return this.logs;
     },
 
@@ -472,10 +471,6 @@ const app = createApp({
         console.error('Error saving trace:', error);
         alert(`Failed to save trace: ${error.message}`);
       }
-    },
-
-    clearLogs() {
-      this.logs = [];
     },
 
     analyzeTrace() {
@@ -1035,11 +1030,6 @@ const app = createApp({
                 <span class="level-badge level-none">NONE</span>
               </label>
             </div>
-          </div>
-
-          <div class="section">
-            <h3>Actions</h3>
-            <button @click="clearLogs">Clear Logs</button>
           </div>
 
           <div class="sidebar-footer">
