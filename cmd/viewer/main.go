@@ -44,7 +44,7 @@ type Client struct {
 
 type WebApp struct {
 	docker           *logs.DockerClient
-	logs             []logs.LogMessage
+	logsByContainer  map[string][]logs.LogMessage // Per-container log storage
 	logsMutex        sync.RWMutex
 	containers       []logs.Container
 	containerIDNames map[string]string // Maps container ID to name
@@ -103,7 +103,7 @@ func NewWebApp() (*WebApp, error) {
 
 	app := &WebApp{
 		docker:           docker,
-		logs:             make([]logs.LogMessage, 0),
+		logsByContainer:  make(map[string][]logs.LogMessage),
 		containerIDNames: make(map[string]string),
 		clients:          make(map[*Client]bool),
 		logChan:          make(chan logs.LogMessage, 1000),
@@ -144,19 +144,23 @@ func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
 	wa.logsMutex.RLock()
 	defer wa.logsMutex.RUnlock()
 
-	startIdx := 0
-	if len(wa.logs) > 1000 {
-		startIdx = len(wa.logs) - 1000
-	}
-
 	logs := make([]LogWSMessage, 0)
-	for i := startIdx; i < len(wa.logs); i++ {
-		msg := wa.logs[i]
-		logs = append(logs, LogWSMessage{
-			ContainerID: msg.ContainerID,
-			Timestamp:   msg.Timestamp,
-			Entry:       msg.Entry,
-		})
+	
+	// Aggregate last 1000 logs from all containers
+	for _, containerLogs := range wa.logsByContainer {
+		startIdx := 0
+		if len(containerLogs) > 1000 {
+			startIdx = len(containerLogs) - 1000
+		}
+		
+		for i := startIdx; i < len(containerLogs); i++ {
+			msg := containerLogs[i]
+			logs = append(logs, LogWSMessage{
+				ContainerID: msg.ContainerID,
+				Timestamp:   msg.Timestamp,
+				Entry:       msg.Entry,
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -165,12 +169,14 @@ func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
 	wa.logsMutex.RLock()
-	totalLogs := len(wa.logs)
+	totalLogs := 0
 
 	// Count logs by container
 	logsByContainer := make(map[string]int)
-	for _, msg := range wa.logs {
-		logsByContainer[msg.ContainerID]++
+	for containerID, containerLogs := range wa.logsByContainer {
+		count := len(containerLogs)
+		logsByContainer[containerID] = count
+		totalLogs += count
 	}
 	wa.logsMutex.RUnlock()
 
@@ -277,8 +283,10 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	client.mu.RUnlock()
 
 	wa.logsMutex.RLock()
-	allLogs := make([]logs.LogMessage, len(wa.logs))
-	copy(allLogs, wa.logs)
+	allLogs := make([]logs.LogMessage, 0)
+	for _, containerLogs := range wa.logsByContainer {
+		allLogs = append(allLogs, containerLogs...)
+	}
 	wa.logsMutex.RUnlock()
 
 	// Filter logs for this client
@@ -467,15 +475,26 @@ func (wa *WebApp) processLogs() {
 			}
 
 			wa.logsMutex.Lock()
-			wa.logs = append(wa.logs, msg)
-			if len(wa.logs) > 10000 {
-				wa.logs = wa.logs[1000:]
+			// Store logs per container, keeping last 10,000 per container
+			containerID := msg.ContainerID
+			if wa.logsByContainer[containerID] == nil {
+				wa.logsByContainer[containerID] = make([]logs.LogMessage, 0)
+			}
+			wa.logsByContainer[containerID] = append(wa.logsByContainer[containerID], msg)
+			if len(wa.logsByContainer[containerID]) > 10000 {
+				wa.logsByContainer[containerID] = wa.logsByContainer[containerID][1000:]
 			}
 			logCount++
+			
+			// Calculate total for debugging
+			totalInMemory := 0
+			for _, containerLogs := range wa.logsByContainer {
+				totalInMemory += len(containerLogs)
+			}
 			wa.logsMutex.Unlock()
 
 			if receivedCount%100 == 0 {
-				slog.Debug("processLogs total in memory", "receivedCount", receivedCount, "totalInMemory", len(wa.logs))
+				slog.Debug("processLogs total in memory", "receivedCount", receivedCount, "totalInMemory", totalInMemory)
 			}
 
 			// Add to batch
@@ -1383,9 +1402,11 @@ func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration)
 	wa.logsMutex.RLock()
 	defer wa.logsMutex.RUnlock()
 
-	for _, msg := range wa.logs {
-		if matchesRequestID(msg, requestID) {
-			collected = append(collected, msg)
+	for _, containerLogs := range wa.logsByContainer {
+		for _, msg := range containerLogs {
+			if matchesRequestID(msg, requestID) {
+				collected = append(collected, msg)
+			}
 		}
 	}
 
