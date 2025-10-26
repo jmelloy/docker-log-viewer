@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "9000:9000"
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+      - go-modules:/go/pkg/mod
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-}
+    working_dir: /app
+
+volumes:
+  go-modules:
