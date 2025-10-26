@@ -156,8 +156,11 @@ const app = createApp({
         // Get valid container names
         const validNames = new Set(this.containers.map(c => c.Name));
         
-        if (this.selectedContainers.size === 0) {
-          // No saved state, select all
+        // Check if this is first load (no localStorage key exists)
+        const isFirstLoad = !localStorage.getItem("selectedContainers");
+        
+        if (isFirstLoad && this.selectedContainers.size === 0) {
+          // First load with no saved state, select all
           this.containers.forEach((c) => this.selectedContainers.add(c.Name));
           this.saveContainerState();
         } else {
