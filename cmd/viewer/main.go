@@ -67,8 +67,8 @@ type WSMessage struct {
 }
 
 type ContainersUpdateMessage struct {
-	Containers       []logs.Container      `json:"containers"`
-	PortToServerMap  map[int]string        `json:"portToServerMap"`
+	Containers      []logs.Container `json:"containers"`
+	PortToServerMap map[int]string   `json:"portToServerMap"`
 }
 
 type LogWSMessage struct {
@@ -78,8 +78,12 @@ type LogWSMessage struct {
 }
 
 func NewWebApp() (*WebApp, error) {
+	logLevel := slog.LevelInfo
+	if os.Getenv("DEBUG") != "" {
+		logLevel = slog.LevelDebug
+	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
 
@@ -126,7 +130,7 @@ func (wa *WebApp) handleContainers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	portToServerMap := wa.buildPortToServerMap(containers)
-	
+
 	response := ContainersUpdateMessage{
 		Containers:      containers,
 		PortToServerMap: portToServerMap,
@@ -173,8 +177,12 @@ func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
 	wa.containerMutex.RLock()
 	containers := make([]map[string]string, 0)
 	for id, name := range wa.containerIDNames {
+		shortID := id
+		if len(id) > 12 {
+			shortID = id[:12]
+		}
 		containers = append(containers, map[string]string{
-			"id":    id[:12],
+			"id":    shortID,
 			"name":  name,
 			"count": fmt.Sprintf("%d", logsByContainer[id]),
 		})
@@ -285,8 +293,6 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 			})
 		}
 	}
-
-
 
 	// Send clear message to replace all logs
 	wsMsg := WSMessage{
@@ -446,12 +452,19 @@ func (wa *WebApp) processLogs() {
 	logCount := 0
 	receivedCount := 0
 
+	slog.Debug("processLogs goroutine started")
+
 	for {
 		select {
 		case <-wa.ctx.Done():
+			slog.Debug("processLogs goroutine exiting")
 			return
 		case msg := <-wa.logChan:
 			receivedCount++
+
+			if receivedCount <= 10 || receivedCount%100 == 0 {
+				slog.Debug("processLogs received message", "receivedCount", receivedCount, "containerID", msg.ContainerID[:12])
+			}
 
 			wa.logsMutex.Lock()
 			wa.logs = append(wa.logs, msg)
@@ -460,6 +473,10 @@ func (wa *WebApp) processLogs() {
 			}
 			logCount++
 			wa.logsMutex.Unlock()
+
+			if receivedCount%100 == 0 {
+				slog.Debug("processLogs total in memory", "receivedCount", receivedCount, "totalInMemory", len(wa.logs))
+			}
 
 			// Add to batch
 			wa.batchMutex.Lock()
@@ -568,18 +585,18 @@ func (wa *WebApp) monitorContainers() {
 
 func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]string {
 	portToServerMap := make(map[int]string)
-	
+
 	if wa.store == nil {
 		return portToServerMap
 	}
-	
+
 	// Get all servers with default databases
 	servers, err := wa.store.ListServers()
 	if err != nil {
 		slog.Error("failed to list servers for port mapping", "error", err)
 		return portToServerMap
 	}
-	
+
 	// Build a map of ports exposed by containers
 	containerPorts := make(map[int]bool)
 	for _, container := range containers {
@@ -589,18 +606,18 @@ func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]stri
 			}
 		}
 	}
-	
+
 	// Map container ports to servers with matching default database connection strings
 	for _, server := range servers {
 		if server.DefaultDatabase == nil || server.DefaultDatabase.ConnectionString == "" {
 			continue
 		}
-		
+
 		// Parse connection string to extract port
 		// Format: postgresql://user:pass@host:port/dbname or host=localhost port=5432 ...
 		connStr := server.DefaultDatabase.ConnectionString
 		var dbPort int
-		
+
 		// Try postgres:// format
 		if strings.Contains(connStr, "://") {
 			re := regexp.MustCompile(`:(\d+)/`)
@@ -614,7 +631,7 @@ func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]stri
 				dbPort, _ = strconv.Atoi(matches[1])
 			}
 		}
-		
+
 		// If we found a port and it matches a container port, map it
 		if dbPort > 0 && containerPorts[dbPort] {
 			// Only map if not already mapped (first server wins)
@@ -624,7 +641,7 @@ func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]stri
 			}
 		}
 	}
-	
+
 	return portToServerMap
 }
 

@@ -58,7 +58,7 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 		}
 		
 		result = append(result, Container{
-			ID:    c.ID[:12],
+			ID:    c.ID, // Use full ID for StreamLogs
 			Name:  name,
 			Image: c.Image,
 			Ports: ports,
