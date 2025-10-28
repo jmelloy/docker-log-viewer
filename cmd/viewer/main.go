@@ -145,14 +145,14 @@ func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
 	defer wa.logsMutex.RUnlock()
 
 	logs := make([]LogWSMessage, 0)
-	
+
 	// Aggregate last 1000 logs from all containers
 	for _, containerLogs := range wa.logsByContainer {
 		startIdx := 0
 		if len(containerLogs) > 1000 {
 			startIdx = len(containerLogs) - 1000
 		}
-		
+
 		for i := startIdx; i < len(containerLogs); i++ {
 			msg := containerLogs[i]
 			logs = append(logs, LogWSMessage{
@@ -482,10 +482,23 @@ func (wa *WebApp) processLogs() {
 			}
 			wa.logsByContainer[containerID] = append(wa.logsByContainer[containerID], msg)
 			if len(wa.logsByContainer[containerID]) > 10000 {
-				wa.logsByContainer[containerID] = wa.logsByContainer[containerID][1000:]
+				// First, try to remove logs older than 2 hours
+				twoHoursAgo := time.Now().Add(-2 * time.Hour)
+				filtered := make([]logs.LogMessage, 0)
+				for _, log := range wa.logsByContainer[containerID] {
+					if log.Timestamp.After(twoHoursAgo) {
+						filtered = append(filtered, log)
+					}
+				}
+				wa.logsByContainer[containerID] = filtered
+
+				// If still over 10,000 after removing old logs, drop oldest by count
+				if len(wa.logsByContainer[containerID]) > 10000 {
+					wa.logsByContainer[containerID] = wa.logsByContainer[containerID][1000:]
+				}
 			}
 			logCount++
-			
+
 			// Calculate total for debugging
 			totalInMemory := 0
 			for _, containerLogs := range wa.logsByContainer {
@@ -617,46 +630,18 @@ func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]stri
 	}
 
 	// Build a map of ports exposed by containers
-	containerPorts := make(map[int]bool)
 	for _, container := range containers {
 		for _, port := range container.Ports {
 			if port.PublicPort > 0 {
-				containerPorts[port.PublicPort] = true
-			}
-		}
-	}
-
-	// Map container ports to servers with matching default database connection strings
-	for _, server := range servers {
-		if server.DefaultDatabase == nil || server.DefaultDatabase.ConnectionString == "" {
-			continue
-		}
-
-		// Parse connection string to extract port
-		// Format: postgresql://user:pass@host:port/dbname or host=localhost port=5432 ...
-		connStr := server.DefaultDatabase.ConnectionString
-		var dbPort int
-
-		// Try postgres:// format
-		if strings.Contains(connStr, "://") {
-			re := regexp.MustCompile(`:(\d+)/`)
-			if matches := re.FindStringSubmatch(connStr); len(matches) > 1 {
-				dbPort, _ = strconv.Atoi(matches[1])
-			}
-		} else {
-			// Try key=value format
-			re := regexp.MustCompile(`port=(\d+)`)
-			if matches := re.FindStringSubmatch(connStr); len(matches) > 1 {
-				dbPort, _ = strconv.Atoi(matches[1])
-			}
-		}
-
-		// If we found a port and it matches a container port, map it
-		if dbPort > 0 && containerPorts[dbPort] {
-			// Only map if not already mapped (first server wins)
-			if _, exists := portToServerMap[dbPort]; !exists {
-				portToServerMap[dbPort] = server.DefaultDatabase.ConnectionString
-				slog.Info("mapped container port to database", "port", dbPort, "server", server.Name)
+				for _, server := range servers {
+					if strings.Contains(server.URL, fmt.Sprintf(":%d", port.PublicPort)) {
+						if server.DefaultDatabase != nil && server.DefaultDatabase.ConnectionString != "" {
+							portToServerMap[port.PublicPort] = server.DefaultDatabase.ConnectionString
+							slog.Info("mapped container port to server", "port", port, "server", server.Name, "container", container.Name)
+						}
+						break
+					}
+				}
 			}
 		}
 	}
@@ -1436,51 +1421,86 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 		}
 
 		message := msg.Entry.Message
-		if strings.Contains(message, "[sql]") {
-			sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
-			if len(sqlMatch) > 1 {
-				normalizedQuery := normalizeQuery(sqlMatch[1])
-				query := store.SQLQuery{
-					Query:           sqlMatch[1],
+		// Check for [sql] or [query] format
+		if strings.Contains(message, "[sql]") || (msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query") {
+			var sqlText string
+			var normalizedQuery string
+			var query store.SQLQuery
+
+			// Handle [sql] format
+			if strings.Contains(message, "[sql]") {
+				sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
+				if len(sqlMatch) > 1 {
+					sqlText = sqlMatch[1]
+					normalizedQuery = normalizeQuery(sqlText)
+					query = store.SQLQuery{
+						Query:           sqlText,
+						NormalizedQuery: normalizedQuery,
+						QueryHash:       store.ComputeQueryHash(normalizedQuery),
+					}
+				} else {
+					continue
+				}
+			} else if msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query" {
+				// Handle [query] format - message is the SQL query
+				sqlText = message
+				normalizedQuery = normalizeQuery(sqlText)
+				query = store.SQLQuery{
+					Query:           sqlText,
 					NormalizedQuery: normalizedQuery,
 					QueryHash:       store.ComputeQueryHash(normalizedQuery),
 				}
 
-				if msg.Entry.Fields != nil {
-					if duration, ok := msg.Entry.Fields["duration"]; ok {
-						var durationVal float64
-						if _, err := strconv.ParseFloat(duration, 64); err == nil {
-							durationVal, _ = strconv.ParseFloat(duration, 64)
-							query.DurationMS = durationVal
-						}
-					}
-					if table, ok := msg.Entry.Fields["db.table"]; ok {
-						query.QueriedTable = table
-					}
-					if op, ok := msg.Entry.Fields["db.operation"]; ok {
-						query.Operation = op
-					}
-					if rows, ok := msg.Entry.Fields["db.rows"]; ok {
-						var rowsVal int
-						if _, err := strconv.Atoi(rows); err == nil {
-							rowsVal, _ = strconv.Atoi(rows)
-							query.Rows = rowsVal
-						}
-					}
-					// Store db.vars as JSON for later use in EXPLAIN
-					if vars, ok := msg.Entry.Fields["db.vars"]; ok {
-						query.Variables = vars
-					}
-					// Check both gql.operation and gql.operationName for GraphQL operation
-					if gqlOp, ok := msg.Entry.Fields["gql.operation"]; ok {
-						query.GraphQLOperation = gqlOp
-					} else if gqlOp, ok := msg.Entry.Fields["gql.operationName"]; ok {
-						query.GraphQLOperation = gqlOp
+				// Extract duration and rows from fields
+				if duration, ok := msg.Entry.Fields["duration_ms"]; ok {
+					if durationVal, err := strconv.ParseFloat(duration, 64); err == nil {
+						query.DurationMS = durationVal
 					}
 				}
-
-				queries = append(queries, query)
+				if rows, ok := msg.Entry.Fields["rows"]; ok {
+					if rowsVal, err := strconv.Atoi(rows); err == nil {
+						query.Rows = rowsVal
+					}
+				}
+			} else {
+				continue
 			}
+
+			if msg.Entry.Fields != nil {
+				// These apply to both [sql] and [query] formats
+				if duration, ok := msg.Entry.Fields["duration"]; ok {
+					var durationVal float64
+					if _, err := strconv.ParseFloat(duration, 64); err == nil {
+						durationVal, _ = strconv.ParseFloat(duration, 64)
+						query.DurationMS = durationVal
+					}
+				}
+				if table, ok := msg.Entry.Fields["db.table"]; ok {
+					query.QueriedTable = table
+				}
+				if op, ok := msg.Entry.Fields["db.operation"]; ok {
+					query.Operation = op
+				}
+				if rows, ok := msg.Entry.Fields["db.rows"]; ok {
+					var rowsVal int
+					if _, err := strconv.Atoi(rows); err == nil {
+						rowsVal, _ = strconv.Atoi(rows)
+						query.Rows = rowsVal
+					}
+				}
+				// Store db.vars as JSON for later use in EXPLAIN
+				if vars, ok := msg.Entry.Fields["db.vars"]; ok {
+					query.Variables = vars
+				}
+				// Check both gql.operation and gql.operationName for GraphQL operation
+				if gqlOp, ok := msg.Entry.Fields["gql.operation"]; ok {
+					query.GraphQLOperation = gqlOp
+				} else if gqlOp, ok := msg.Entry.Fields["gql.operationName"]; ok {
+					query.GraphQLOperation = gqlOp
+				}
+			}
+
+			queries = append(queries, query)
 		}
 	}
 

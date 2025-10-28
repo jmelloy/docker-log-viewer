@@ -3,6 +3,7 @@ package logs
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,10 +20,13 @@ type LogEntry struct {
 }
 
 var (
-	timestampRegex = regexp.MustCompile(`(\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+(?:\.\d+)?|\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d+[-/]\d+[-/]\d+\s+\d+:\d+:\d+(?:\.\d+)?|\d{10,13})`)
+	timestampRegex = regexp.MustCompile(`(\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+(?:\.\d+)?|\[\d{2}:\d{2}:\d{2}\.\d+\]|\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d+[-/]\d+[-/]\d+\s+\d+:\d+:\d+(?:\.\d+)?|\b\d{10,13}\b)`)
 	levelRegex     = regexp.MustCompile(`(FATAL|DEBUG|INFO|WARN|ERROR|DBG|TRC|INF|WRN|ERR)`)
 	fileRegex      = regexp.MustCompile(`([\w/]+\.go:\d+)`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
+	sentryRegex    = regexp.MustCompile(`^Sentry Logger \[(log|warn|error|debug)\]:\s*(.*)$`)
+	pinoRegex      = regexp.MustCompile(`^\[(\d{2}:\d{2}:\d{2}\.\d+)\]\s+(DEBUG|INFO|WARN|ERROR)\s+\((\d+)\):\s+(.*)$`)
+	queryRegex     = regexp.MustCompile(`^\[query\]\s+(.+?)(?:\s+\[took\s+(\d+)\s*ms(?:,\s*(\d+)\s+(row|result)s?\s+affected)?\])?$`)
 )
 
 func stripANSI(s string) string {
@@ -132,6 +136,80 @@ func ParseLogLine(line string) *LogEntry {
 	}
 
 	line = stripANSI(line)
+
+	// Try Sentry Logger format
+	if matches := sentryRegex.FindStringSubmatch(line); len(matches) >= 3 {
+		entry.Level = strings.ToUpper(matches[1])
+		entry.Message = matches[2]
+		return entry
+	}
+
+	// Try Pino format: [HH:MM:SS.mmm] LEVEL (pid): message {json}
+	if matches := pinoRegex.FindStringSubmatch(line); len(matches) >= 5 {
+		entry.Timestamp = matches[1]
+		entry.Level = matches[2]
+		entry.Fields["pid"] = matches[3]
+		remaining := matches[4]
+
+		// Check if there's JSON at the end
+		if idx := strings.Index(remaining, "{"); idx >= 0 {
+			entry.Message = strings.TrimSpace(remaining[:idx])
+			jsonPart := remaining[idx:]
+			if json.Valid([]byte(jsonPart)) {
+				entry.IsJSON = true
+				entry.JSONFields = make(map[string]interface{})
+				json.Unmarshal([]byte(jsonPart), &entry.JSONFields)
+
+				// Extract specific fields from nested JSON
+				if req, ok := entry.JSONFields["req"].(map[string]interface{}); ok {
+					if method, ok := req["method"].(string); ok {
+						entry.Fields["method"] = method
+					}
+					if headers, ok := req["headers"].(map[string]interface{}); ok {
+						if contentLength, ok := headers["content-length"].(string); ok {
+							entry.Fields["content-length"] = contentLength
+						}
+						if baggage, ok := headers["baggage"].(string); ok {
+							// Parse baggage for sentry-trace_id
+							pairs := strings.Split(baggage, ",")
+							for _, pair := range pairs {
+								kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+								if len(kv) == 2 && kv[0] == "sentry-trace_id" {
+									entry.Fields["trace_id"] = kv[1]
+									break
+								}
+							}
+						}
+					}
+				}
+				if res, ok := entry.JSONFields["res"].(map[string]interface{}); ok {
+					if statusCode, ok := res["statusCode"].(float64); ok {
+						entry.Fields["statusCode"] = strconv.Itoa(int(statusCode))
+					}
+				}
+				if responseTime, ok := entry.JSONFields["responseTime"].(float64); ok {
+					entry.Fields["responseTime"] = strconv.FormatFloat(responseTime, 'f', -1, 64)
+				}
+			}
+		} else {
+			entry.Message = remaining
+		}
+		return entry
+	}
+
+	// Try query format: [query] statement [took X ms, Y results]
+	if matches := queryRegex.FindStringSubmatch(line); len(matches) >= 2 {
+		entry.Level = "INFO"
+		entry.Message = matches[1]
+		entry.Fields["type"] = "query"
+		if len(matches) > 2 && matches[2] != "" {
+			entry.Fields["duration_ms"] = matches[2]
+		}
+		if len(matches) > 3 && matches[3] != "" {
+			entry.Fields["rows"] = matches[3]
+		}
+		return entry
+	}
 
 	if json.Valid([]byte(line)) {
 		entry.IsJSON = true

@@ -48,6 +48,7 @@ const app = createApp({
       sqlAnalysis: null,
       collapsedProjects: new Set(),
       portToServerMap: {}, // Map of port -> connectionString
+      recentRequests: [], // Last 5 unique request IDs with paths
     };
   },
 
@@ -143,22 +144,22 @@ const app = createApp({
       try {
         const response = await fetch("/api/containers");
         const data = await response.json();
-        
+
         // Handle both old format (array) and new format (object with containers and portToServerMap)
         if (Array.isArray(data)) {
           this.containers = data;
         } else {
           this.containers = data.containers || [];
           this.portToServerMap = data.portToServerMap || {};
-          console.log('Loaded port to server map:', this.portToServerMap);
+          console.log("Loaded port to server map:", this.portToServerMap);
         }
-        
+
         // Get valid container names
-        const validNames = new Set(this.containers.map(c => c.Name));
-        
+        const validNames = new Set(this.containers.map((c) => c.Name));
+
         // Check if this is first load (no localStorage key exists)
         const isFirstLoad = !localStorage.getItem("selectedContainers");
-        
+
         if (isFirstLoad && this.selectedContainers.size === 0) {
           // First load with no saved state, select all
           this.containers.forEach((c) => this.selectedContainers.add(c.Name));
@@ -171,16 +172,16 @@ const app = createApp({
               validSelections.add(name);
             }
           }
-          
+
           // If everything was invalid, select all
           if (validSelections.size === 0) {
             this.containers.forEach((c) => validSelections.add(c.Name));
           }
-          
+
           this.selectedContainers = validSelections;
           this.saveContainerState();
         }
-        
+
         // Don't send filter update here - will be sent when WebSocket connects
       } catch (error) {
         console.error("Failed to load containers:", error);
@@ -237,6 +238,7 @@ const app = createApp({
       if (this.logs.length > 100000) {
         this.logs = this.logs.slice(-50000);
       }
+      this.updateRecentRequests(log);
       this.$nextTick(() => this.scrollToBottom());
     },
 
@@ -246,6 +248,7 @@ const app = createApp({
       if (this.logs.length > 100000) {
         this.logs = this.logs.slice(-50000);
       }
+      logs.forEach((log) => this.updateRecentRequests(log));
       this.$nextTick(() => this.scrollToBottom());
     },
 
@@ -253,7 +256,100 @@ const app = createApp({
       // Replace all logs with initial filtered set
       console.log(`Received ${logs.length} initial filtered logs`);
       this.logs = logs;
+      logs.forEach((log) => this.updateRecentRequests(log));
       this.$nextTick(() => this.scrollToBottom());
+    },
+
+    updateRecentRequests(log) {
+      const requestId = log.entry?.fields?.request_id;
+      const path = log.entry?.fields?.path;
+      const operationName =
+        log.entry?.fields?.operation_name ||
+        log.entry?.fields?.operationName ||
+        log.entry?.fields?.["gql.operationName"];
+      const method = log.entry?.fields?.method;
+      const statusCode =
+        log.entry?.fields?.status_code || log.entry?.fields?.statusCode;
+      const latency =
+        log.entry?.fields?.latency ||
+        log.entry?.fields?.duration ||
+        log.entry?.fields?.["request.duration"];
+      const timestamp = log.entry?.timestamp || log.timestamp;
+
+      if (!requestId || !path) return;
+
+      if (latency && latency < 5) return;
+
+      // Check if request ID already exists
+      const existingIndex = this.recentRequests.findIndex(
+        (r) => r.requestId === requestId
+      );
+
+      if (existingIndex !== -1) {
+        // Update existing request with new info
+        const existing = this.recentRequests[existingIndex];
+
+        // Add operation name if we have one and it's not already in the set
+        if (operationName && !existing.operations.includes(operationName)) {
+          existing.operations.push(operationName);
+        }
+
+        // Update status code if we have one
+        if (statusCode) {
+          existing.statusCode = statusCode;
+        }
+
+        // Update latency if we have one
+        if (latency) {
+          existing.latency = latency;
+        }
+
+        // Update timestamp to latest
+        if (timestamp) {
+          existing.timestamp = timestamp;
+        }
+
+        // Move to front
+        this.recentRequests.splice(existingIndex, 1);
+        this.recentRequests.unshift(existing);
+      } else {
+        // Add new request to front
+        this.recentRequests.unshift({
+          requestId,
+          path: path,
+          operations: operationName ? [operationName] : [],
+          method: method || "POST",
+          statusCode: statusCode || null,
+          latency: latency || null,
+          timestamp: timestamp || new Date().toLocaleTimeString(),
+        });
+
+        // Keep only last 5
+        if (this.recentRequests.length > 5) {
+          this.recentRequests.pop();
+        }
+      }
+
+      // Also check recent logs for this request_id to find gql.operationName
+      if (requestId && !operationName) {
+        const recentLogs = this.logs.slice(-100); // Check last 100 logs
+        for (const recentLog of recentLogs) {
+          if (recentLog.entry?.fields?.request_id === requestId) {
+            const gqlOp = recentLog.entry?.fields?.["gql.operationName"];
+            if (gqlOp) {
+              const idx = this.recentRequests.findIndex(
+                (r) => r.requestId === requestId
+              );
+              if (
+                idx !== -1 &&
+                !this.recentRequests[idx].operations.includes(gqlOp)
+              ) {
+                this.recentRequests[idx].operations.push(gqlOp);
+              }
+            }
+          }
+        }
+      }
     },
 
     sendFilterUpdate() {
@@ -266,7 +362,9 @@ const app = createApp({
         selectedContainers: Array.from(this.selectedContainers),
         selectedLevels: Array.from(this.selectedLevels),
         searchQuery: this.searchQuery,
-        traceFilters: Array.from(this.traceFilters.entries()).map(([type, value]) => ({ type, value })),
+        traceFilters: Array.from(this.traceFilters.entries()).map(
+          ([type, value]) => ({ type, value })
+        ),
       };
 
       console.log("Sending filter update:", filter);
@@ -304,19 +402,17 @@ const app = createApp({
       }
 
       this.containers = newContainers;
-      
+
       // Update port to server mapping
       if (data.portToServerMap) {
         this.portToServerMap = data.portToServerMap;
-        console.log('Updated port to server map:', this.portToServerMap);
+        console.log("Updated port to server map:", this.portToServerMap);
       }
 
       if (this.hasTraceFilters) {
         this.analyzeTrace();
       }
     },
-
-
 
     getProjectName(containerName) {
       const parts = containerName.split(/-/);
@@ -368,7 +464,9 @@ const app = createApp({
 
     isProjectSelected(project) {
       const projectContainers = this.containersByProject[project];
-      return projectContainers.every((c) => this.selectedContainers.has(c.Name));
+      return projectContainers.every((c) =>
+        this.selectedContainers.has(c.Name)
+      );
     },
 
     isProjectIndeterminate(project) {
@@ -426,7 +524,9 @@ const app = createApp({
     async saveTrace() {
       if (this.traceFilters.size === 0) return;
 
-      const filterDesc = Array.from(this.traceFilters.entries()).map(([k, v]) => `${k}: ${v}`).join(', ');
+      const filterDesc = Array.from(this.traceFilters.entries())
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
       const name = prompt(`Save trace as:`, filterDesc);
       if (!name) return;
 
@@ -449,17 +549,17 @@ const app = createApp({
         const sqlQueries = this.extractSQLQueries(traceLogs);
 
         const payload = {
-          traceId: this.traceFilters.get('trace_id') || null,
-          requestId: this.traceFilters.get('request_id') || null,
+          traceId: this.traceFilters.get("trace_id") || null,
+          requestId: this.traceFilters.get("request_id") || null,
           name: name,
           logs: traceLogs,
           sqlQueries: sqlQueries,
         };
 
-        const response = await fetch('/api/save-trace', {
-          method: 'POST',
+        const response = await fetch("/api/save-trace", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(payload),
         });
@@ -468,10 +568,10 @@ const app = createApp({
           const result = await response.json();
           alert(`Trace saved successfully! ID: ${result.id}`);
         } else {
-          alert('Failed to save trace');
+          alert("Failed to save trace");
         }
       } catch (error) {
-        console.error('Error saving trace:', error);
+        console.error("Error saving trace:", error);
         alert(`Failed to save trace: ${error.message}`);
       }
     },
@@ -707,25 +807,28 @@ const app = createApp({
       // Find the first container port that maps to a database
       for (const container of this.containers) {
         if (!container.Ports) continue;
-        
+
         for (const port of container.Ports) {
           if (port.publicPort && this.portToServerMap[port.publicPort]) {
-            console.log(`Using database for port ${port.publicPort}:`, this.portToServerMap[port.publicPort]);
+            console.log(
+              `Using database for port ${port.publicPort}:`,
+              this.portToServerMap[port.publicPort]
+            );
             return this.portToServerMap[port.publicPort];
           }
         }
       }
-      
+
       // No matching port found, return empty to use default
-      console.log('No port mapping found, using default database connection');
-      return '';
+      console.log("No port mapping found, using default database connection");
+      return "";
     },
 
     async runExplain(query, variables = {}, metadata = null) {
       try {
         // Determine connection string based on container ports
         const connectionString = this.getDatabaseConnectionString();
-        
+
         const payload = {
           query: query,
           variables: variables,
@@ -771,13 +874,13 @@ const app = createApp({
 
     async shareExplainPlan() {
       try {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = 'https://explain.dalibo.com/new';
-        form.target = '_blank';
-        
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "https://explain.dalibo.com/new";
+        form.target = "_blank";
+
         // Build descriptive title from metadata
-        let title = 'Query Plan from Logseidon';
+        let title = "Query Plan from Logseidon";
         if (this.explainData.metadata) {
           const parts = [];
           if (this.explainData.metadata.type) {
@@ -790,33 +893,33 @@ const app = createApp({
             parts.push(`on ${this.explainData.metadata.table}`);
           }
           if (parts.length > 0) {
-            title = parts.join(' ') + ' - Logseidon';
+            title = parts.join(" ") + " - Logseidon";
           }
         }
-        
-        const titleInput = document.createElement('input');
-        titleInput.type = 'hidden';
-        titleInput.name = 'title';
+
+        const titleInput = document.createElement("input");
+        titleInput.type = "hidden";
+        titleInput.name = "title";
         titleInput.value = title;
         form.appendChild(titleInput);
-        
-        const planInput = document.createElement('input');
-        planInput.type = 'hidden';
-        planInput.name = 'plan';
+
+        const planInput = document.createElement("input");
+        planInput.type = "hidden";
+        planInput.name = "plan";
         planInput.value = this.explainData.planSource;
         form.appendChild(planInput);
-        
-        const queryInput = document.createElement('input');
-        queryInput.type = 'hidden';
-        queryInput.name = 'query';
+
+        const queryInput = document.createElement("input");
+        queryInput.type = "hidden";
+        queryInput.name = "query";
         queryInput.value = this.explainData.planQuery;
         form.appendChild(queryInput);
-        
+
         document.body.appendChild(form);
         form.submit();
         document.body.removeChild(form);
       } catch (error) {
-        console.error('Error sharing plan:', error);
+        console.error("Error sharing plan:", error);
         alert(`Failed to share plan: ${error.message}`);
       }
     },
@@ -997,9 +1100,33 @@ const app = createApp({
                     <div class="checkbox" :class="{ checked: isContainerSelected(container.Name) }"></div>
                     <div class="container-info">
                       <div class="container-name">{{ container.Name }}</div>
-                      <div class="container-id">{{ container.ID }}</div>
+                      <div class="container-id">{{ container.ID.substring(0, 12) }}</div>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="recentRequests.length > 0" class="section">
+            <h3>Recent Requests</h3>
+            <div class="recent-requests-list">
+              <div v-for="req in recentRequests" :key="req.requestId" 
+                   class="recent-request-item"
+                   @click="setTraceFilter('request_id', req.requestId, null)"
+                   title="Click to filter by this request">
+                <div class="request-header-line">
+                  <span class="request-method">{{ req.method }}</span>
+                  <span class="request-path">{{ req.path }}</span>
+                  <span v-if="req.latency" class="request-latency" :class="{ 'latency-slow': parseFloat(req.latency) > 1000 }">{{ parseFloat(req.latency).toFixed(0) }}ms</span>
+                  <span v-if="req.statusCode" class="request-status" :class="{ 'status-success': req.statusCode >= 200 && req.statusCode < 300, 'status-error': req.statusCode >= 400 }">{{ req.statusCode }}</span>
+                </div>
+                <div v-if="req.operations.length > 0" class="request-operations">
+                  <span v-for="op in req.operations" :key="op" class="operation-badge">{{ op }}</span>
+                </div>
+                <div class="request-footer">
+                  <span class="request-timestamp">{{ req.timestamp }}</span>
+                  <span class="request-id">{{ req.requestId.substring(0, 8) }}...</span>
                 </div>
               </div>
             </div>
