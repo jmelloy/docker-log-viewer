@@ -1691,4 +1691,119 @@ button:disabled {
     font-size: 0.65rem;
 }
 
+/* Recent Requests */
+.recent-requests-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.recent-request-item {
+    padding: 0.5rem;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.recent-request-item:hover {
+    background: #1c2128;
+    border-color: #58a6ff;
+}
+
+.request-header-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.request-method {
+    font-weight: 600;
+    color: #7ee787;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.35rem;
+    background: #1f6f42;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.request-path {
+    font-weight: 500;
+    color: #58a6ff;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.request-latency {
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    flex-shrink: 0;
+    background: #1c2d41;
+    color: #79c0ff;
+}
+
+.request-latency.latency-slow {
+    background: #5a1e1e;
+    color: #f85149;
+}
+
+.request-status {
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.request-status.status-success {
+    background: #1f6f42;
+    color: #7ee787;
+}
+
+.request-status.status-error {
+    background: #5a1e1e;
+    color: #f85149;
+}
+
+.request-operations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.operation-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.35rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 3px;
+    color: #c9d1d9;
+}
+
+.request-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.request-timestamp {
+    color: #8b949e;
+    font-size: 0.7rem;
+}
+
+.request-id {
+    color: #8b949e;
+    font-size: 0.7rem;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+}
+
 
