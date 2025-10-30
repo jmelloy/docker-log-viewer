@@ -91,6 +91,28 @@ const app = createApp({
         return null;
       }
     },
+
+    filteredRequestLogs() {
+      if (!this.selectedRequestDetail || !this.selectedRequestDetail.logs) {
+        return [];
+      }
+      // Filter out TRACE level logs (case-insensitive)
+      return this.selectedRequestDetail.logs.filter((log) => {
+        const level = (log.level || "").toUpperCase();
+        return level !== "TRC" && level !== "TRACE";
+      });
+    },
+
+    requestViewerLink() {
+      if (
+        !this.selectedRequestDetail ||
+        !this.selectedRequestDetail.execution.requestIdHeader
+      ) {
+        return null;
+      }
+      const requestId = this.selectedRequestDetail.execution.requestIdHeader;
+      return `/?request_id=${encodeURIComponent(requestId)}`;
+    },
   },
 
   async mounted() {
@@ -883,23 +905,29 @@ const app = createApp({
 
       const keywords = [
         "SELECT",
-        "FROM",
         "WHERE",
-        "JOIN",
-        "LEFT JOIN",
-        "RIGHT JOIN",
-        "INNER JOIN",
-        "FULL JOIN",
         "GROUP BY",
         "ORDER BY",
         "HAVING",
         "UNION",
         "INSERT INTO",
         "UPDATE",
-        "DELETE FROM",
         "SET",
         "VALUES",
       ];
+
+      formatted = formatted.replaceAll(
+        new RegExp(
+          `\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)\\b`,
+          "gi"
+        ),
+        `\n$1`
+      );
+
+      formatted = formatted.replaceAll(
+        new RegExp(`\\b(DELETE FROM|FROM)\\b`, "gi"),
+        `\n$1`
+      );
 
       keywords.forEach((kw) => {
         formatted = formatted.replace(
@@ -908,93 +936,76 @@ const app = createApp({
         );
       });
 
-      // Split into lines and process SELECT lists specially
-      let lines = formatted.split("\n");
-      let result = [];
+      const lines = formatted
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const output = [];
+      const indentStack = [];
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
+      for (const line of lines) {
+        if (
+          /^(SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|UNION)$/i.test(line)
+        ) {
+          indentStack.length = 0;
+        }
 
-        // Check if this is a SELECT line with comma-separated items
-        if (line.startsWith("SELECT ")) {
-          result.push("SELECT");
+        const opens = (line.match(/\(/g) || []).length;
+        const closes = (line.match(/\)/g) || []).length;
+        const netChange = opens - closes;
+        console.log(netChange, indentStack.length, line);
 
-          // Get everything after SELECT until next keyword
-          let selectContent = line.substring(7); // Remove 'SELECT '
-          let j = i + 1;
-          while (
-            j < lines.length &&
-            !lines[j]
-              .trim()
-              .match(/^(FROM|WHERE|JOIN|GROUP BY|ORDER BY|HAVING|UNION)/i)
-          ) {
-            selectContent += " " + lines[j].trim();
-            j++;
-          }
-          i = j - 1; // Skip processed lines
-
-          // Split by commas (outside parens) and group to ~120 chars
-          const items = [];
+        if (netChange <= 0) {
+          // Break on AND/OR outside parens
           let depth = 0;
-          let current = "";
-          for (let k = 0; k < selectContent.length; k++) {
-            const char = selectContent[k];
+          let result = "  ".repeat(indentStack.length);
+          let i = 0;
+          while (i < line.length) {
+            const char = line[i];
             if (char === "(") depth++;
             else if (char === ")") depth--;
 
-            if (char === "," && depth === 0) {
-              items.push(current.trim());
-              current = "";
-            } else {
-              current += char;
+            if (depth == 0) {
+              const remaining = line.substring(i);
+              if (/^\s+(AND|OR)\b/i.test(remaining)) {
+                const match = remaining.match(/^(\s+)(AND|OR)\b/i);
+                result +=
+                  "\n" +
+                  "  ".repeat(indentStack.length + 1) +
+                  match[2].toUpperCase();
+                i += match[0].length;
+                continue;
+              }
+
+              if (result.length > 100 && char == ",") {
+                output.push(result + ",");
+                result = "  ".repeat(indentStack.length + 1);
+                i += 1;
+                continue;
+              }
+            }
+            result += char;
+            i++;
+          }
+          output.push(result);
+
+          if (netChange < 0) {
+            for (let i = 0; i < Math.abs(netChange); i++) {
+              indentStack.pop();
             }
           }
-          if (current.trim()) items.push(current.trim());
-
-          // Group items to fit ~120 chars per line
-          let currentLine = "";
-          items.forEach((item, idx) => {
-            const separator = idx === 0 ? "" : ", ";
-            if (currentLine && (currentLine + separator + item).length > 120) {
-              result.push("  " + currentLine + ",");
-              currentLine = item;
-            } else {
-              currentLine += separator + item;
-            }
-          });
-          if (currentLine) result.push("  " + currentLine);
-
-          result.push(""); // Blank line after SELECT
         } else {
-          result.push(line);
+          output.push("  ".repeat(indentStack.length) + line);
+        }
+
+        if (netChange > 0) {
+          for (let i = 0; i < netChange; i++) {
+            indentStack.push(true);
+          }
         }
       }
 
-      // Indent based on parens
-      let indent = 0;
-      return result
-        .map((line) => {
-          const trimmed = line.trim();
-          if (!trimmed) return "";
-          if (
-            trimmed === "SELECT" ||
-            trimmed.match(/^(FROM|WHERE|GROUP BY|ORDER BY)/i)
-          ) {
-            indent = 0;
-            return trimmed;
-          }
-
-          if (trimmed.startsWith(")")) indent = Math.max(0, indent - 1);
-          const formatted = "  ".repeat(indent) + trimmed;
-
-          const opens = (trimmed.match(/\(/g) || []).length;
-          const closes = (trimmed.match(/\)/g) || []).length;
-          indent += opens - closes;
-
-          return formatted;
-        })
-        .join("\n");
+      return output.join("\n");
     },
   },
 
@@ -1299,10 +1310,13 @@ const app = createApp({
           </div>
 
           <div class="modal-section">
-            <h4>Logs (<span>{{ selectedRequestDetail.logs.length }}</span>)</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4 style="margin: 0;">Logs (<span>{{ filteredRequestLogs.length }}</span>) <span v-if="selectedRequestDetail.logs.length > filteredRequestLogs.length" style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">({{ selectedRequestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span></h4>
+              <a v-if="requestViewerLink" :href="requestViewerLink" target="_blank" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none;">View in Log Viewer →</a>
+            </div>
             <div class="logs-list">
-              <p v-if="selectedRequestDetail.logs.length === 0" style="color: #6c757d;">No logs captured</p>
-              <div v-for="(log, idx) in selectedRequestDetail.logs" :key="idx" class="log-entry">
+              <p v-if="filteredRequestLogs.length === 0" style="color: #6c757d;">No logs captured (or all logs are TRACE level)</p>
+              <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-entry">
                 <div class="log-entry-header">
                   <span class="log-level" :class="log.level || 'INFO'">{{ log.level || 'INFO' }}</span>
                   <span class="log-timestamp">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
