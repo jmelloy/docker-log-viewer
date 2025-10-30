@@ -18,11 +18,11 @@ type IndexRecommendation struct {
 
 // IndexAnalysis provides comprehensive index usage analysis
 type IndexAnalysis struct {
-	Recommendations      []IndexRecommendation `json:"recommendations"`
-	SequentialScans      []SequentialScanIssue `json:"sequentialScans"`
-	UnusedIndexes        []string              `json:"unusedIndexes,omitempty"`
-	IndexUsageStats      []IndexUsageStat      `json:"indexUsageStats"`
-	Summary              IndexAnalysisSummary  `json:"summary"`
+	Recommendations []IndexRecommendation `json:"recommendations"`
+	SequentialScans []SequentialScanIssue `json:"sequentialScans"`
+	UnusedIndexes   []string              `json:"unusedIndexes,omitempty"`
+	IndexUsageStats []IndexUsageStat      `json:"indexUsageStats"`
+	Summary         IndexAnalysisSummary  `json:"summary"`
 }
 
 // SequentialScanIssue identifies queries performing sequential scans
@@ -72,7 +72,7 @@ func AnalyzeIndexUsage(queries []QueryWithPlan) *IndexAnalysis {
 
 	// Track sequential scans by normalized query
 	seqScanMap := make(map[string]*SequentialScanIssue)
-	
+
 	// Track index usage
 	indexUsageMap := make(map[string]*IndexUsageStat)
 
@@ -123,13 +123,13 @@ func AnalyzeIndexUsage(queries []QueryWithPlan) *IndexAnalysis {
 }
 
 // analyzeNode recursively analyzes a plan node
-func analyzeNode(plan *ParsedExplainPlan, query QueryWithPlan, seqScanMap map[string]*SequentialScanIssue, 
+func analyzeNode(plan *ParsedExplainPlan, query QueryWithPlan, seqScanMap map[string]*SequentialScanIssue,
 	indexUsageMap map[string]*IndexUsageStat, summary *IndexAnalysisSummary) {
-	
+
 	// Check for sequential scans
 	if plan.NodeType == "Seq Scan" {
 		summary.SequentialScans++
-		
+
 		key := query.NormalizedQuery
 		if issue, exists := seqScanMap[key]; exists {
 			issue.Occurrences++
@@ -155,7 +155,7 @@ func analyzeNode(plan *ParsedExplainPlan, query QueryWithPlan, seqScanMap map[st
 	// Track index scans
 	if strings.Contains(plan.NodeType, "Index") {
 		summary.IndexScans++
-		
+
 		if plan.IndexName != "" {
 			key := plan.IndexName
 			if stat, exists := indexUsageMap[key]; exists {
@@ -198,9 +198,9 @@ func extractFilterCondition(plan *ParsedExplainPlan) string {
 }
 
 // generateRecommendations creates index recommendations based on analysis
-func generateRecommendations(seqScans map[string]*SequentialScanIssue, 
+func generateRecommendations(seqScans map[string]*SequentialScanIssue,
 	indexUsage map[string]*IndexUsageStat) []IndexRecommendation {
-	
+
 	var recommendations []IndexRecommendation
 
 	// Recommend indexes for frequent sequential scans
@@ -211,7 +211,7 @@ func generateRecommendations(seqScans map[string]*SequentialScanIssue,
 
 		// Determine priority based on frequency, cost, and row count
 		priority := determinePriority(issue)
-		
+
 		// Skip low priority single-occurrence scans on small tables
 		if priority == "low" && issue.Occurrences == 1 && issue.EstimatedRows < 100 {
 			continue
@@ -221,13 +221,13 @@ func generateRecommendations(seqScans map[string]*SequentialScanIssue,
 		if len(columns) == 0 {
 			// Generic recommendation if we can't determine columns
 			rec := IndexRecommendation{
-				QueriedTable:    issue.QueriedTable,
-				Columns:         []string{"<filter_column>"},
-				Reason:          fmt.Sprintf("Sequential scan detected on table '%s' (occurred %d times, avg cost: %.2f)", 
+				QueriedTable: issue.QueriedTable,
+				Columns:      []string{"<filter_column>"},
+				Reason: fmt.Sprintf("Sequential scan detected on table '%s' (occurred %d times, avg cost: %.2f)",
 					issue.QueriedTable, issue.Occurrences, issue.Cost),
 				EstimatedImpact: estimateImpact(issue),
 				Priority:        priority,
-				SQLCommand:      fmt.Sprintf("CREATE INDEX idx_%s_<column> ON %s (<filter_column>);", 
+				SQLCommand: fmt.Sprintf("CREATE INDEX idx_%s_<column> ON %s (<filter_column>);",
 					issue.QueriedTable, issue.QueriedTable),
 				AffectedQueries: issue.Occurrences,
 			}
@@ -236,13 +236,13 @@ func generateRecommendations(seqScans map[string]*SequentialScanIssue,
 			// Specific recommendation with detected columns
 			indexName := fmt.Sprintf("idx_%s_%s", issue.QueriedTable, strings.Join(columns, "_"))
 			rec := IndexRecommendation{
-				QueriedTable:    issue.QueriedTable,
-				Columns:         columns,
-				Reason:          fmt.Sprintf("Sequential scan on '%s' filtering by %s (occurred %d times)", 
+				QueriedTable: issue.QueriedTable,
+				Columns:      columns,
+				Reason: fmt.Sprintf("Sequential scan on '%s' filtering by %s (occurred %d times)",
 					issue.QueriedTable, strings.Join(columns, ", "), issue.Occurrences),
 				EstimatedImpact: estimateImpact(issue),
 				Priority:        priority,
-				SQLCommand:      fmt.Sprintf("CREATE INDEX %s ON %s (%s);", 
+				SQLCommand: fmt.Sprintf("CREATE INDEX %s ON %s (%s);",
 					indexName, issue.QueriedTable, strings.Join(columns, ", ")),
 				AffectedQueries: issue.Occurrences,
 			}
@@ -320,12 +320,12 @@ func extractColumnsFromFilter(filter string) []string {
 	// Simple pattern matching for common filter patterns
 	// Example: "(user_id = $1)" -> ["user_id"]
 	// Example: "((status)::text = 'active'::text)" -> ["status"]
-	
+
 	// Remove common patterns
 	filter = strings.ReplaceAll(filter, "::text", "")
 	filter = strings.ReplaceAll(filter, "::integer", "")
 	filter = strings.ReplaceAll(filter, "::bigint", "")
-	
+
 	// Look for patterns like "column_name =" or "column_name IS"
 	words := strings.Fields(filter)
 	for i, word := range words {
@@ -378,7 +378,7 @@ func deduplicateStrings(slice []string) []string {
 // sortRecommendations sorts recommendations by priority
 func sortRecommendations(recs []IndexRecommendation) {
 	priorityOrder := map[string]int{"high": 0, "medium": 1, "low": 2}
-	
+
 	// Use a simple bubble sort since we're modifying in place
 	for i := 0; i < len(recs); i++ {
 		for j := i + 1; j < len(recs); j++ {

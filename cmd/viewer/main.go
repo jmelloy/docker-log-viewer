@@ -20,6 +20,7 @@ import (
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/sqlexplain"
 	"docker-log-parser/pkg/store"
+	"docker-log-parser/pkg/utils"
 
 	"github.com/gorilla/websocket"
 )
@@ -1366,6 +1367,9 @@ func generateRequestID() string {
 }
 
 func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
+	// Replace localhost with host.docker.internal if running in Docker
+	url = utils.ReplaceLocalhostWithDockerHost(url)
+
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
 		return 0, "", "", err

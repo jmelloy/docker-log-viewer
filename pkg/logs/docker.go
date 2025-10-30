@@ -46,7 +46,7 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 	result := make([]Container, 0, len(containers))
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
-		
+
 		// Extract port mappings
 		ports := make([]PortMapping, 0)
 		for _, port := range c.Ports {
@@ -56,7 +56,7 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 				Type:        port.Type,
 			})
 		}
-		
+
 		result = append(result, Container{
 			ID:    c.ID, // Use full ID for StreamLogs
 			Name:  name,

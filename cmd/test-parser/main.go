@@ -107,7 +107,7 @@ func readFromDockerContainer(containerID string, tail int, follow bool, debug bo
 		case logMsg := <-logChan:
 			lineCount++
 			printLogEntry(lineCount, logMsg.Entry, debug, verbose)
-			
+
 			if !follow && lineCount >= tail {
 				fmt.Printf("\nReached tail limit (%d lines). Use -follow to continue streaming.\n", tail)
 				return
@@ -138,7 +138,7 @@ func readFromLogFile(filePath string, debug bool, verbose bool) {
 	for scanner.Scan() {
 		lineCount++
 		line := scanner.Text()
-		
+
 		if strings.TrimSpace(line) == "" {
 			if debug {
 				fmt.Printf("Line %d: [EMPTY LINE]\n", lineCount)
@@ -160,18 +160,18 @@ func readFromLogFile(filePath string, debug bool, verbose bool) {
 
 func printLogEntry(lineNum int, entry *logs.LogEntry, debug bool, verbose bool) {
 	fmt.Printf("\n--- Line %d ---\n", lineNum)
-	
+
 	if debug {
 		fmt.Printf("Raw: %s\n", entry.Raw)
 		fmt.Println(strings.Repeat("-", 40))
 	}
-	
+
 	fmt.Printf("IsJSON: %v\n", entry.IsJSON)
 	fmt.Printf("Timestamp: %s\n", entry.Timestamp)
 	fmt.Printf("Level: %s\n", entry.Level)
 	fmt.Printf("File: %s\n", entry.File)
 	fmt.Printf("Message: %s\n", entry.Message)
-	
+
 	if len(entry.Fields) > 0 {
 		fmt.Printf("Fields (%d):\n", len(entry.Fields))
 		for k, v := range entry.Fields {
@@ -182,7 +182,7 @@ func printLogEntry(lineNum int, entry *logs.LogEntry, debug bool, verbose bool) 
 			}
 		}
 	}
-	
+
 	if entry.IsJSON && len(entry.JSONFields) > 0 {
 		fmt.Printf("JSON Fields (%d):\n", len(entry.JSONFields))
 		for k, v := range entry.JSONFields {
@@ -193,10 +193,10 @@ func printLogEntry(lineNum int, entry *logs.LogEntry, debug bool, verbose bool) 
 			}
 		}
 	}
-	
+
 	if debug {
 		fmt.Printf("Formatted: %s\n", entry.FormattedString())
 	}
-	
+
 	fmt.Println(strings.Repeat("-", 40))
 }

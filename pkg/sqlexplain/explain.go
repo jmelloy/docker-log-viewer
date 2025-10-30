@@ -97,14 +97,14 @@ func noPasswordConnectionString(connectionString string) string {
 func formatSQL(query string) string {
 	// Remove leading/trailing whitespace
 	query = strings.TrimSpace(query)
-	
+
 	// Keywords that should start on a new line
 	keywords := []string{
 		"SELECT", "FROM", "WHERE", "AND", "OR", "JOIN", "INNER JOIN", "LEFT JOIN", "RIGHT JOIN",
 		"GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "UNION", "UNION ALL",
 		"INSERT INTO", "UPDATE", "DELETE FROM", "VALUES", "SET",
 	}
-	
+
 	// Add newlines before major keywords
 	for _, keyword := range keywords {
 		// Match keyword with word boundaries
@@ -116,7 +116,7 @@ func formatSQL(query string) string {
 			return "\n" + strings.ToUpper(match)
 		})
 	}
-	
+
 	// Clean up multiple newlines and trim each line
 	lines := strings.Split(query, "\n")
 	var formatted []string
@@ -126,7 +126,7 @@ func formatSQL(query string) string {
 			formatted = append(formatted, trimmed)
 		}
 	}
-	
+
 	return strings.Join(formatted, "\n")
 }
 

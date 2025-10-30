@@ -19,6 +19,7 @@ import (
 
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/store"
+	"docker-log-parser/pkg/utils"
 )
 
 type Config struct {
@@ -395,6 +396,9 @@ func generateRequestID() string {
 }
 
 func makeRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
+	// Replace localhost with host.docker.internal if running in Docker
+	url = utils.ReplaceLocalhostWithDockerHost(url)
+
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
 		return 0, "", "", err

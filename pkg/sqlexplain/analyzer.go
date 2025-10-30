@@ -9,42 +9,42 @@ import (
 
 // QueryWithPlan represents a SQL query with its explain plan
 type QueryWithPlan struct {
-	Query            string
-	NormalizedQuery  string
-	OperationName    string  // GraphQL operation or other grouping identifier
-	Timestamp        int64   // Unix timestamp for ordering
-	DurationMS       float64
-	QueriedTable     string
-	Operation        string
-	Rows             int
-	ExplainPlan      string // JSON string of the explain plan
-	Variables        string
+	Query           string
+	NormalizedQuery string
+	OperationName   string // GraphQL operation or other grouping identifier
+	Timestamp       int64  // Unix timestamp for ordering
+	DurationMS      float64
+	QueriedTable    string
+	Operation       string
+	Rows            int
+	ExplainPlan     string // JSON string of the explain plan
+	Variables       string
 }
 
 // ExplainPlanComparison represents comparison between two query sets
 type ExplainPlanComparison struct {
-	QueriesOnlyInSet1     []QueryWithPlan       `json:"queriesOnlyInSet1"`
-	QueriesOnlyInSet2     []QueryWithPlan       `json:"queriesOnlyInSet2"`
-	CommonQueries         []QueryPlanComparison `json:"commonQueries"`
-	PlanDifferences       []QueryPlanComparison `json:"planDifferences"`
+	QueriesOnlyInSet1      []QueryWithPlan       `json:"queriesOnlyInSet1"`
+	QueriesOnlyInSet2      []QueryWithPlan       `json:"queriesOnlyInSet2"`
+	CommonQueries          []QueryPlanComparison `json:"commonQueries"`
+	PlanDifferences        []QueryPlanComparison `json:"planDifferences"`
 	PerformanceDifferences []QueryPlanComparison `json:"performanceDifferences"`
-	Summary               ComparisonSummary     `json:"summary"`
+	Summary                ComparisonSummary     `json:"summary"`
 }
 
 // QueryPlanComparison compares the same query between two sets
 type QueryPlanComparison struct {
-	NormalizedQuery   string              `json:"normalizedQuery"`
-	ExampleQuery      string              `json:"exampleQuery"`
-	OperationName     string              `json:"operationName"`
-	Set1Count         int                 `json:"set1Count"`
-	Set2Count         int                 `json:"set2Count"`
-	Set1AvgDuration   float64             `json:"set1AvgDuration"`
-	Set2AvgDuration   float64             `json:"set2AvgDuration"`
-	DurationDiffPct   float64             `json:"durationDiffPct"`
-	Plan1             *ParsedExplainPlan  `json:"plan1,omitempty"`
-	Plan2             *ParsedExplainPlan  `json:"plan2,omitempty"`
-	PlanDifferences   []string            `json:"planDifferences,omitempty"`
-	HasPlanChange     bool                `json:"hasPlanChange"`
+	NormalizedQuery string             `json:"normalizedQuery"`
+	ExampleQuery    string             `json:"exampleQuery"`
+	OperationName   string             `json:"operationName"`
+	Set1Count       int                `json:"set1Count"`
+	Set2Count       int                `json:"set2Count"`
+	Set1AvgDuration float64            `json:"set1AvgDuration"`
+	Set2AvgDuration float64            `json:"set2AvgDuration"`
+	DurationDiffPct float64            `json:"durationDiffPct"`
+	Plan1           *ParsedExplainPlan `json:"plan1,omitempty"`
+	Plan2           *ParsedExplainPlan `json:"plan2,omitempty"`
+	PlanDifferences []string           `json:"planDifferences,omitempty"`
+	HasPlanChange   bool               `json:"hasPlanChange"`
 }
 
 // ComparisonSummary provides high-level statistics
@@ -61,18 +61,18 @@ type ComparisonSummary struct {
 
 // ParsedExplainPlan represents a parsed PostgreSQL EXPLAIN plan
 type ParsedExplainPlan struct {
-	NodeType          string                  `json:"nodeType"`
-	RelationName      string                  `json:"relationName,omitempty"`
-	StartupCost       float64                 `json:"startupCost"`
-	TotalCost         float64                 `json:"totalCost"`
-	PlanRows          float64                 `json:"planRows"`
-	PlanWidth         int                     `json:"planWidth"`
-	ActualRows        float64                 `json:"actualRows,omitempty"`
-	ActualLoops       int                     `json:"actualLoops,omitempty"`
-	IndexName         string                  `json:"indexName,omitempty"`
-	ScanDirection     string                  `json:"scanDirection,omitempty"`
-	Plans             []ParsedExplainPlan     `json:"plans,omitempty"`
-	RawPlan           map[string]interface{}  `json:"rawPlan,omitempty"`
+	NodeType      string                 `json:"nodeType"`
+	RelationName  string                 `json:"relationName,omitempty"`
+	StartupCost   float64                `json:"startupCost"`
+	TotalCost     float64                `json:"totalCost"`
+	PlanRows      float64                `json:"planRows"`
+	PlanWidth     int                    `json:"planWidth"`
+	ActualRows    float64                `json:"actualRows,omitempty"`
+	ActualLoops   int                    `json:"actualLoops,omitempty"`
+	IndexName     string                 `json:"indexName,omitempty"`
+	ScanDirection string                 `json:"scanDirection,omitempty"`
+	Plans         []ParsedExplainPlan    `json:"plans,omitempty"`
+	RawPlan       map[string]interface{} `json:"rawPlan,omitempty"`
 }
 
 // CompareQuerySets compares two sets of queries with their explain plans
@@ -148,8 +148,8 @@ func CompareQuerySets(set1, set2 []QueryWithPlan) *ExplainPlanComparison {
 
 	// Sort results by duration difference (most impactful first)
 	sort.Slice(result.PerformanceDifferences, func(i, j int) bool {
-		return abs(result.PerformanceDifferences[i].DurationDiffPct) > 
-		       abs(result.PerformanceDifferences[j].DurationDiffPct)
+		return abs(result.PerformanceDifferences[i].DurationDiffPct) >
+			abs(result.PerformanceDifferences[j].DurationDiffPct)
 	})
 
 	return result
@@ -204,7 +204,7 @@ func compareQueryGroup(normalized string, set1, set2 []QueryWithPlan) QueryPlanC
 	if set1[0].ExplainPlan != "" && set2[0].ExplainPlan != "" {
 		plan1 := parseExplainPlan(set1[0].ExplainPlan)
 		plan2 := parseExplainPlan(set2[0].ExplainPlan)
-		
+
 		comp.Plan1 = plan1
 		comp.Plan2 = plan2
 
@@ -314,7 +314,7 @@ func comparePlans(plan1, plan2 *ParsedExplainPlan) []string {
 	// Compare costs (significant change = >20%)
 	costDiff := ((plan2.TotalCost - plan1.TotalCost) / plan1.TotalCost) * 100
 	if abs(costDiff) > 20 {
-		diffs = append(diffs, fmt.Sprintf("Cost changed by %.1f%% (%.2f → %.2f)", 
+		diffs = append(diffs, fmt.Sprintf("Cost changed by %.1f%% (%.2f → %.2f)",
 			costDiff, plan1.TotalCost, plan2.TotalCost))
 	}
 
@@ -322,7 +322,7 @@ func comparePlans(plan1, plan2 *ParsedExplainPlan) []string {
 	if plan1.PlanRows != plan2.PlanRows {
 		rowDiff := ((plan2.PlanRows - plan1.PlanRows) / plan1.PlanRows) * 100
 		if abs(rowDiff) > 20 {
-			diffs = append(diffs, fmt.Sprintf("Estimated rows changed by %.1f%% (%.0f → %.0f)", 
+			diffs = append(diffs, fmt.Sprintf("Estimated rows changed by %.1f%% (%.0f → %.0f)",
 				rowDiff, plan1.PlanRows, plan2.PlanRows))
 		}
 	}

@@ -45,10 +45,10 @@ func TestSubstituteVariables(t *testing.T) {
 			expected: "SELECT * FROM users WHERE name = 'O''Brien'",
 		},
 		{
-			name:  "No variables",
-			query: "SELECT * FROM users",
+			name:      "No variables",
+			query:     "SELECT * FROM users",
 			variables: map[string]string{},
-			expected: "SELECT * FROM users",
+			expected:  "SELECT * FROM users",
 		},
 		{
 			name:  "Missing variable",
