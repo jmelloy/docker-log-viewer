@@ -1383,6 +1383,8 @@ button:disabled {
     font-size: 0.875rem;
     color: #c9d1d9;
     overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .logs-list {
@@ -1589,6 +1591,41 @@ button:disabled {
     letter-spacing: 0.05em;
 }
 
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #8b949e;
+}
+
+.stat-value {
+    font-size: 1rem;
+    color: #c9d1d9;
+    font-weight: 500;
+}
+
+.stat-value.success {
+    color: #7ee787;
+}
+
+.stat-value.error {
+    color: #f85149;
+}
+
+.stat-value.pending {
+    color: #ffa657;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
 .stats-grid-compact {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -1596,20 +1633,15 @@ button:disabled {
 }
 
 .stats-grid-compact .stat-item {
-    display: flex;
-    flex-direction: column;
     gap: 0.25rem;
 }
 
 .stats-grid-compact .stat-label {
     font-size: 0.7rem;
-    color: #8b949e;
 }
 
 .stats-grid-compact .stat-value {
     font-size: 0.85rem;
-    color: #c9d1d9;
-    font-weight: 500;
 }
 
 .query-list-compact {

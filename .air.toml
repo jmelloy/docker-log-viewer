@@ -3,10 +3,19 @@ args_bin = []
 bin = "./tmp/main"
 cmd = "CGO_ENABLED=1 go build -o ./tmp/main cmd/viewer/main.go"
 delay = 1000
-exclude_dir = ["assets", "tmp", "vendor", "testdata", "web", "bin", "graphql-operations-unique"]
+exclude_dir = [
+    "assets",
+    "tmp",
+    "vendor",
+    "testdata",
+    "web",
+    "bin",
+    "graphql-operations-unique",
+]
 include_ext = ["go", "graphql", "tmpl"]
 include_dir = ["pkg", "cmd/server"]
 stop_on_dir_change = false
 rerun = true
 send_interrupt = true
 kill_delay = 1000
+stop_on_exit = true
