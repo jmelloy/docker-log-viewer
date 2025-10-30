@@ -307,4 +307,3 @@ func TestDatabaseURL(t *testing.T) {
 		t.Errorf("Expected 0 database URLs after delete, got %d", len(dbURLs))
 	}
 }
-

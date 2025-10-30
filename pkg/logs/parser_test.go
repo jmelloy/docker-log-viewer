@@ -195,29 +195,29 @@ func TestMultilineSQLParsing(t *testing.T) {
 		LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.deleted_at IS NULL
 		WHERE (wm.user_id = $3 OR (w.id IN ($4) AND wm.user_id = $5)) AND w.deleted_at IS NULL
 	 db.operation=select db.rows=0 db.table=restricted_thread_recipients duration=0.546712 location=["/app/pkg/repository/threadrecipient/repository.go:444","/app/pkg/operations/thread/thread.go:638","/app/pkg/operations/thread/send.go:93"] request_id=86ad5b4d span_id=cef3d6b89201c4eb trace_id=959bf87832d58c2088c3bab3514cee63`
-	
+
 	entry := ParseLogLine(input)
-	
+
 	// Should be parsed as TRC level
 	if entry.Level != "TRC" {
 		t.Errorf("Expected level TRC, got %s", entry.Level)
 	}
-	
+
 	// Should contain the SQL UNION statement
 	if !strings.Contains(entry.Raw, "UNION") {
 		t.Errorf("Expected SQL to contain UNION, raw log: %s", entry.Raw)
 	}
-	
+
 	// Should have trace_id field
 	if entry.Fields["trace_id"] != "959bf87832d58c2088c3bab3514cee63" {
 		t.Errorf("Expected trace_id 959bf87832d58c2088c3bab3514cee63, got %s", entry.Fields["trace_id"])
 	}
-	
+
 	// Should have db.table field
 	if entry.Fields["db.table"] != "restricted_thread_recipients" {
 		t.Errorf("Expected db.table restricted_thread_recipients, got %s", entry.Fields["db.table"])
 	}
-	
+
 	// Should have duration field
 	if entry.Fields["duration"] != "0.546712" {
 		t.Errorf("Expected duration 0.546712, got %s", entry.Fields["duration"])
@@ -251,13 +251,13 @@ Oct  6 18:09:29.226800 TRC pkg/repository/app/repository.go:269 > [sql]: SELECT 
 	sqlCount := 0
 	lines := strings.Split(input, "\n")
 	inSQL := false
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
-		
+
 		// Start of new SQL statement
 		if strings.Contains(line, "[sql]:") {
 			sqlCount++

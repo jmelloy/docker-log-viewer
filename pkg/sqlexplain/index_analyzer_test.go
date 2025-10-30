@@ -373,7 +373,7 @@ func TestGenerateRecommendations(t *testing.T) {
 		for i := 0; i < len(recs)-1; i++ {
 			priorities := map[string]int{"high": 0, "medium": 1, "low": 2}
 			if priorities[recs[i].Priority] > priorities[recs[i+1].Priority] {
-				t.Errorf("Recommendations not sorted by priority: %s before %s", 
+				t.Errorf("Recommendations not sorted by priority: %s before %s",
 					recs[i].Priority, recs[i+1].Priority)
 			}
 		}

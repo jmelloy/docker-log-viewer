@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/sqlexplain"
+	"docker-log-parser/pkg/utils"
 	"embed"
 	"encoding/hex"
 	"encoding/json"
@@ -75,36 +76,36 @@ type SQLAnalysis struct {
 }
 
 type QueryDiff struct {
-	Query1       string
-	Query2       string
-	Diff         string
-	Added        []string
-	Removed      []string
-	Changed      []string
-	IsSame       bool
+	Query1  string
+	Query2  string
+	Diff    string
+	Added   []string
+	Removed []string
+	Changed []string
+	IsSame  bool
 }
 
 type ComparisonAnalysis struct {
-	QueryDiffs      []QueryDiff
-	QueriesOnlyIn1  []SQLQuery
-	QueriesOnlyIn2  []SQLQuery
-	CommonQueries   []QueryComparison
+	QueryDiffs       []QueryDiff
+	QueriesOnlyIn1   []SQLQuery
+	QueriesOnlyIn2   []SQLQuery
+	CommonQueries    []QueryComparison
 	PerfImprovements []QueryComparison
 	PerfRegressions  []QueryComparison
 }
 
 type QueryComparison struct {
-	Query        string
-	Duration1    float64
-	Duration2    float64
-	DiffPercent  float64
-	Improvement  bool
-	Table        string
-	Operation    string
-	Rows1        int
-	Rows2        int
-	Count1       int
-	Count2       int
+	Query       string
+	Duration1   float64
+	Duration2   float64
+	DiffPercent float64
+	Improvement bool
+	Table       string
+	Operation   string
+	Rows1       int
+	Rows2       int
+	Count1      int
+	Count2      int
 }
 
 type QueryGroup struct {
@@ -116,18 +117,18 @@ type QueryGroup struct {
 
 type MultiRunQueryAnalysis struct {
 	// Query matching across runs
-	MatchedQueries    []MatchedQuery
-	ConsistencyScore  float64  // 0-100, how consistent queries are across runs
-	AvgQueryCount     float64
-	QueryCountStdDev  float64
+	MatchedQueries   []MatchedQuery
+	ConsistencyScore float64 // 0-100, how consistent queries are across runs
+	AvgQueryCount    float64
+	QueryCountStdDev float64
 }
 
 type MatchedQuery struct {
 	NormalizedQuery string
-	Occurrences     []int      // Count per run
-	AvgDurations    []float64  // Avg duration per run
+	Occurrences     []int     // Count per run
+	AvgDurations    []float64 // Avg duration per run
 	Example         SQLQuery
-	IsConsistent    bool       // Same count in all runs
+	IsConsistent    bool // Same count in all runs
 }
 
 func main() {
@@ -265,6 +266,9 @@ func testURL(url string, data []byte, logChan <-chan logs.LogMessage, timeout ti
 		// Not valid JSON, might be GraphQL
 		contentType = "application/json"
 	}
+
+	// Replace localhost with host.docker.internal if running in Docker
+	url = utils.ReplaceLocalhostWithDockerHost(url)
 
 	// Make request
 	startTime := time.Now()
@@ -565,7 +569,7 @@ func analyzeMultiRunQueries(runs []*RequestResult) *MultiRunQueryAnalysis {
 
 	// Calculate statistics
 	avgQueryCount := float64(totalQueryCount) / float64(len(runs))
-	
+
 	// Calculate standard deviation
 	var variance float64
 	for _, run := range runs {
@@ -577,7 +581,7 @@ func analyzeMultiRunQueries(runs []*RequestResult) *MultiRunQueryAnalysis {
 	stdDev := 0.0
 	if len(runs) > 0 {
 		stdDev = variance / float64(len(runs))
-		stdDev = float64(int(stdDev * 100)) / 100 // Round to 2 decimal places
+		stdDev = float64(int(stdDev*100)) / 100 // Round to 2 decimal places
 	}
 
 	consistencyScore := 0.0
@@ -628,7 +632,7 @@ func ansiToHTML(text string) template.HTML {
 
 func formatSQL(sql string) string {
 	depth := 0
-	
+
 	// Replace major keywords with newlines
 	formatted := sql
 	formatted = regexp.MustCompile(`\bSELECT\b`).ReplaceAllString(formatted, "\nSELECT")
@@ -642,52 +646,52 @@ func formatSQL(sql string) string {
 	formatted = regexp.MustCompile(`\bGROUP BY\b`).ReplaceAllString(formatted, "\nGROUP BY")
 	formatted = regexp.MustCompile(`\bORDER BY\b`).ReplaceAllString(formatted, "\nORDER BY")
 	formatted = regexp.MustCompile(`\bLIMIT\b`).ReplaceAllString(formatted, "\nLIMIT")
-	
+
 	// Handle parentheses
 	formatted = strings.ReplaceAll(formatted, "(", "\n(\n")
 	formatted = strings.ReplaceAll(formatted, ")", "\n)\n")
-	
+
 	// Split into lines and indent
 	lines := strings.Split(formatted, "\n")
 	var result strings.Builder
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		
+
 		if line == ")" {
 			depth--
 		}
-		
+
 		result.WriteString(strings.Repeat("  ", depth))
 		result.WriteString(line)
 		result.WriteString("\n")
-		
+
 		if line == "(" {
 			depth++
 		}
 	}
-	
+
 	return strings.TrimSpace(result.String())
 }
 
 func formatAndHighlightSQL(sql string) template.HTML {
 	// First format the SQL
 	formatted := formatSQL(sql)
-	
+
 	// Apply syntax highlighting with proper escaping
 	// We use ReplaceAllStringFunc to escape each part individually
 	keywords := regexp.MustCompile(`\b(SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TABLE|INDEX|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AND|OR|NOT|IN|EXISTS|LIKE|IS|NULL|ORDER|BY|GROUP|HAVING|LIMIT|OFFSET|AS|SET|VALUES|INTO|DISTINCT|UNION|CASE|WHEN|THEN|ELSE|END)\b`)
 	strings_re := regexp.MustCompile(`('[^']*')`)
 	numbers := regexp.MustCompile(`\b(\d+(?:\.\d+)?)\b`)
-	
+
 	// Process in order: keywords first, then strings, then numbers
 	result := keywords.ReplaceAllStringFunc(formatted, func(match string) string {
 		return fmt.Sprintf(`<span class="sql-keyword">%s</span>`, template.HTMLEscapeString(match))
 	})
-	
+
 	result = strings_re.ReplaceAllStringFunc(result, func(match string) string {
 		// Check if already inside a span tag
 		if strings.Contains(match, "sql-keyword") {
@@ -695,7 +699,7 @@ func formatAndHighlightSQL(sql string) template.HTML {
 		}
 		return fmt.Sprintf(`<span class="sql-string">%s</span>`, template.HTMLEscapeString(match))
 	})
-	
+
 	result = numbers.ReplaceAllStringFunc(result, func(match string) string {
 		// Check if already inside a span tag
 		if strings.Contains(match, "sql-keyword") || strings.Contains(match, "sql-string") {
@@ -703,13 +707,13 @@ func formatAndHighlightSQL(sql string) template.HTML {
 		}
 		return fmt.Sprintf(`<span class="sql-number">%s</span>`, template.HTMLEscapeString(match))
 	})
-	
+
 	// Escape any remaining untagged content
 	// Split by tags and escape the text between them
 	var builder strings.Builder
 	inTag := false
 	current := ""
-	
+
 	for i := 0; i < len(result); i++ {
 		if result[i] == '<' {
 			if !inTag && current != "" {
@@ -731,45 +735,45 @@ func formatAndHighlightSQL(sql string) template.HTML {
 			}
 		}
 	}
-	
+
 	return template.HTML(builder.String())
 }
 
 func compareQuerySequences(result1, result2 *RequestResult) *ComparisonAnalysis {
 	analysis := &ComparisonAnalysis{}
-	
+
 	if result1.SQLAnalysis == nil || result2.SQLAnalysis == nil {
 		return analysis
 	}
-	
+
 	queries1 := result1.SQLAnalysis.AllQueries
 	queries2 := result2.SQLAnalysis.AllQueries
-	
+
 	// Group queries by normalized form
 	map1 := make(map[string][]SQLQuery)
 	map2 := make(map[string][]SQLQuery)
-	
+
 	for _, q := range queries1 {
 		map1[q.Normalized] = append(map1[q.Normalized], q)
 	}
 	for _, q := range queries2 {
 		map2[q.Normalized] = append(map2[q.Normalized], q)
 	}
-	
+
 	// Find queries only in result1
 	for norm, queries := range map1 {
 		if _, exists := map2[norm]; !exists {
 			analysis.QueriesOnlyIn1 = append(analysis.QueriesOnlyIn1, queries[0])
 		}
 	}
-	
+
 	// Find queries only in result2
 	for norm, queries := range map2 {
 		if _, exists := map1[norm]; !exists {
 			analysis.QueriesOnlyIn2 = append(analysis.QueriesOnlyIn2, queries[0])
 		}
 	}
-	
+
 	// Compare common queries
 	for norm, queries1 := range map1 {
 		if queries2, exists := map2[norm]; exists {
@@ -777,7 +781,7 @@ func compareQuerySequences(result1, result2 *RequestResult) *ComparisonAnalysis 
 			avgDur2 := 0.0
 			totalRows1 := 0
 			totalRows2 := 0
-			
+
 			for _, q := range queries1 {
 				avgDur1 += q.Duration
 				totalRows1 += q.Rows
@@ -796,26 +800,26 @@ func compareQuerySequences(result1, result2 *RequestResult) *ComparisonAnalysis 
 			if len(queries2) > 0 {
 				avgRows2 = totalRows2 / len(queries2)
 			}
-			
+
 			comp := QueryComparison{
-				Query:      queries1[0].Query,
-				Duration1:  avgDur1,
-				Duration2:  avgDur2,
-				Table:      queries1[0].Table,
-				Operation:  queries1[0].Operation,
-				Rows1:      avgRows1,
-				Rows2:      avgRows2,
-				Count1:     len(queries1),
-				Count2:     len(queries2),
+				Query:     queries1[0].Query,
+				Duration1: avgDur1,
+				Duration2: avgDur2,
+				Table:     queries1[0].Table,
+				Operation: queries1[0].Operation,
+				Rows1:     avgRows1,
+				Rows2:     avgRows2,
+				Count1:    len(queries1),
+				Count2:    len(queries2),
 			}
-			
+
 			if avgDur1 > 0 {
 				comp.DiffPercent = ((avgDur2 - avgDur1) / avgDur1) * 100
 				comp.Improvement = avgDur2 < avgDur1
 			}
-			
+
 			analysis.CommonQueries = append(analysis.CommonQueries, comp)
-			
+
 			if comp.Improvement && comp.DiffPercent < -10 {
 				analysis.PerfImprovements = append(analysis.PerfImprovements, comp)
 			} else if !comp.Improvement && comp.DiffPercent > 10 {
@@ -823,7 +827,7 @@ func compareQuerySequences(result1, result2 *RequestResult) *ComparisonAnalysis 
 			}
 		}
 	}
-	
+
 	// Sort by performance impact
 	sort.Slice(analysis.PerfImprovements, func(i, j int) bool {
 		return analysis.PerfImprovements[i].DiffPercent < analysis.PerfImprovements[j].DiffPercent
@@ -831,31 +835,31 @@ func compareQuerySequences(result1, result2 *RequestResult) *ComparisonAnalysis 
 	sort.Slice(analysis.PerfRegressions, func(i, j int) bool {
 		return analysis.PerfRegressions[i].DiffPercent > analysis.PerfRegressions[j].DiffPercent
 	})
-	
+
 	// Generate sequential diffs for all queries
 	maxLen := len(queries1)
 	if len(queries2) > maxLen {
 		maxLen = len(queries2)
 	}
-	
+
 	for i := 0; i < maxLen; i++ {
 		diff := QueryDiff{}
-		
+
 		if i < len(queries1) {
 			diff.Query1 = queries1[i].Query
 		}
 		if i < len(queries2) {
 			diff.Query2 = queries2[i].Query
 		}
-		
+
 		diff.IsSame = diff.Query1 == diff.Query2
 		if !diff.IsSame && diff.Query1 != "" && diff.Query2 != "" {
 			diff.Added, diff.Removed, diff.Changed = computeQueryDiff(diff.Query1, diff.Query2)
 		}
-		
+
 		analysis.QueryDiffs = append(analysis.QueryDiffs, diff)
 	}
-	
+
 	return analysis
 }
 
@@ -863,19 +867,19 @@ func computeQueryDiff(q1, q2 string) ([]string, []string, []string) {
 	// Simple word-based diff
 	words1 := strings.Fields(q1)
 	words2 := strings.Fields(q2)
-	
+
 	wordMap1 := make(map[string]bool)
 	wordMap2 := make(map[string]bool)
-	
+
 	for _, w := range words1 {
 		wordMap1[w] = true
 	}
 	for _, w := range words2 {
 		wordMap2[w] = true
 	}
-	
+
 	var added, removed, changed []string
-	
+
 	for _, w := range words2 {
 		if !wordMap1[w] {
 			added = append(added, w)
@@ -886,13 +890,13 @@ func computeQueryDiff(q1, q2 string) ([]string, []string, []string) {
 			removed = append(removed, w)
 		}
 	}
-	
+
 	return added, removed, changed
 }
 
 func generateHTML(filename string, result1, result2 *RequestResult, postData string) error {
 	comparison := compareQuerySequences(result1, result2)
-	
+
 	tmpl := template.Must(template.New("comparison-report.tmpl").Funcs(template.FuncMap{
 		"escapeHTML": template.HTMLEscapeString,
 		"ansiToHTML": ansiToHTML,
@@ -949,7 +953,7 @@ func generateHTMLMultiRun(filename string, result1, result2 *MultiRunResult, pos
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 		templatePath = "cmd/compare/comparison-report.tmpl"
 	}
-	
+
 	tmpl := template.Must(template.New("comparison-report.tmpl").Funcs(template.FuncMap{
 		"escapeHTML": template.HTMLEscapeString,
 		"ansiToHTML": ansiToHTML,
@@ -1018,57 +1022,57 @@ func generateHTMLMultiRun(filename string, result1, result2 *MultiRunResult, pos
 // ConvertToQueryWithPlan converts compare tool's SQLQuery to sqlexplain.QueryWithPlan
 // This allows using the explain plan analyzer with queries from the compare tool
 func ConvertToQueryWithPlan(queries []SQLQuery, operationName string) []sqlexplain.QueryWithPlan {
-result := make([]sqlexplain.QueryWithPlan, len(queries))
-for i, q := range queries {
-result[i] = sqlexplain.QueryWithPlan{
-Query:           q.Query,
-NormalizedQuery: q.Normalized,
-OperationName:   operationName,
-Timestamp:       int64(i), // Use index as timestamp for ordering
-DurationMS:      q.Duration,
-QueriedTable:    q.Table,
-Operation:       q.Operation,
-Rows:            q.Rows,
-ExplainPlan:     "", // Not available in basic compare tool queries
-Variables:       "",
-}
-}
-return result
+	result := make([]sqlexplain.QueryWithPlan, len(queries))
+	for i, q := range queries {
+		result[i] = sqlexplain.QueryWithPlan{
+			Query:           q.Query,
+			NormalizedQuery: q.Normalized,
+			OperationName:   operationName,
+			Timestamp:       int64(i), // Use index as timestamp for ordering
+			DurationMS:      q.Duration,
+			QueriedTable:    q.Table,
+			Operation:       q.Operation,
+			Rows:            q.Rows,
+			ExplainPlan:     "", // Not available in basic compare tool queries
+			Variables:       "",
+		}
+	}
+	return result
 }
 
 // CompareQuerySetsWithExplainPlans compares two query sets and returns detailed analysis
 // This is a convenience function that wraps sqlexplain.CompareQuerySets
 func CompareQuerySetsWithExplainPlans(queries1, queries2 []SQLQuery, opName1, opName2 string) *sqlexplain.ExplainPlanComparison {
-qwp1 := ConvertToQueryWithPlan(queries1, opName1)
-qwp2 := ConvertToQueryWithPlan(queries2, opName2)
-return sqlexplain.CompareQuerySets(qwp1, qwp2)
+	qwp1 := ConvertToQueryWithPlan(queries1, opName1)
+	qwp2 := ConvertToQueryWithPlan(queries2, opName2)
+	return sqlexplain.CompareQuerySets(qwp1, qwp2)
 }
 
 // AnalyzeIndexUsageForQueries analyzes index usage and generates recommendations
 // This is a convenience function that wraps sqlexplain.AnalyzeIndexUsage
 func AnalyzeIndexUsageForQueries(queries []SQLQuery, operationName string) *sqlexplain.IndexAnalysis {
-qwp := ConvertToQueryWithPlan(queries, operationName)
-return sqlexplain.AnalyzeIndexUsage(qwp)
+	qwp := ConvertToQueryWithPlan(queries, operationName)
+	return sqlexplain.AnalyzeIndexUsage(qwp)
 }
 
 // FormatIndexRecommendations formats index recommendations as a readable string
 func FormatIndexRecommendations(analysis *sqlexplain.IndexAnalysis) string {
-if len(analysis.Recommendations) == 0 {
-return "No index recommendations."
-}
+	if len(analysis.Recommendations) == 0 {
+		return "No index recommendations."
+	}
 
-var sb strings.Builder
-sb.WriteString(fmt.Sprintf("Index Recommendations (%d total, %d high priority):\n\n", 
-analysis.Summary.TotalRecommendations, analysis.Summary.HighPriorityRecs))
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Index Recommendations (%d total, %d high priority):\n\n",
+		analysis.Summary.TotalRecommendations, analysis.Summary.HighPriorityRecs))
 
-for i, rec := range analysis.Recommendations {
-sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", i+1, strings.ToUpper(rec.Priority), rec.QueriedTable))
-sb.WriteString(fmt.Sprintf("   Columns: %s\n", strings.Join(rec.Columns, ", ")))
-sb.WriteString(fmt.Sprintf("   Reason: %s\n", rec.Reason))
-sb.WriteString(fmt.Sprintf("   Impact: %s\n", rec.EstimatedImpact))
-sb.WriteString(fmt.Sprintf("   SQL: %s\n", rec.SQLCommand))
-sb.WriteString(fmt.Sprintf("   Affected Queries: %d\n\n", rec.AffectedQueries))
-}
+	for i, rec := range analysis.Recommendations {
+		sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", i+1, strings.ToUpper(rec.Priority), rec.QueriedTable))
+		sb.WriteString(fmt.Sprintf("   Columns: %s\n", strings.Join(rec.Columns, ", ")))
+		sb.WriteString(fmt.Sprintf("   Reason: %s\n", rec.Reason))
+		sb.WriteString(fmt.Sprintf("   Impact: %s\n", rec.EstimatedImpact))
+		sb.WriteString(fmt.Sprintf("   SQL: %s\n", rec.SQLCommand))
+		sb.WriteString(fmt.Sprintf("   Affected Queries: %d\n\n", rec.AffectedQueries))
+	}
 
-return sb.String()
+	return sb.String()
 }

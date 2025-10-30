@@ -195,18 +195,18 @@ func TestParseExplainPlan(t *testing.T) {
 
 func TestComparePlans(t *testing.T) {
 	plan1 := &ParsedExplainPlan{
-		NodeType:    "Seq Scan",
+		NodeType:     "Seq Scan",
 		RelationName: "users",
-		TotalCost:   1000.0,
-		PlanRows:    10000,
+		TotalCost:    1000.0,
+		PlanRows:     10000,
 	}
 
 	plan2 := &ParsedExplainPlan{
-		NodeType:    "Index Scan",
+		NodeType:     "Index Scan",
 		RelationName: "users",
-		IndexName:   "idx_users_email",
-		TotalCost:   50.0,
-		PlanRows:    10000,
+		IndexName:    "idx_users_email",
+		TotalCost:    50.0,
+		PlanRows:     10000,
 	}
 
 	diffs := comparePlans(plan1, plan2)
@@ -382,7 +382,7 @@ func TestAbs(t *testing.T) {
 func TestExplainPlanComparisonJSON(t *testing.T) {
 	// Test that we can marshal and unmarshal the comparison result
 	plan1JSON := `[{"Plan": {"Node Type": "Seq Scan", "Total Cost": 100.0}}]`
-	
+
 	set1 := []QueryWithPlan{
 		{
 			Query:           "SELECT * FROM users",
