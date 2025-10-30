@@ -359,6 +359,15 @@ func (s *Store) CreateExecution(exec *ExecutedRequest) (int64, error) {
 	return int64(exec.ID), nil
 }
 
+// UpdateExecution updates an existing execution record
+func (s *Store) UpdateExecution(exec *ExecutedRequest) error {
+	result := s.db.Save(exec)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update execution: %w", result.Error)
+	}
+	return nil
+}
+
 // GetExecution retrieves an execution by ID
 func (s *Store) GetExecution(id int64) (*ExecutedRequest, error) {
 	var exec ExecutedRequest

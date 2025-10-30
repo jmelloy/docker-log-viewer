@@ -367,34 +367,42 @@ func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
 		}
 	}
 
-	// Search query filter
+	// Search query filter - AND multiple terms together
 	if filter.SearchQuery != "" {
-		query := strings.ToLower(filter.SearchQuery)
-		found := false
+		terms := strings.Fields(filter.SearchQuery) // Split on whitespace
 
 		if msg.Entry != nil {
-			// Search in message
-			if strings.Contains(strings.ToLower(msg.Entry.Message), query) {
-				found = true
-			}
+			for _, term := range terms {
+				query := strings.ToLower(term)
+				found := false
 
-			// Search in raw log
-			if !found && strings.Contains(strings.ToLower(msg.Entry.Raw), query) {
-				found = true
-			}
+				// Search in message
+				if strings.Contains(strings.ToLower(msg.Entry.Message), query) {
+					found = true
+				}
 
-			// Search in fields
-			if !found && msg.Entry.Fields != nil {
-				for key, value := range msg.Entry.Fields {
-					if strings.Contains(strings.ToLower(key), query) || strings.Contains(strings.ToLower(value), query) {
-						found = true
-						break
+				// Search in raw log
+				if !found && strings.Contains(strings.ToLower(msg.Entry.Raw), query) {
+					found = true
+				}
+
+				// Search in fields
+				if !found && msg.Entry.Fields != nil {
+					for key, value := range msg.Entry.Fields {
+						if strings.Contains(strings.ToLower(key), query) || strings.Contains(strings.ToLower(value), query) {
+							found = true
+							break
+						}
 					}
 				}
-			}
-		}
 
-		if !found {
+				// If any term is not found, the log doesn't match (AND logic)
+				if !found {
+					return false
+				}
+			}
+		} else {
+			// No entry, can't match
 			return false
 		}
 	}
@@ -921,10 +929,13 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute request in background with overrides
-	go wa.executeRequestWithOverrides(id, input.ServerID, input.URLOverride, input.BearerTokenOverride, input.DevIDOverride, input.RequestDataOverride)
+	executionID := wa.executeRequestWithOverrides(id, input.ServerID, input.URLOverride, input.BearerTokenOverride, input.DevIDOverride, input.RequestDataOverride)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":      "started",
+		"executionId": executionID,
+	})
 }
 
 func (wa *WebApp) handleExecutions(w http.ResponseWriter, r *http.Request) {
@@ -1177,15 +1188,15 @@ func (wa *WebApp) handleDatabaseURLDetail(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, urlOverride, bearerTokenOverride, devIDOverride, requestDataOverride string) {
+func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, urlOverride, bearerTokenOverride, devIDOverride, requestDataOverride string) int64 {
 	req, err := wa.store.GetRequest(requestID)
 	if err != nil {
 		slog.Error("failed to get request", "request_id", requestID, "error", err)
-		return
+		return 0
 	}
 	if req == nil {
 		slog.Warn("request not found", "request_id", requestID)
-		return
+		return 0
 	}
 
 	// Generate request ID
@@ -1200,7 +1211,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		server, err := wa.store.GetServer(int64(*serverIDOverride))
 		if err != nil {
 			slog.Error("failed to get override server", "server_id", *serverIDOverride, "error", err)
-			return
+			return 0
 		}
 		if server != nil {
 			url = server.URL
@@ -1245,90 +1256,103 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	// Convert requestID to pointer for SampleID
 	sampleID := uint(requestID)
 
+	// Create execution record immediately with pending status
 	execution := &store.ExecutedRequest{
 		SampleID:        &sampleID,
 		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
 		RequestBody:     requestData,
 		ExecutedAt:      time.Now(),
+		StatusCode:      0, // 0 indicates pending
 	}
 
-	// Execute HTTP request
-	startTime := time.Now()
-	statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(requestData), requestIDHeader, bearerToken, devID, experimentalMode)
-	execution.DurationMS = time.Since(startTime).Milliseconds()
-	execution.StatusCode = statusCode
-	execution.ResponseBody = responseBody
-	execution.ResponseHeaders = responseHeaders
-
-	if err != nil {
-		execution.Error = err.Error()
-	}
-
-	// Save execution
+	// Save execution immediately
 	execID, err := wa.store.CreateExecution(execution)
 	if err != nil {
 		slog.Error("failed to save execution", "error", err)
-		return
+		return 0
 	}
 
-	slog.Info("request executed", "request_id", requestID, "header_id", requestIDHeader, "status", statusCode, "duration_ms", execution.DurationMS)
+	// Execute HTTP request in background
+	go func() {
+		startTime := time.Now()
+		statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(requestData), requestIDHeader, bearerToken, devID, experimentalMode)
+		execution.DurationMS = time.Since(startTime).Milliseconds()
+		execution.StatusCode = statusCode
+		execution.ResponseBody = responseBody
+		execution.ResponseHeaders = responseHeaders
 
-	// Collect logs
-	collectedLogs := wa.collectLogsForRequest(requestIDHeader, 10*time.Second)
-
-	// Save logs
-	if len(collectedLogs) > 0 {
-		if err := wa.store.SaveExecutionLogs(execID, collectedLogs); err != nil {
-			slog.Error("failed to save logs", "error", err)
-		}
-	}
-
-	// Extract and save SQL queries
-	sqlQueries := extractSQLQueries(collectedLogs)
-	if len(sqlQueries) > 0 {
-		if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
-			slog.Error("failed to save SQL queries", "error", err)
+		if err != nil {
+			execution.Error = err.Error()
 		}
 
-		// Auto-execute EXPLAIN for queries taking longer than 2ms
-		for i, q := range sqlQueries {
-			if q.DurationMS > 2.0 {
-				// Parse db.vars to extract parameters
-				variables := make(map[string]string)
-				if q.Variables != "" {
-					var varsArray []interface{}
-					if err := json.Unmarshal([]byte(q.Variables), &varsArray); err == nil {
-						// Convert array values to map with 1-based indices
-						for idx, val := range varsArray {
-							variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
+		// Update execution with results
+		execution.ID = uint(execID)
+		if err := wa.store.UpdateExecution(execution); err != nil {
+			slog.Error("failed to update execution", "error", err)
+			return
+		}
+
+		slog.Info("request executed", "request_id", requestID, "header_id", requestIDHeader, "status", statusCode, "duration_ms", execution.DurationMS)
+
+		// Collect logs
+		collectedLogs := wa.collectLogsForRequest(requestIDHeader, 10*time.Second)
+
+		// Save logs
+		if len(collectedLogs) > 0 {
+			if err := wa.store.SaveExecutionLogs(execID, collectedLogs); err != nil {
+				slog.Error("failed to save logs", "error", err)
+			}
+		}
+
+		// Extract and save SQL queries
+		sqlQueries := extractSQLQueries(collectedLogs)
+		if len(sqlQueries) > 0 {
+			if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
+				slog.Error("failed to save SQL queries", "error", err)
+			}
+
+			// Auto-execute EXPLAIN for queries taking longer than 2ms
+			for i, q := range sqlQueries {
+				if q.DurationMS > 2.0 {
+					// Parse db.vars to extract parameters
+					variables := make(map[string]string)
+					if q.Variables != "" {
+						var varsArray []interface{}
+						if err := json.Unmarshal([]byte(q.Variables), &varsArray); err == nil {
+							// Convert array values to map with 1-based indices
+							for idx, val := range varsArray {
+								variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
+							}
+						} else {
+							slog.Warn("failed to parse db.vars", "query_index", i, "error", err)
 						}
-					} else {
-						slog.Warn("failed to parse db.vars", "query_index", i, "error", err)
 					}
-				}
 
-				// Execute EXPLAIN
-				req := sqlexplain.Request{
-					Query:            q.Query,
-					Variables:        variables,
-					ConnectionString: connectionString,
-				}
-				resp := sqlexplain.Explain(req)
+					// Execute EXPLAIN
+					req := sqlexplain.Request{
+						Query:            q.Query,
+						Variables:        variables,
+						ConnectionString: connectionString,
+					}
+					resp := sqlexplain.Explain(req)
 
-				if resp.Error != "" {
-					slog.Warn("auto-EXPLAIN failed", "query_index", i, "error", resp.Error)
-					continue
-				}
+					if resp.Error != "" {
+						slog.Warn("auto-EXPLAIN failed", "query_index", i, "error", resp.Error)
+						continue
+					}
 
-				// Save the EXPLAIN plan to database
-				planJSON, _ := json.Marshal(resp.QueryPlan)
-				if err := wa.store.UpdateQueryExplainPlan(execID, q.QueryHash, string(planJSON)); err != nil {
-					slog.Error("failed to save EXPLAIN plan", "query_index", i, "error", err)
+					// Save the EXPLAIN plan to database
+					planJSON, _ := json.Marshal(resp.QueryPlan)
+					if err := wa.store.UpdateQueryExplainPlan(execID, q.QueryHash, string(planJSON)); err != nil {
+						slog.Error("failed to save EXPLAIN plan", "query_index", i, "error", err)
+					}
 				}
 			}
 		}
-	}
+	}()
+
+	return execID
 }
 
 func (wa *WebApp) executeRequest(requestID int64) {

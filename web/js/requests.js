@@ -241,6 +241,7 @@ const app = createApp({
     getDetailStatusClass() {
       if (!this.selectedRequestDetail) return "";
       const statusCode = this.selectedRequestDetail.execution.statusCode;
+      if (!statusCode || statusCode === 0) return "pending";
       return statusCode >= 200 && statusCode < 300 ? "success" : "error";
     },
 
@@ -275,6 +276,7 @@ const app = createApp({
 
       if (query.explainPlan && query.explainPlan.length > 0) {
         // Show saved plan
+
         try {
           const plan = JSON.parse(query.explainPlan);
           this.displayExplainPlan(plan, query.query);
@@ -396,7 +398,9 @@ const app = createApp({
         const queryInput = document.createElement("input");
         queryInput.type = "hidden";
         queryInput.name = "query";
-        queryInput.value = this.explainPlanData.query;
+        queryInput.value =
+          this.formatSQL(this.explainPlanData.query) ||
+          this.explainPlanData.query;
         form.appendChild(queryInput);
 
         document.body.appendChild(form);
@@ -699,19 +703,61 @@ const app = createApp({
           throw new Error("Failed to execute query");
         }
 
+        const result = await response.json();
         this.showExecuteQueryModal = false;
-        alert(
-          "Query execution started. Results will appear in the requests list."
-        );
 
-        // Reload requests after a delay
-        setTimeout(() => {
-          this.loadRequests(this.selectedSampleQuery.id);
-          this.loadAllRequests();
-        }, 12000); // Wait 12 seconds for logs to be collected
+        // Immediately reload to show the pending execution
+        await this.loadAllRequests();
+        await this.loadRequests(this.selectedSampleQuery.id);
+
+        // Start polling for execution completion
+        if (result.executionId) {
+          this.pollExecutionStatus(result.executionId);
+        }
       } catch (error) {
         console.error("Failed to execute query:", error);
         alert("Failed to execute query: " + error.message);
+      }
+    },
+
+    async pollExecutionStatus(executionId, attempts = 0) {
+      const maxAttempts = 60; // Poll for up to 60 seconds
+      const interval = 1000; // 1 second
+
+      if (attempts >= maxAttempts) {
+        console.log("Polling timeout for execution", executionId);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/executions/${executionId}`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch execution detail");
+        }
+
+        const detail = await response.json();
+
+        // Check if execution is complete (status code is set)
+        if (detail.execution && detail.execution.statusCode > 0) {
+          // Execution is complete, reload the requests
+          await this.loadAllRequests();
+          if (this.selectedSampleQuery) {
+            await this.loadRequests(this.selectedSampleQuery.id);
+          }
+          console.log("Execution complete", executionId);
+          return;
+        }
+
+        // Continue polling
+        setTimeout(() => {
+          this.pollExecutionStatus(executionId, attempts + 1);
+        }, interval);
+      } catch (error) {
+        console.error("Error polling execution status:", error);
+        // Continue polling despite errors
+        setTimeout(() => {
+          this.pollExecutionStatus(executionId, attempts + 1);
+        }, interval);
       }
     },
 
@@ -828,6 +874,127 @@ const app = createApp({
       const div = document.createElement("div");
       div.textContent = text;
       return div.innerHTML;
+    },
+
+    formatSQL(sql) {
+      if (!sql?.trim()) return sql;
+
+      let formatted = sql.replace(/\s+/g, " ").trim();
+
+      const keywords = [
+        "SELECT",
+        "FROM",
+        "WHERE",
+        "JOIN",
+        "LEFT JOIN",
+        "RIGHT JOIN",
+        "INNER JOIN",
+        "FULL JOIN",
+        "GROUP BY",
+        "ORDER BY",
+        "HAVING",
+        "UNION",
+        "INSERT INTO",
+        "UPDATE",
+        "DELETE FROM",
+        "SET",
+        "VALUES",
+      ];
+
+      keywords.forEach((kw) => {
+        formatted = formatted.replace(
+          new RegExp(`\\b${kw}\\b`, "gi"),
+          `\n${kw.toUpperCase()}`
+        );
+      });
+
+      // Split into lines and process SELECT lists specially
+      let lines = formatted.split("\n");
+      let result = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Check if this is a SELECT line with comma-separated items
+        if (line.startsWith("SELECT ")) {
+          result.push("SELECT");
+
+          // Get everything after SELECT until next keyword
+          let selectContent = line.substring(7); // Remove 'SELECT '
+          let j = i + 1;
+          while (
+            j < lines.length &&
+            !lines[j]
+              .trim()
+              .match(/^(FROM|WHERE|JOIN|GROUP BY|ORDER BY|HAVING|UNION)/i)
+          ) {
+            selectContent += " " + lines[j].trim();
+            j++;
+          }
+          i = j - 1; // Skip processed lines
+
+          // Split by commas (outside parens) and group to ~120 chars
+          const items = [];
+          let depth = 0;
+          let current = "";
+          for (let k = 0; k < selectContent.length; k++) {
+            const char = selectContent[k];
+            if (char === "(") depth++;
+            else if (char === ")") depth--;
+
+            if (char === "," && depth === 0) {
+              items.push(current.trim());
+              current = "";
+            } else {
+              current += char;
+            }
+          }
+          if (current.trim()) items.push(current.trim());
+
+          // Group items to fit ~120 chars per line
+          let currentLine = "";
+          items.forEach((item, idx) => {
+            const separator = idx === 0 ? "" : ", ";
+            if (currentLine && (currentLine + separator + item).length > 120) {
+              result.push("  " + currentLine + ",");
+              currentLine = item;
+            } else {
+              currentLine += separator + item;
+            }
+          });
+          if (currentLine) result.push("  " + currentLine);
+
+          result.push(""); // Blank line after SELECT
+        } else {
+          result.push(line);
+        }
+      }
+
+      // Indent based on parens
+      let indent = 0;
+      return result
+        .map((line) => {
+          const trimmed = line.trim();
+          if (!trimmed) return "";
+          if (
+            trimmed === "SELECT" ||
+            trimmed.match(/^(FROM|WHERE|GROUP BY|ORDER BY)/i)
+          ) {
+            indent = 0;
+            return trimmed;
+          }
+
+          if (trimmed.startsWith(")")) indent = Math.max(0, indent - 1);
+          const formatted = "  ".repeat(indent) + trimmed;
+
+          const opens = (trimmed.match(/\(/g) || []).length;
+          const closes = (trimmed.match(/\)/g) || []).length;
+          indent += opens - closes;
+
+          return formatted;
+        })
+        .join("\n");
     },
   },
 
@@ -1118,7 +1285,7 @@ const app = createApp({
                   <span>{{ q.tableName || 'unknown' }} - {{ q.operation || 'SELECT' }}</span>
                   <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
                 </div>
-                <div class="sql-query-text">{{ q.query }}</div>
+                <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
                 <div class="query-actions">
                   <button v-if="!q.explainPlan || q.explainPlan.length === 0" 
                           class="btn-explain" 
@@ -1201,7 +1368,7 @@ const app = createApp({
                 <div class="comparison-queries">
                   <div v-for="(q, idx) in comparisonData.detail1.sqlQueries" :key="idx" class="comparison-query">
                     <div><strong>{{ q.tableName }}</strong> - {{ q.durationMs.toFixed(2) }}ms</div>
-                    <div class="sql-query-text">{{ q.query }}</div>
+                    <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
                   </div>
                 </div>
               </div>
@@ -1234,7 +1401,7 @@ const app = createApp({
                 <div class="comparison-queries">
                   <div v-for="(q, idx) in comparisonData.detail2.sqlQueries" :key="idx" class="comparison-query">
                     <div><strong>{{ q.tableName }}</strong> - {{ q.durationMs.toFixed(2) }}ms</div>
-                    <div class="sql-query-text">{{ q.query }}</div>
+                    <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
                   </div>
                 </div>
               </div>
