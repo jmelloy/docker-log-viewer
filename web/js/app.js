@@ -55,6 +55,7 @@ const app = createApp({
   watch: {
     searchQuery() {
       this.sendFilterUpdate();
+      this.updateURL();
     },
   },
 
@@ -101,10 +102,51 @@ const app = createApp({
   },
 
   mounted() {
+    this.parseURLParameters();
     this.init();
   },
 
   methods: {
+    parseURLParameters() {
+      const params = new URLSearchParams(window.location.search);
+
+      // Parse search query parameter
+      const queryParam = params.get("query");
+      if (queryParam) {
+        this.searchQuery = queryParam;
+      }
+
+      // Parse trace filter parameters (e.g., ?trace_request_id=abc123 or ?request_id=abc123)
+      const traceParamNames = ["request_id", "trace_id", "span_id"];
+      for (const paramName of traceParamNames) {
+        const value = params.get(paramName) || params.get(`trace_${paramName}`);
+        if (value) {
+          this.traceFilters.set(paramName, value);
+        }
+      }
+    },
+
+    updateURL() {
+      const params = new URLSearchParams();
+
+      // Add search query
+      if (this.searchQuery) {
+        params.set("query", this.searchQuery);
+      }
+
+      // Add trace filters
+      for (const [key, value] of this.traceFilters.entries()) {
+        params.set(key, value);
+      }
+
+      const newURL = params.toString()
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+
+      // Update URL without reloading
+      window.history.replaceState({}, "", newURL);
+    },
+
     async init() {
       await this.loadContainers();
       this.connectWebSocket();
@@ -502,12 +544,14 @@ const app = createApp({
       if (event) event.stopPropagation();
       this.traceFilters.set(type, value);
       this.sendFilterUpdate();
+      this.updateURL();
       this.analyzeTrace();
     },
 
     removeTraceFilter(type) {
       this.traceFilters.delete(type);
       this.sendFilterUpdate();
+      this.updateURL();
       if (this.traceFilters.size === 0) {
         this.showAnalyzer = false;
       } else {
@@ -518,6 +562,7 @@ const app = createApp({
     clearTraceFilters() {
       this.traceFilters.clear();
       this.sendFilterUpdate();
+      this.updateURL();
       this.showAnalyzer = false;
     },
 
@@ -981,7 +1026,7 @@ const app = createApp({
           <div class="header-controls">
             <div class="search-box">
               <input type="text" v-model="searchQuery" placeholder="Search logs...">
-              <button @click="searchQuery = ''" class="clear-btn" title="Clear search">✕</button>
+              <button @click="searchQuery = ''; updateURL()" class="clear-btn" title="Clear search">✕</button>
             </div>
             <div class="trace-filter-display" v-if="hasTraceFilters">
               <span v-for="([key, value], index) in Array.from(traceFilters.entries())" :key="key" class="trace-filter-badge">
