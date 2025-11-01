@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -68,9 +69,9 @@ type WSMessage struct {
 }
 
 type ContainersUpdateMessage struct {
-	Containers      []logs.Container      `json:"containers"`
-	PortToServerMap map[int]string        `json:"portToServerMap"`
-	LogCounts       map[string]int        `json:"logCounts"`   // container name -> log count
+	Containers      []logs.Container         `json:"containers"`
+	PortToServerMap map[int]string           `json:"portToServerMap"`
+	LogCounts       map[string]int           `json:"logCounts"`  // container name -> log count
 	Retentions      map[string]RetentionInfo `json:"retentions"` // container name -> retention settings
 }
 
@@ -378,19 +379,16 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 
 	// Get logs from selected containers or all containers if none selected
 	var recentStoreLogs []*logstore.LogMessage
-	
+
 	if len(filter.SelectedContainers) > 0 {
 		// Get logs from specific containers
 		wa.containerMutex.RLock()
 		for containerID, containerName := range wa.containerIDNames {
 			// Check if this container is selected
-			for _, selectedName := range filter.SelectedContainers {
-				if containerName == selectedName {
-					// Get logs for this specific container (up to 10000 per container)
-					containerLogs := wa.logStore.SearchByContainer(containerID, 10000)
-					recentStoreLogs = append(recentStoreLogs, containerLogs...)
-					break
-				}
+			if slices.Contains(filter.SelectedContainers, containerName) {
+				// Get logs for this specific container (up to 10000 per container)
+				containerLogs := wa.logStore.SearchByContainer(containerID, 10000)
+				recentStoreLogs = append(recentStoreLogs, containerLogs...)
 			}
 		}
 		wa.containerMutex.RUnlock()
@@ -400,21 +398,17 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	}
 
 	// Convert logstore messages back to logs.LogMessage for filtering
-	allLogs := make([]logs.LogMessage, 0, len(recentStoreLogs))
+	filteredLogs := []LogWSMessage{}
+	slices.Reverse(recentStoreLogs)
+
 	for _, storeMsg := range recentStoreLogs {
-		allLogs = append(allLogs, logs.LogMessage{
+		msg := logs.LogMessage{
 			ContainerID: storeMsg.ContainerID,
 			Timestamp:   storeMsg.Timestamp,
 			Entry:       deserializeLogEntry(storeMsg),
-		})
-	}
+		}
 
-	// Filter logs for this client (apply level, search, trace filters)
-	// Skip container filter since we already fetched from selected containers
-	filteredLogs := []LogWSMessage{}
-
-	for _, msg := range allLogs {
-		if wa.matchesFilterExceptContainer(msg, filter) {
+		if wa.matchesFilter(msg, filter) {
 			filteredLogs = append(filteredLogs, LogWSMessage{
 				ContainerID: msg.ContainerID,
 				Timestamp:   msg.Timestamp,
@@ -423,11 +417,7 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 		}
 	}
 
-	// Reverse the logs so oldest is first (logs come from store newest-first)
-	for i, j := 0, len(filteredLogs)-1; i < j; i, j = i+1, j-1 {
-		filteredLogs[i], filteredLogs[j] = filteredLogs[j], filteredLogs[i]
-	}
-
+	slog.Info("filteredLogs", "count", len(filteredLogs))
 	// Send clear message to replace all logs
 	wsMsg := WSMessage{
 		Type: "logs_initial",
@@ -438,9 +428,18 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	client.conn.WriteJSON(wsMsg)
 }
 
-// matchesFilterExceptContainer checks if a log matches the filter criteria except container
-func (wa *WebApp) matchesFilterExceptContainer(msg logs.LogMessage, filter ClientFilter) bool {
-	// Skip container filter - already applied during fetch
+// matchesFilter checks if a log matches the client's filter criteria (including container filter)
+func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
+	// Container filter
+	if len(filter.SelectedContainers) > 0 {
+		wa.containerMutex.RLock()
+		containerName := wa.containerIDNames[msg.ContainerID]
+		wa.containerMutex.RUnlock()
+
+		if !slices.Contains(filter.SelectedContainers, containerName) {
+			return false
+		}
+	}
 
 	// Level filter
 	if len(filter.SelectedLevels) > 0 {
@@ -451,27 +450,13 @@ func (wa *WebApp) matchesFilterExceptContainer(msg logs.LogMessage, filter Clien
 		// Check if log has a level
 		if msg.Entry.Level == "" {
 			// No level parsed - check if NONE is selected
-			found := false
-			for _, level := range filter.SelectedLevels {
-				if level == "NONE" {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !slices.Contains(filter.SelectedLevels, "NONE") {
 				return false
 			}
 		} else {
 			// Has a level - check if it matches (case-insensitive)
-			found := false
 			logLevel := strings.ToUpper(msg.Entry.Level)
-			for _, level := range filter.SelectedLevels {
-				if logLevel == level {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !slices.Contains(filter.SelectedLevels, logLevel) {
 				return false
 			}
 		}
@@ -527,30 +512,6 @@ func (wa *WebApp) matchesFilterExceptContainer(msg logs.LogMessage, filter Clien
 	}
 
 	return true
-}
-
-// matchesFilter checks if a log matches the client's filter criteria (including container filter)
-func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
-	// Container filter
-	if len(filter.SelectedContainers) > 0 {
-		wa.containerMutex.RLock()
-		containerName := wa.containerIDNames[msg.ContainerID]
-		wa.containerMutex.RUnlock()
-
-		found := false
-		for _, name := range filter.SelectedContainers {
-			if containerName == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-
-	// Apply remaining filters
-	return wa.matchesFilterExceptContainer(msg, filter)
 }
 
 func (wa *WebApp) broadcastBatch(batch []logs.LogMessage) {
