@@ -491,16 +491,12 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 	results := make([]*LogMessage, 0, limit)
 	count := 0
 
-	// Determine the most efficient starting point for iteration
-	var useMainList bool
-	var useFieldIndex bool
-	var fieldIndexList *list.List
-
 	// Priority: FieldFilters > Single Container > Multiple Containers > All Messages
-	
+
 	// If field filters specified, use the smallest field index
 	if len(opts.FieldFilters) > 0 {
 		smallestSize := -1
+		var fieldIndexList *list.List
 		for _, filter := range opts.FieldFilters {
 			if fieldMap := ls.byField[filter.Name]; fieldMap != nil {
 				if valueList := fieldMap[filter.Value]; valueList != nil {
@@ -518,14 +514,26 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 				return results
 			}
 		}
-		useFieldIndex = true
-	} else if len(opts.ContainerIDs) == 1 {
-		// Single container - use container index
+
+		// Use field index for iteration
+		for e := fieldIndexList.Front(); e != nil && count < limit; e = e.Next() {
+			elem := e.Value.(*list.Element)
+			msg := elem.Value.(*LogMessage)
+			if ls.matchesFilterOptions(msg, opts) {
+				results = append(results, msg)
+				count++
+			}
+		}
+		return results
+	}
+
+	// Single container - use container index
+	if len(opts.ContainerIDs) == 1 {
 		containerList := ls.byContainer[opts.ContainerIDs[0]]
 		if containerList == nil {
 			return results
 		}
-		
+
 		for e := containerList.Front(); e != nil && count < limit; e = e.Next() {
 			elem := e.Value.(*list.Element)
 			msg := elem.Value.(*LogMessage)
@@ -535,14 +543,16 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 			}
 		}
 		return results
-	} else if len(opts.ContainerIDs) > 1 {
-		// Multiple containers - iterate through each container's index
+	}
+
+	// Multiple containers - iterate through each container's index
+	if len(opts.ContainerIDs) > 1 {
 		for _, containerID := range opts.ContainerIDs {
 			containerList := ls.byContainer[containerID]
 			if containerList == nil {
 				continue
 			}
-			
+
 			for e := containerList.Front(); e != nil && count < limit; e = e.Next() {
 				elem := e.Value.(*list.Element)
 				msg := elem.Value.(*LogMessage)
@@ -556,28 +566,14 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 			}
 		}
 		return results
-	} else {
-		// No indexes to use, search main list
-		useMainList = true
 	}
 
-	// Iterate and apply all filters
-	if useMainList {
-		for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
-			msg := e.Value.(*LogMessage)
-			if ls.matchesFilterOptions(msg, opts) {
-				results = append(results, msg)
-				count++
-			}
-		}
-	} else if useFieldIndex {
-		for e := fieldIndexList.Front(); e != nil && count < limit; e = e.Next() {
-			elem := e.Value.(*list.Element)
-			msg := elem.Value.(*LogMessage)
-			if ls.matchesFilterOptions(msg, opts) {
-				results = append(results, msg)
-				count++
-			}
+	// No indexes to use, search main list
+	for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
+		msg := e.Value.(*LogMessage)
+		if ls.matchesFilterOptions(msg, opts) {
+			results = append(results, msg)
+			count++
 		}
 	}
 
