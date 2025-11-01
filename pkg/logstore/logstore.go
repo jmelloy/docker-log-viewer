@@ -475,6 +475,209 @@ func (ls *LogStore) SetMaxMessages(max int) {
 	}
 }
 
+// FilterOptions represents all filtering criteria for log messages
+type FilterOptions struct {
+	ContainerIDs []string // Empty means all containers
+	Levels       []string // Empty means all levels
+	SearchTerms  []string // All terms must match (AND)
+	FieldFilters []FieldFilter
+}
+
+// Filter returns messages matching all filter criteria with a limit
+func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
+	ls.mu.RLock()
+	defer ls.mu.RUnlock()
+
+	results := make([]*LogMessage, 0, limit)
+	count := 0
+
+	// Determine the most efficient starting point for iteration
+	var useMainList bool
+	var useFieldIndex bool
+	var fieldIndexList *list.List
+
+	// Priority: FieldFilters > Single Container > Multiple Containers > All Messages
+	
+	// If field filters specified, use the smallest field index
+	if len(opts.FieldFilters) > 0 {
+		smallestSize := -1
+		for _, filter := range opts.FieldFilters {
+			if fieldMap := ls.byField[filter.Name]; fieldMap != nil {
+				if valueList := fieldMap[filter.Value]; valueList != nil {
+					size := valueList.Len()
+					if smallestSize == -1 || size < smallestSize {
+						smallestSize = size
+						fieldIndexList = valueList
+					}
+				} else {
+					// Value not found, no results possible
+					return results
+				}
+			} else {
+				// Field not found, no results possible
+				return results
+			}
+		}
+		useFieldIndex = true
+	} else if len(opts.ContainerIDs) == 1 {
+		// Single container - use container index
+		containerList := ls.byContainer[opts.ContainerIDs[0]]
+		if containerList == nil {
+			return results
+		}
+		
+		for e := containerList.Front(); e != nil && count < limit; e = e.Next() {
+			elem := e.Value.(*list.Element)
+			msg := elem.Value.(*LogMessage)
+			if ls.matchesFilterOptions(msg, opts) {
+				results = append(results, msg)
+				count++
+			}
+		}
+		return results
+	} else if len(opts.ContainerIDs) > 1 {
+		// Multiple containers - iterate through each container's index
+		for _, containerID := range opts.ContainerIDs {
+			containerList := ls.byContainer[containerID]
+			if containerList == nil {
+				continue
+			}
+			
+			for e := containerList.Front(); e != nil && count < limit; e = e.Next() {
+				elem := e.Value.(*list.Element)
+				msg := elem.Value.(*LogMessage)
+				if ls.matchesFilterOptions(msg, opts) {
+					results = append(results, msg)
+					count++
+					if count >= limit {
+						return results
+					}
+				}
+			}
+		}
+		return results
+	} else {
+		// No indexes to use, search main list
+		useMainList = true
+	}
+
+	// Iterate and apply all filters
+	if useMainList {
+		for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
+			msg := e.Value.(*LogMessage)
+			if ls.matchesFilterOptions(msg, opts) {
+				results = append(results, msg)
+				count++
+			}
+		}
+	} else if useFieldIndex {
+		for e := fieldIndexList.Front(); e != nil && count < limit; e = e.Next() {
+			elem := e.Value.(*list.Element)
+			msg := elem.Value.(*LogMessage)
+			if ls.matchesFilterOptions(msg, opts) {
+				results = append(results, msg)
+				count++
+			}
+		}
+	}
+
+	return results
+}
+
+// matchesFilterOptions checks if a message matches all filter criteria
+func (ls *LogStore) matchesFilterOptions(msg *LogMessage, opts FilterOptions) bool {
+	// Container filter
+	if len(opts.ContainerIDs) > 0 {
+		found := false
+		for _, containerID := range opts.ContainerIDs {
+			if msg.ContainerID == containerID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	// Level filter
+	if len(opts.Levels) > 0 {
+		level := msg.Fields["_level"]
+		if level == "" {
+			// No level parsed - check if NONE is selected
+			found := false
+			for _, l := range opts.Levels {
+				if l == "NONE" {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		} else {
+			// Has a level - check if it matches (case-insensitive)
+			levelUpper := strings.ToUpper(level)
+			found := false
+			for _, l := range opts.Levels {
+				if strings.ToUpper(l) == levelUpper {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+	}
+
+	// Search terms filter - AND multiple terms together
+	if len(opts.SearchTerms) > 0 {
+		for _, term := range opts.SearchTerms {
+			query := strings.ToLower(term)
+			found := false
+
+			// Search in message
+			if strings.Contains(strings.ToLower(msg.Message), query) {
+				found = true
+			}
+
+			// Search in raw log
+			if !found {
+				if raw, ok := msg.Fields["_raw"]; ok {
+					if strings.Contains(strings.ToLower(raw), query) {
+						found = true
+					}
+				}
+			}
+
+			// Search in fields
+			if !found {
+				for key, value := range msg.Fields {
+					if strings.Contains(strings.ToLower(key), query) || strings.Contains(strings.ToLower(value), query) {
+						found = true
+						break
+					}
+				}
+			}
+
+			// If any term is not found, the log doesn't match (AND logic)
+			if !found {
+				return false
+			}
+		}
+	}
+
+	// Field filters - all must match
+	for _, filter := range opts.FieldFilters {
+		if msg.Fields[filter.Name] != filter.Value {
+			return false
+		}
+	}
+
+	return true
+}
+
 // SetContainerRetention sets retention policy for a specific container
 func (ls *LogStore) SetContainerRetention(containerID string, policy ContainerRetentionPolicy) {
 	ls.mu.Lock()

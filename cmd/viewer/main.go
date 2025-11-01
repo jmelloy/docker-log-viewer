@@ -377,44 +377,22 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	filter := client.filter
 	client.mu.RUnlock()
 
-	// Get logs from selected containers or all containers if none selected
-	var recentStoreLogs []*logstore.LogMessage
+	// Convert client filter to LogStore FilterOptions
+	filterOpts := wa.clientFilterToLogStoreFilter(filter)
+	
+	// Use LogStore's Filter method to get filtered logs directly
+	recentStoreLogs := wa.logStore.Filter(filterOpts, 10000)
 
-	if len(filter.SelectedContainers) > 0 {
-		// Get logs from specific containers
-		wa.containerMutex.RLock()
-		for containerID, containerName := range wa.containerIDNames {
-			// Check if this container is selected
-			if slices.Contains(filter.SelectedContainers, containerName) {
-				// Get logs for this specific container (up to 10000 per container)
-				containerLogs := wa.logStore.SearchByContainer(containerID, 10000)
-				recentStoreLogs = append(recentStoreLogs, containerLogs...)
-			}
-		}
-		wa.containerMutex.RUnlock()
-	} else {
-		// No containers selected, get recent logs globally
-		recentStoreLogs = wa.logStore.GetRecent(10000)
-	}
-
-	// Convert logstore messages back to logs.LogMessage for filtering
-	filteredLogs := []LogWSMessage{}
+	// Convert to WebSocket format
+	filteredLogs := make([]LogWSMessage, 0, len(recentStoreLogs))
 	slices.Reverse(recentStoreLogs)
 
 	for _, storeMsg := range recentStoreLogs {
-		msg := logs.LogMessage{
+		filteredLogs = append(filteredLogs, LogWSMessage{
 			ContainerID: storeMsg.ContainerID,
 			Timestamp:   storeMsg.Timestamp,
 			Entry:       deserializeLogEntry(storeMsg),
-		}
-
-		if wa.matchesFilter(msg, filter) {
-			filteredLogs = append(filteredLogs, LogWSMessage{
-				ContainerID: msg.ContainerID,
-				Timestamp:   msg.Timestamp,
-				Entry:       msg.Entry,
-			})
-		}
+		})
 	}
 
 	slog.Info("filteredLogs", "count", len(filteredLogs))
@@ -426,6 +404,48 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	wsMsg.Data = data
 
 	client.conn.WriteJSON(wsMsg)
+}
+
+// clientFilterToLogStoreFilter converts a ClientFilter to logstore.FilterOptions
+func (wa *WebApp) clientFilterToLogStoreFilter(filter ClientFilter) logstore.FilterOptions {
+	opts := logstore.FilterOptions{}
+
+	// Convert container names to container IDs
+	if len(filter.SelectedContainers) > 0 {
+		wa.containerMutex.RLock()
+		containerIDs := make([]string, 0, len(filter.SelectedContainers))
+		for containerID, containerName := range wa.containerIDNames {
+			if slices.Contains(filter.SelectedContainers, containerName) {
+				containerIDs = append(containerIDs, containerID)
+			}
+		}
+		wa.containerMutex.RUnlock()
+		opts.ContainerIDs = containerIDs
+	}
+
+	// Set levels
+	if len(filter.SelectedLevels) > 0 {
+		opts.Levels = filter.SelectedLevels
+	}
+
+	// Set search terms (split by whitespace for AND logic)
+	if filter.SearchQuery != "" {
+		opts.SearchTerms = strings.Fields(filter.SearchQuery)
+	}
+
+	// Set trace filters as field filters
+	if len(filter.TraceFilters) > 0 {
+		fieldFilters := make([]logstore.FieldFilter, 0, len(filter.TraceFilters))
+		for _, tf := range filter.TraceFilters {
+			fieldFilters = append(fieldFilters, logstore.FieldFilter{
+				Name:  tf.Type,
+				Value: tf.Value,
+			})
+		}
+		opts.FieldFilters = fieldFilters
+	}
+
+	return opts
 }
 
 // matchesFilter checks if a log matches the client's filter criteria (including container filter)
@@ -527,7 +547,7 @@ func (wa *WebApp) broadcastBatch(batch []logs.LogMessage) {
 		filter := client.filter
 		client.mu.RUnlock()
 
-		// Filter logs for this client
+		// Filter logs for this client using matchesFilter
 		filteredLogs := []LogWSMessage{}
 		for _, msg := range batch {
 			if wa.matchesFilter(msg, filter) {
