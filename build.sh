@@ -15,9 +15,6 @@ go build -o bin/graphql-tester cmd/graphql-tester/main.go
 echo "Building Analyze Tool..."
 go build -o bin/analyze cmd/analyze/main.go
 
-echo "Building Test Parser..."
-go build -o bin/test-parser cmd/test-parser/main.go
-
 echo ""
 echo "Build complete!"
 echo "  - ./bin/docker-log-viewer - Web-based log viewer"

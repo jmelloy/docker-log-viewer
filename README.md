@@ -67,7 +67,7 @@ Save and execute GraphQL/API requests with full log capture and SQL analysis.
 ./graphql-tester -list
 ```
 
-See [docs/GRAPHQL_MANAGER.md](docs/GRAPHQL_MANAGER.md) for full documentation.
+
 
 ### Comparison Tool
 
@@ -106,13 +106,9 @@ See [cmd/analyze/README.md](cmd/analyze/README.md) for full documentation.
 
 ## Documentation
 
-- [Usage Guide](docs/USAGE_GUIDE.md) - Detailed feature walkthrough
-- [SQL EXPLAIN](docs/SQL_EXPLAIN.md) - Query analysis setup
-- [PEV2 Integration](docs/PEV2_INTEGRATION.md) - PostgreSQL EXPLAIN visualization
-- [GraphQL Manager](docs/GRAPHQL_MANAGER.md) - Request management guide
-- [Comparison Tool](docs/COMPARE-TOOL.md) - API comparison guide
-- [Implementation](docs/IMPLEMENTATION.md) - Technical details
 - [AGENTS.md](AGENTS.md) - Developer guide
+- [cmd/analyze/README.md](cmd/analyze/README.md) - Query analysis tool documentation
+- [pkg/sqlexplain/README.md](pkg/sqlexplain/README.md) - SQL explain plan analyzers
 
 ## Architecture
 
