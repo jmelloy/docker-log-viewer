@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"docker-log-parser/pkg/logs"
+	"docker-log-parser/pkg/logstore"
 	"docker-log-parser/pkg/sqlexplain"
 	"docker-log-parser/pkg/store"
 	"docker-log-parser/pkg/utils"
@@ -45,8 +46,7 @@ type Client struct {
 
 type WebApp struct {
 	docker           *logs.DockerClient
-	logsByContainer  map[string][]logs.LogMessage // Per-container log storage
-	logsMutex        sync.RWMutex
+	logStore         *logstore.LogStore // Indexed log storage
 	containers       []logs.Container
 	containerIDNames map[string]string // Maps container ID to name
 	containerMutex   sync.RWMutex
@@ -78,6 +78,82 @@ type LogWSMessage struct {
 	Entry       *logs.LogEntry `json:"entry"`
 }
 
+// Helper functions to convert between logs.LogMessage and logstore.LogMessage
+
+// serializeLogEntry converts a logs.LogEntry into fields for logstore
+func serializeLogEntry(entry *logs.LogEntry) (message string, fields map[string]string) {
+	if entry == nil {
+		return "", make(map[string]string)
+	}
+
+	fields = make(map[string]string)
+	message = entry.Message
+
+	// Store the raw log line as a field
+	if entry.Raw != "" {
+		fields["_raw"] = entry.Raw
+	}
+	if entry.Timestamp != "" {
+		fields["_timestamp"] = entry.Timestamp
+	}
+	if entry.Level != "" {
+		fields["_level"] = entry.Level
+	}
+	if entry.File != "" {
+		fields["_file"] = entry.File
+	}
+
+	// Copy all parsed fields
+	for k, v := range entry.Fields {
+		fields[k] = v
+	}
+
+	// Store JSON flag
+	if entry.IsJSON {
+		fields["_is_json"] = "true"
+	}
+
+	return message, fields
+}
+
+// deserializeLogEntry reconstructs a logs.LogEntry from logstore.LogMessage
+func deserializeLogEntry(msg *logstore.LogMessage) *logs.LogEntry {
+	if msg == nil {
+		return nil
+	}
+
+	entry := &logs.LogEntry{
+		Message: msg.Message,
+		Fields:  make(map[string]string),
+	}
+
+	// Extract special fields
+	if raw, ok := msg.Fields["_raw"]; ok {
+		entry.Raw = raw
+	}
+	if timestamp, ok := msg.Fields["_timestamp"]; ok {
+		entry.Timestamp = timestamp
+	}
+	if level, ok := msg.Fields["_level"]; ok {
+		entry.Level = level
+	}
+	if file, ok := msg.Fields["_file"]; ok {
+		entry.File = file
+	}
+	if isJSON, ok := msg.Fields["_is_json"]; ok {
+		entry.IsJSON = isJSON == "true"
+	}
+
+	// Copy non-special fields
+	for k, v := range msg.Fields {
+		if !strings.HasPrefix(k, "_") {
+			entry.Fields[k] = v
+		}
+	}
+
+	return entry
+}
+
 func NewWebApp() (*WebApp, error) {
 	logLevel := slog.LevelInfo
 	if os.Getenv("DEBUG") != "" {
@@ -104,7 +180,7 @@ func NewWebApp() (*WebApp, error) {
 
 	app := &WebApp{
 		docker:           docker,
-		logsByContainer:  make(map[string][]logs.LogMessage),
+		logStore:         logstore.NewLogStore(10000, 2*time.Hour),
 		containerIDNames: make(map[string]string),
 		clients:          make(map[*Client]bool),
 		logChan:          make(chan logs.LogMessage, 1000),
@@ -142,26 +218,16 @@ func (wa *WebApp) handleContainers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
-	wa.logsMutex.RLock()
-	defer wa.logsMutex.RUnlock()
+	// Get recent logs from the store (limit to 1000)
+	recentLogs := wa.logStore.GetRecent(1000)
 
-	logs := make([]LogWSMessage, 0)
-
-	// Aggregate last 1000 logs from all containers
-	for _, containerLogs := range wa.logsByContainer {
-		startIdx := 0
-		if len(containerLogs) > 1000 {
-			startIdx = len(containerLogs) - 1000
-		}
-
-		for i := startIdx; i < len(containerLogs); i++ {
-			msg := containerLogs[i]
-			logs = append(logs, LogWSMessage{
-				ContainerID: msg.ContainerID,
-				Timestamp:   msg.Timestamp,
-				Entry:       msg.Entry,
-			})
-		}
+	logs := make([]LogWSMessage, 0, len(recentLogs))
+	for _, logMsg := range recentLogs {
+		logs = append(logs, LogWSMessage{
+			ContainerID: logMsg.ContainerID,
+			Timestamp:   logMsg.Timestamp,
+			Entry:       deserializeLogEntry(logMsg),
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -169,17 +235,10 @@ func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
-	wa.logsMutex.RLock()
-	totalLogs := 0
+	totalLogs := wa.logStore.Count()
 
 	// Count logs by container
 	logsByContainer := make(map[string]int)
-	for containerID, containerLogs := range wa.logsByContainer {
-		count := len(containerLogs)
-		logsByContainer[containerID] = count
-		totalLogs += count
-	}
-	wa.logsMutex.RUnlock()
 
 	wa.containerMutex.RLock()
 	containers := make([]map[string]string, 0)
@@ -188,10 +247,15 @@ func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
 		if len(id) > 12 {
 			shortID = id[:12]
 		}
+		// Get count from logstore for this container
+		containerLogs := wa.logStore.SearchByContainer(id, 100000)
+		count := len(containerLogs)
+		logsByContainer[id] = count
+
 		containers = append(containers, map[string]string{
 			"id":    shortID,
 			"name":  name,
-			"count": fmt.Sprintf("%d", logsByContainer[id]),
+			"count": fmt.Sprintf("%d", count),
 		})
 	}
 	wa.containerMutex.RUnlock()
@@ -283,12 +347,18 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	filter := client.filter
 	client.mu.RUnlock()
 
-	wa.logsMutex.RLock()
-	allLogs := make([]logs.LogMessage, 0)
-	for _, containerLogs := range wa.logsByContainer {
-		allLogs = append(allLogs, containerLogs...)
+	// Get recent logs from LogStore
+	recentStoreLogs := wa.logStore.GetRecent(10000)
+
+	// Convert logstore messages back to logs.LogMessage for filtering
+	allLogs := make([]logs.LogMessage, 0, len(recentStoreLogs))
+	for _, storeMsg := range recentStoreLogs {
+		allLogs = append(allLogs, logs.LogMessage{
+			ContainerID: storeMsg.ContainerID,
+			Timestamp:   storeMsg.Timestamp,
+			Entry:       deserializeLogEntry(storeMsg),
+		})
 	}
-	wa.logsMutex.RUnlock()
 
 	// Filter logs for this client
 	filteredLogs := []LogWSMessage{}
@@ -483,40 +553,19 @@ func (wa *WebApp) processLogs() {
 				slog.Debug("processLogs received message", "receivedCount", receivedCount, "containerID", msg.ContainerID[:12])
 			}
 
-			wa.logsMutex.Lock()
-			// Store logs per container, keeping last 10,000 per container
-			containerID := msg.ContainerID
-			if wa.logsByContainer[containerID] == nil {
-				wa.logsByContainer[containerID] = make([]logs.LogMessage, 0)
+			// Convert logs.LogMessage to logstore.LogMessage and add to store
+			message, fields := serializeLogEntry(msg.Entry)
+			storeMsg := &logstore.LogMessage{
+				Timestamp:   msg.Timestamp,
+				ContainerID: msg.ContainerID,
+				Message:     message,
+				Fields:      fields,
 			}
-			wa.logsByContainer[containerID] = append(wa.logsByContainer[containerID], msg)
-			if len(wa.logsByContainer[containerID]) > 10000 {
-				// First, try to remove logs older than 2 hours
-				twoHoursAgo := time.Now().Add(-2 * time.Hour)
-				filtered := make([]logs.LogMessage, 0)
-				for _, log := range wa.logsByContainer[containerID] {
-					if log.Timestamp.After(twoHoursAgo) {
-						filtered = append(filtered, log)
-					}
-				}
-				wa.logsByContainer[containerID] = filtered
-
-				// If still over 10,000 after removing old logs, drop oldest by count
-				if len(wa.logsByContainer[containerID]) > 10000 {
-					wa.logsByContainer[containerID] = wa.logsByContainer[containerID][1000:]
-				}
-			}
+			wa.logStore.Add(storeMsg)
 			logCount++
 
-			// Calculate total for debugging
-			totalInMemory := 0
-			for _, containerLogs := range wa.logsByContainer {
-				totalInMemory += len(containerLogs)
-			}
-			wa.logsMutex.Unlock()
-
 			if receivedCount%100 == 0 {
-				slog.Debug("processLogs total in memory", "receivedCount", receivedCount, "totalInMemory", totalInMemory)
+				slog.Debug("processLogs total in memory", "receivedCount", receivedCount, "totalInMemory", wa.logStore.Count())
 			}
 
 			// Add to batch
@@ -1410,17 +1459,20 @@ func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration)
 	// Wait for logs to arrive
 	time.Sleep(timeout)
 
-	// Scan stored logs for matching request ID
-	collected := []logs.LogMessage{}
-	wa.logsMutex.RLock()
-	defer wa.logsMutex.RUnlock()
+	// Search LogStore for matching request ID
+	filters := []logstore.FieldFilter{
+		{Name: "request_id", Value: requestID},
+	}
+	storeResults := wa.logStore.SearchByFields(filters, 100000)
 
-	for _, containerLogs := range wa.logsByContainer {
-		for _, msg := range containerLogs {
-			if matchesRequestID(msg, requestID) {
-				collected = append(collected, msg)
-			}
-		}
+	// Convert back to logs.LogMessage
+	collected := make([]logs.LogMessage, 0, len(storeResults))
+	for _, storeMsg := range storeResults {
+		collected = append(collected, logs.LogMessage{
+			ContainerID: storeMsg.ContainerID,
+			Timestamp:   storeMsg.Timestamp,
+			Entry:       deserializeLogEntry(storeMsg),
+		})
 	}
 
 	return collected
