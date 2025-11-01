@@ -23,8 +23,8 @@ type LogStore struct {
 	messages *list.List
 
 	// Indexes for fast lookups
-	byContainer map[string]*list.List                   // container_id -> list of elements
-	byField     map[string]map[string]*list.List        // field_name -> field_value -> list of elements
+	byContainer map[string]*list.List            // container_id -> list of elements
+	byField     map[string]map[string]*list.List // field_name -> field_value -> list of elements
 
 	// Configuration
 	maxMessages int

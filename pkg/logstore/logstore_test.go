@@ -95,7 +95,7 @@ func TestEvictionByAge(t *testing.T) {
 	store := NewLogStore(100, 100*time.Millisecond)
 
 	baseTime := time.Now()
-	
+
 	// Add old messages (200ms before base time)
 	oldTime := baseTime.Add(-200 * time.Millisecond)
 	for i := 0; i < 3; i++ {

@@ -154,7 +154,6 @@ func deserializeLogEntry(msg *logstore.LogMessage) *logs.LogEntry {
 	return entry
 }
 
-
 func NewWebApp() (*WebApp, error) {
 	logLevel := slog.LevelInfo
 	if os.Getenv("DEBUG") != "" {
@@ -240,7 +239,7 @@ func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
 
 	// Count logs by container
 	logsByContainer := make(map[string]int)
-	
+
 	wa.containerMutex.RLock()
 	containers := make([]map[string]string, 0)
 	for id, name := range wa.containerIDNames {
@@ -252,7 +251,7 @@ func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
 		containerLogs := wa.logStore.SearchByContainer(id, 100000)
 		count := len(containerLogs)
 		logsByContainer[id] = count
-		
+
 		containers = append(containers, map[string]string{
 			"id":    shortID,
 			"name":  name,
@@ -350,7 +349,7 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 
 	// Get recent logs from LogStore
 	recentStoreLogs := wa.logStore.GetRecent(10000)
-	
+
 	// Convert logstore messages back to logs.LogMessage for filtering
 	allLogs := make([]logs.LogMessage, 0, len(recentStoreLogs))
 	for _, storeMsg := range recentStoreLogs {
@@ -1465,7 +1464,7 @@ func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration)
 		{Name: "request_id", Value: requestID},
 	}
 	storeResults := wa.logStore.SearchByFields(filters, 100000)
-	
+
 	// Convert back to logs.LogMessage
 	collected := make([]logs.LogMessage, 0, len(storeResults))
 	for _, storeMsg := range storeResults {
