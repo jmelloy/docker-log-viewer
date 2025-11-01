@@ -94,8 +94,10 @@ func TestEvictionByCount(t *testing.T) {
 func TestEvictionByAge(t *testing.T) {
 	store := NewLogStore(100, 100*time.Millisecond)
 
-	// Add old messages
-	oldTime := time.Now().Add(-200 * time.Millisecond)
+	baseTime := time.Now()
+	
+	// Add old messages (200ms before base time)
+	oldTime := baseTime.Add(-200 * time.Millisecond)
 	for i := 0; i < 3; i++ {
 		msg := &LogMessage{
 			Timestamp:   oldTime,
@@ -106,10 +108,10 @@ func TestEvictionByAge(t *testing.T) {
 		store.Add(msg)
 	}
 
-	// Wait a bit to ensure messages are old
-	time.Sleep(50 * time.Millisecond)
+	// Sleep to ensure enough time passes that the old messages should be expired
+	time.Sleep(150 * time.Millisecond)
 
-	// Add a new message which should trigger eviction
+	// Add a new message which should trigger eviction of old messages
 	newMsg := &LogMessage{
 		Timestamp:   time.Now(),
 		ContainerID: "container1",
@@ -118,7 +120,7 @@ func TestEvictionByAge(t *testing.T) {
 	}
 	store.Add(newMsg)
 
-	// Old messages should be evicted
+	// Old messages should be evicted (they are now >100ms old)
 	if store.Count() != 1 {
 		t.Errorf("Expected count 1 after age-based eviction, got %d", store.Count())
 	}
