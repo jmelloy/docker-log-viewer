@@ -229,7 +229,16 @@ func (ls *LogStore) SearchByFields(filters []FieldFilter, limit int) []*LogMessa
 	defer ls.mu.RUnlock()
 
 	if len(filters) == 0 {
-		return ls.GetRecent(limit)
+		// Inline GetRecent logic to avoid deadlock
+		results := make([]*LogMessage, 0, min(limit, ls.messageCount))
+		count := 0
+
+		for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
+			results = append(results, e.Value.(*LogMessage))
+			count++
+		}
+
+		return results
 	}
 
 	// Start with the smallest index for efficiency
@@ -422,11 +431,4 @@ func (ls *LogStore) SetMaxMessages(max int) {
 	for ls.messageCount > ls.maxMessages {
 		ls.evictOldest()
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
