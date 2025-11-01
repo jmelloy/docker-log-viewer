@@ -68,8 +68,15 @@ type WSMessage struct {
 }
 
 type ContainersUpdateMessage struct {
-	Containers      []logs.Container `json:"containers"`
-	PortToServerMap map[int]string   `json:"portToServerMap"`
+	Containers      []logs.Container      `json:"containers"`
+	PortToServerMap map[int]string        `json:"portToServerMap"`
+	LogCounts       map[string]int        `json:"logCounts"`   // container name -> log count
+	Retentions      map[string]RetentionInfo `json:"retentions"` // container name -> retention settings
+}
+
+type RetentionInfo struct {
+	Type  string `json:"type"`  // "count" or "time"
+	Value int    `json:"value"` // number of logs or seconds
 }
 
 type LogWSMessage struct {
@@ -208,9 +215,32 @@ func (wa *WebApp) handleContainers(w http.ResponseWriter, r *http.Request) {
 
 	portToServerMap := wa.buildPortToServerMap(containers)
 
+	// Get log counts for each container
+	logCounts := make(map[string]int)
+	for _, container := range containers {
+		count := wa.logStore.CountByContainer(container.ID)
+		logCounts[container.Name] = count
+	}
+
+	// Get retention settings for all containers
+	retentions := make(map[string]RetentionInfo)
+	if wa.store != nil {
+		retentionList, err := wa.store.ListContainerRetentions()
+		if err == nil {
+			for _, r := range retentionList {
+				retentions[r.ContainerName] = RetentionInfo{
+					Type:  r.RetentionType,
+					Value: r.RetentionValue,
+				}
+			}
+		}
+	}
+
 	response := ContainersUpdateMessage{
 		Containers:      containers,
 		PortToServerMap: portToServerMap,
+		LogCounts:       logCounts,
+		Retentions:      retentions,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -248,8 +278,7 @@ func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
 			shortID = id[:12]
 		}
 		// Get count from logstore for this container
-		containerLogs := wa.logStore.SearchByContainer(id, 100000)
-		count := len(containerLogs)
+		count := wa.logStore.CountByContainer(id)
 		logsByContainer[id] = count
 
 		containers = append(containers, map[string]string{
@@ -347,8 +376,28 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	filter := client.filter
 	client.mu.RUnlock()
 
-	// Get recent logs from LogStore
-	recentStoreLogs := wa.logStore.GetRecent(10000)
+	// Get logs from selected containers or all containers if none selected
+	var recentStoreLogs []*logstore.LogMessage
+	
+	if len(filter.SelectedContainers) > 0 {
+		// Get logs from specific containers
+		wa.containerMutex.RLock()
+		for containerID, containerName := range wa.containerIDNames {
+			// Check if this container is selected
+			for _, selectedName := range filter.SelectedContainers {
+				if containerName == selectedName {
+					// Get logs for this specific container (up to 10000 per container)
+					containerLogs := wa.logStore.SearchByContainer(containerID, 10000)
+					recentStoreLogs = append(recentStoreLogs, containerLogs...)
+					break
+				}
+			}
+		}
+		wa.containerMutex.RUnlock()
+	} else {
+		// No containers selected, get recent logs globally
+		recentStoreLogs = wa.logStore.GetRecent(10000)
+	}
 
 	// Convert logstore messages back to logs.LogMessage for filtering
 	allLogs := make([]logs.LogMessage, 0, len(recentStoreLogs))
@@ -360,17 +409,23 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 		})
 	}
 
-	// Filter logs for this client
+	// Filter logs for this client (apply level, search, trace filters)
+	// Skip container filter since we already fetched from selected containers
 	filteredLogs := []LogWSMessage{}
 
 	for _, msg := range allLogs {
-		if wa.matchesFilter(msg, filter) {
+		if wa.matchesFilterExceptContainer(msg, filter) {
 			filteredLogs = append(filteredLogs, LogWSMessage{
 				ContainerID: msg.ContainerID,
 				Timestamp:   msg.Timestamp,
 				Entry:       msg.Entry,
 			})
 		}
+	}
+
+	// Reverse the logs so oldest is first (logs come from store newest-first)
+	for i, j := 0, len(filteredLogs)-1; i < j; i, j = i+1, j-1 {
+		filteredLogs[i], filteredLogs[j] = filteredLogs[j], filteredLogs[i]
 	}
 
 	// Send clear message to replace all logs
@@ -383,25 +438,9 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	client.conn.WriteJSON(wsMsg)
 }
 
-// matchesFilter checks if a log matches the client's filter criteria
-func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
-	// Container filter
-	if len(filter.SelectedContainers) > 0 {
-		wa.containerMutex.RLock()
-		containerName := wa.containerIDNames[msg.ContainerID]
-		wa.containerMutex.RUnlock()
-
-		found := false
-		for _, name := range filter.SelectedContainers {
-			if containerName == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
+// matchesFilterExceptContainer checks if a log matches the filter criteria except container
+func (wa *WebApp) matchesFilterExceptContainer(msg logs.LogMessage, filter ClientFilter) bool {
+	// Skip container filter - already applied during fetch
 
 	// Level filter
 	if len(filter.SelectedLevels) > 0 {
@@ -488,6 +527,30 @@ func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
 	}
 
 	return true
+}
+
+// matchesFilter checks if a log matches the client's filter criteria (including container filter)
+func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
+	// Container filter
+	if len(filter.SelectedContainers) > 0 {
+		wa.containerMutex.RLock()
+		containerName := wa.containerIDNames[msg.ContainerID]
+		wa.containerMutex.RUnlock()
+
+		found := false
+		for _, name := range filter.SelectedContainers {
+			if containerName == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	// Apply remaining filters
+	return wa.matchesFilterExceptContainer(msg, filter)
 }
 
 func (wa *WebApp) broadcastBatch(batch []logs.LogMessage) {
@@ -1599,6 +1662,75 @@ func normalizeQuery(query string) string {
 	return strings.TrimSpace(normalized)
 }
 
+func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		retentions, err := wa.store.ListContainerRetentions()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(retentions)
+	case http.MethodPost:
+		var retention store.ContainerRetention
+		if err := json.NewDecoder(r.Body).Decode(&retention); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := wa.store.SaveContainerRetention(&retention); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(retention)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (wa *WebApp) handleRetentionDetail(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract container name from path
+	containerName := strings.TrimPrefix(r.URL.Path, "/api/retention/")
+	if containerName == "" {
+		http.Error(w, "Container name required", http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		retention, err := wa.store.GetContainerRetention(containerName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if retention == nil {
+			http.Error(w, "Retention settings not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(retention)
+	case http.MethodDelete:
+		if err := wa.store.DeleteContainerRetention(containerName); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func (wa *WebApp) Run(addr string) error {
 	if err := wa.loadContainers(); err != nil {
 		return err
@@ -1637,6 +1769,8 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/executions", wa.handleExecutions)
 	http.HandleFunc("/api/all-executions", wa.handleAllExecutions)
 	http.HandleFunc("/api/executions/", wa.handleExecutionDetail)
+	http.HandleFunc("/api/retention", wa.handleRetention)
+	http.HandleFunc("/api/retention/", wa.handleRetentionDetail)
 
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 

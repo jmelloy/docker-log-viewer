@@ -49,6 +49,14 @@ const app = createApp({
       collapsedProjects: new Set(),
       portToServerMap: {}, // Map of port -> connectionString
       recentRequests: [], // Last 5 unique request IDs with paths
+      logCounts: {}, // Map of container name -> log count
+      retentions: {}, // Map of container name -> retention settings
+      showRetentionModal: false,
+      retentionContainer: null,
+      retentionForm: {
+        type: "count",
+        value: 1000,
+      },
     };
   },
 
@@ -193,6 +201,8 @@ const app = createApp({
         } else {
           this.containers = data.containers || [];
           this.portToServerMap = data.portToServerMap || {};
+          this.logCounts = data.logCounts || {};
+          this.retentions = data.retentions || {};
           console.log("Loaded port to server map:", this.portToServerMap);
         }
 
@@ -917,6 +927,75 @@ const app = createApp({
       }
     },
 
+    openRetentionModal(containerName) {
+      this.retentionContainer = containerName;
+      const existing = this.retentions[containerName];
+      if (existing) {
+        this.retentionForm.type = existing.type;
+        this.retentionForm.value = existing.value;
+      } else {
+        this.retentionForm.type = "count";
+        this.retentionForm.value = 1000;
+      }
+      this.showRetentionModal = true;
+    },
+
+    getRetentionTooltip(containerName) {
+      const retention = this.retentions[containerName];
+      if (!retention) {
+        return "Click to set retention policy";
+      }
+      if (retention.type === "count") {
+        return `Retention: ${retention.value} logs`;
+      } else {
+        return `Retention: ${retention.value} seconds (${Math.floor(retention.value / 3600)}h ${Math.floor((retention.value % 3600) / 60)}m)`;
+      }
+    },
+
+    async saveRetention() {
+      try {
+        const response = await fetch("/api/retention", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            containerName: this.retentionContainer,
+            retentionType: this.retentionForm.type,
+            retentionValue: this.retentionForm.value,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          this.retentions[this.retentionContainer] = {
+            type: data.retentionType,
+            value: data.retentionValue,
+          };
+          this.showRetentionModal = false;
+        } else {
+          console.error("Failed to save retention:", await response.text());
+        }
+      } catch (error) {
+        console.error("Error saving retention:", error);
+      }
+    },
+
+    async deleteRetention() {
+      try {
+        const response = await fetch(`/api/retention/${encodeURIComponent(this.retentionContainer)}`, {
+          method: "DELETE",
+        });
+
+        if (response.ok) {
+          delete this.retentions[this.retentionContainer];
+          this.showRetentionModal = false;
+        } else {
+          console.error("Failed to delete retention:", await response.text());
+        }
+      } catch (error) {
+        console.error("Error deleting retention:", error);
+      }
+    },
+
     async shareExplainPlan() {
       try {
         const form = document.createElement("form");
@@ -1140,12 +1219,19 @@ const app = createApp({
                   <div v-for="container in containersByProject[project]" 
                        :key="container.Name"
                        class="container-item"
-                       :class="{ selected: isContainerSelected(container.Name) }"
-                       @click="toggleContainer(container.Name)">
-                    <div class="checkbox" :class="{ checked: isContainerSelected(container.Name) }"></div>
-                    <div class="container-info">
-                      <div class="container-name">{{ container.Name }}</div>
-                      <div class="container-id">{{ container.ID.substring(0, 12) }}</div>
+                       :class="{ selected: isContainerSelected(container.Name) }">
+                    <div @click="toggleContainer(container.Name)" style="display: flex; flex: 1; align-items: center;">
+                      <div class="checkbox" :class="{ checked: isContainerSelected(container.Name) }"></div>
+                      <div class="container-info">
+                        <div class="container-name">{{ container.Name }}</div>
+                        <div class="container-id">{{ container.ID.substring(0, 12) }}</div>
+                      </div>
+                    </div>
+                    <div class="log-count-badge" 
+                         @click.stop="openRetentionModal(container.Name)" 
+                         :title="getRetentionTooltip(container.Name)">
+                      {{ logCounts[container.Name] || 0 }}
+                      <span v-if="retentions[container.Name]" class="retention-indicator">⏱</span>
                     </div>
                   </div>
                 </div>
@@ -1299,6 +1385,48 @@ const app = createApp({
           <div v-if="explainData.error" class="alert alert-danger" style="margin: 1rem;">{{ explainData.error }}</div>
           <div v-else id="pev2App" class="d-flex flex-column">
             <pev2 :plan-source="explainData.planSource" :plan-query="explainData.planQuery"></pev2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Retention Modal -->
+    <div v-if="showRetentionModal" class="modal" @click="showRetentionModal = false">
+      <div class="modal-content" @click.stop style="max-width: 500px;">
+        <div class="modal-header">
+          <h3>Log Retention - {{ retentionContainer }}</h3>
+          <button @click="showRetentionModal = false">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 1.5rem;">
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Retention Type:</label>
+            <select v-model="retentionForm.type" style="width: 100%; padding: 0.5rem; border: 1px solid #30363d; background: #0d1117; color: #c9d1d9; border-radius: 6px;">
+              <option value="count">By Count (number of logs)</option>
+              <option value="time">By Time (seconds)</option>
+            </select>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+              {{ retentionForm.type === 'count' ? 'Maximum Logs:' : 'Maximum Age (seconds):' }}
+            </label>
+            <input 
+              v-model.number="retentionForm.value" 
+              type="number" 
+              min="1"
+              style="width: 100%; padding: 0.5rem; border: 1px solid #30363d; background: #0d1117; color: #c9d1d9; border-radius: 6px;"
+              :placeholder="retentionForm.type === 'count' ? 'e.g., 1000' : 'e.g., 3600 (1 hour)'"
+            />
+          </div>
+          <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button @click="saveRetention" class="btn-primary" style="padding: 0.5rem 1rem; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer;">
+              Save
+            </button>
+            <button v-if="retentions[retentionContainer]" @click="deleteRetention" class="btn-danger" style="padding: 0.5rem 1rem; background: #da3633; color: white; border: none; border-radius: 6px; cursor: pointer;">
+              Remove
+            </button>
+            <button @click="showRetentionModal = false" style="padding: 0.5rem 1rem; background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; cursor: pointer;">
+              Cancel
+            </button>
           </div>
         </div>
       </div>

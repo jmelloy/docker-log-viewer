@@ -111,6 +111,20 @@ func (ExecutionLog) TableName() string {
 	return "request_log_messages"
 }
 
+// ContainerRetention represents log retention settings for a container
+type ContainerRetention struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	ContainerName  string    `gorm:"not null;uniqueIndex" json:"containerName"`
+	RetentionType  string    `gorm:"not null" json:"retentionType"`  // "count" or "time"
+	RetentionValue int       `gorm:"not null" json:"retentionValue"` // number of logs or seconds
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+func (ContainerRetention) TableName() string {
+	return "container_retention"
+}
+
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
@@ -596,4 +610,56 @@ func (s *Store) analyzeSQLQueries(queries []SQLQuery) *SQLAnalysis {
 func ComputeQueryHash(normalizedQuery string) string {
 	hash := sha256.Sum256([]byte(normalizedQuery))
 	return hex.EncodeToString(hash[:])
+}
+
+// GetContainerRetention retrieves retention settings for a container
+func (s *Store) GetContainerRetention(containerName string) (*ContainerRetention, error) {
+	var retention ContainerRetention
+	result := s.db.Where("container_name = ?", containerName).First(&retention)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get retention: %w", result.Error)
+	}
+	return &retention, nil
+}
+
+// SaveContainerRetention saves or updates retention settings for a container
+func (s *Store) SaveContainerRetention(retention *ContainerRetention) error {
+	var existing ContainerRetention
+	result := s.db.Where("container_name = ?", retention.ContainerName).First(&existing)
+
+	if result.Error == gorm.ErrRecordNotFound {
+		// Create new
+		result = s.db.Create(retention)
+	} else if result.Error == nil {
+		// Update existing
+		retention.ID = existing.ID
+		result = s.db.Save(retention)
+	}
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to save retention: %w", result.Error)
+	}
+	return nil
+}
+
+// ListContainerRetentions retrieves all retention settings
+func (s *Store) ListContainerRetentions() ([]ContainerRetention, error) {
+	var retentions []ContainerRetention
+	result := s.db.Find(&retentions)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to list retentions: %w", result.Error)
+	}
+	return retentions, nil
+}
+
+// DeleteContainerRetention deletes retention settings for a container
+func (s *Store) DeleteContainerRetention(containerName string) error {
+	result := s.db.Where("container_name = ?", containerName).Delete(&ContainerRetention{})
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete retention: %w", result.Error)
+	}
+	return nil
 }
