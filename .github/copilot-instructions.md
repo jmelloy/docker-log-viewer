@@ -176,7 +176,5 @@ go test ./pkg/sqlexplain
 
 For more detailed information, see:
 - [AGENTS.md](../AGENTS.md) - Complete developer guide
-- [docs/USAGE_GUIDE.md](../docs/USAGE_GUIDE.md) - Feature walkthrough
-- [docs/SQL_EXPLAIN.md](../docs/SQL_EXPLAIN.md) - SQL EXPLAIN setup
-- [docs/PEV2_INTEGRATION.md](../docs/PEV2_INTEGRATION.md) - PostgreSQL visualization
-- [docs/IMPLEMENTATION.md](../docs/IMPLEMENTATION.md) - Technical details
+- [cmd/analyze/README.md](../cmd/analyze/README.md) - Query analysis tool documentation
+- [pkg/sqlexplain/README.md](../pkg/sqlexplain/README.md) - SQL explain plan analyzers
