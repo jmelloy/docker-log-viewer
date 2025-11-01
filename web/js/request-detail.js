@@ -277,6 +277,11 @@ const app = createApp({
         alert(`Failed to run EXPLAIN: ${error.message}`);
       }
     },
+
+    // Wrapper for global formatSQL function
+    formatSQL(sql) {
+      return formatSQL(sql);
+    },
   },
 
   template: `

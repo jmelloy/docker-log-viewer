@@ -266,6 +266,11 @@ const app = createApp({
       div.textContent = text;
       return div.innerHTML;
     },
+
+    // Wrapper for global formatSQL function
+    formatSQL(sql) {
+      return formatSQL(sql);
+    },
   },
 
 
