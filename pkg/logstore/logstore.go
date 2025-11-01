@@ -32,17 +32,27 @@ type LogStore struct {
 
 	// Element tracking
 	messageCount int
+
+	// Per-container retention settings
+	containerRetention map[string]ContainerRetentionPolicy
+}
+
+// ContainerRetentionPolicy defines retention for a specific container
+type ContainerRetentionPolicy struct {
+	Type  string // "count" or "time"
+	Value int    // number of logs or seconds
 }
 
 // NewLogStore creates a new log store
 func NewLogStore(maxMessages int, maxAge time.Duration) *LogStore {
 	return &LogStore{
-		messages:     list.New(),
-		byContainer:  make(map[string]*list.List),
-		byField:      make(map[string]map[string]*list.List),
-		maxMessages:  maxMessages,
-		maxAge:       maxAge,
-		messageCount: 0,
+		messages:           list.New(),
+		byContainer:        make(map[string]*list.List),
+		byField:            make(map[string]map[string]*list.List),
+		maxMessages:        maxMessages,
+		maxAge:             maxAge,
+		messageCount:       0,
+		containerRetention: make(map[string]ContainerRetentionPolicy),
 	}
 }
 
@@ -72,19 +82,37 @@ func (ls *LogStore) Add(msg *LogMessage) {
 		ls.byField[k][v].PushFront(elem)
 	}
 
-	// Evict old messages based on count
-	if ls.messageCount > ls.maxMessages {
-		ls.evictOldest()
+	// Check if this container has a retention policy, otherwise use default per-container limit
+	if _, exists := ls.containerRetention[msg.ContainerID]; exists {
+		ls.applyContainerRetention(msg.ContainerID)
+	} else {
+		// Apply default per-container limit (maxMessages is per-container, not global)
+		containerList := ls.byContainer[msg.ContainerID]
+		if containerList != nil && containerList.Len() > ls.maxMessages {
+			// Remove oldest message from this container
+			e := containerList.Back()
+			if e != nil {
+				elem := e.Value.(*list.Element)
+				msg := elem.Value.(*LogMessage)
+				ls.removeMessage(elem, msg)
+			}
+		}
 	}
 
 	// Evict messages older than maxAge
 	ls.evictExpired()
 }
 
-// evictOldest removes the oldest message
-func (ls *LogStore) evictOldest() {
-	elem := ls.messages.Back()
-	if elem != nil {
+// evictOldest removes the oldest message from a specific container
+func (ls *LogStore) evictOldestFromContainer(containerID string) {
+	containerList := ls.byContainer[containerID]
+	if containerList == nil {
+		return
+	}
+
+	e := containerList.Back()
+	if e != nil {
+		elem := e.Value.(*list.Element)
 		msg := elem.Value.(*LogMessage)
 		ls.removeMessage(elem, msg)
 	}
@@ -421,14 +449,98 @@ func (ls *LogStore) Count() int {
 	return ls.messageCount
 }
 
-// SetMaxMessages updates the maximum message limit
+// CountByContainer returns the number of messages for a specific container
+func (ls *LogStore) CountByContainer(containerID string) int {
+	ls.mu.RLock()
+	defer ls.mu.RUnlock()
+
+	containerList := ls.byContainer[containerID]
+	if containerList == nil {
+		return 0
+	}
+	return containerList.Len()
+}
+
+// SetMaxMessages updates the maximum message limit per container
 func (ls *LogStore) SetMaxMessages(max int) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 	ls.maxMessages = max
 
-	// Evict excess messages
-	for ls.messageCount > ls.maxMessages {
-		ls.evictOldest()
+	// Evict excess messages from each container
+	for containerID, containerList := range ls.byContainer {
+		for containerList.Len() > ls.maxMessages {
+			ls.evictOldestFromContainer(containerID)
+		}
+	}
+}
+
+// SetContainerRetention sets retention policy for a specific container
+func (ls *LogStore) SetContainerRetention(containerID string, policy ContainerRetentionPolicy) {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	ls.containerRetention[containerID] = policy
+
+	// Apply retention immediately
+	ls.applyContainerRetention(containerID)
+}
+
+// RemoveContainerRetention removes retention policy for a container
+func (ls *LogStore) RemoveContainerRetention(containerID string) {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	delete(ls.containerRetention, containerID)
+}
+
+// applyContainerRetention applies retention policy for a specific container
+// Must be called with lock held
+func (ls *LogStore) applyContainerRetention(containerID string) {
+	policy, exists := ls.containerRetention[containerID]
+	if !exists {
+		return
+	}
+
+	containerList := ls.byContainer[containerID]
+	if containerList == nil {
+		return
+	}
+
+	switch policy.Type {
+	case "count":
+		// Remove oldest logs exceeding count limit
+		count := containerList.Len()
+		toRemove := count - policy.Value
+
+		if toRemove > 0 {
+			// Iterate from back (oldest) and remove
+			for i := 0; i < toRemove; i++ {
+				e := containerList.Back()
+				if e != nil {
+					elem := e.Value.(*list.Element)
+					msg := elem.Value.(*LogMessage)
+					ls.removeMessage(elem, msg)
+				}
+			}
+		}
+	case "time":
+		// Remove logs older than specified seconds, but always keep at least 100
+		cutoff := time.Now().Add(-time.Duration(policy.Value) * time.Second)
+
+		count := containerList.Len()
+		minToKeep := 100
+		// Count how many would be removed by time
+		for e := containerList.Back(); e != nil && count > minToKeep; e = e.Prev() {
+			elem := e.Value.(*list.Element)
+			msg := elem.Value.(*LogMessage)
+
+			if msg.Timestamp.Before(cutoff) {
+				ls.removeMessage(elem, msg)
+				count--
+			} else {
+				break
+			}
+		}
 	}
 }

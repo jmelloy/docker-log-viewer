@@ -398,6 +398,32 @@ header input[type="text"] {
     color: #58a6ff;
 }
 
+.log-count-badge {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #58a6ff;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 40px;
+    justify-content: center;
+}
+
+.log-count-badge:hover {
+    background: #30363d;
+    border-color: #58a6ff;
+}
+
+.retention-indicator {
+    font-size: 0.85rem;
+}
+
 .container-name {
     color: #8b949e;
     font-size: 0.8rem;
