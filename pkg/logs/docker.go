@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -35,6 +36,40 @@ func NewDockerClient() (*DockerClient, error) {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 	return &DockerClient{cli: cli}, nil
+}
+
+// hasTimestamp checks if a line starts with a timestamp
+func hasTimestamp(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	// Check for common timestamp patterns at the start
+	months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+	for _, month := range months {
+		if strings.HasPrefix(trimmed, month+" ") {
+			return true
+		}
+	}
+	// Check for numeric timestamp patterns (YYYY-MM-DD, etc.)
+	timestampPattern := regexp.MustCompile(`^\d{4}[-/]\d{2}[-/]\d{2}|\d{1,2}\s+\w+\s+\d{4}|\d{2}:\d{2}:\d{2}`)
+	return timestampPattern.MatchString(trimmed)
+}
+
+// hasFields checks if a line contains key=value field patterns
+func hasFields(line string) bool {
+	// Look for key=value patterns
+	fieldPattern := regexp.MustCompile(`\b\w+(\.\w+)*=`)
+	return fieldPattern.MatchString(line)
+}
+
+// startsWithSQL checks if a line contains [sql]: without substantial content after
+func startsWithSQL(line string) bool {
+	if !strings.Contains(line, "[sql]:") {
+		return false
+	}
+	// Extract part after [sql]:
+	idx := strings.Index(line, "[sql]:")
+	after := strings.TrimSpace(line[idx+6:])
+	// If nothing after or just whitespace, or no fields, it's a multiline SQL start
+	return after == "" || !hasFields(after)
 }
 
 func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container, error) {
@@ -87,12 +122,28 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		defer reader.Close()
 		buf := make([]byte, 8192)
 		var leftover []byte
+		var bufferedLog strings.Builder
 		lineCount := 0
+
+		flushLog := func() {
+			if bufferedLog.Len() > 0 {
+				logText := bufferedLog.String()
+				entry := ParseLogLine(logText)
+				logChan <- LogMessage{
+					ContainerID: containerID,
+					Timestamp:   time.Now(),
+					Entry:       entry,
+				}
+				bufferedLog.Reset()
+				lineCount++
+			}
+		}
 
 		for {
 			select {
 			case <-ctx.Done():
 				slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12])
+				flushLog()
 				return
 			default:
 				n, err := reader.Read(buf)
@@ -124,19 +175,43 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							leftover = []byte(line)
 							continue
 						}
-						if strings.TrimSpace(line) != "" {
-							entry := ParseLogLine(line)
-							logChan <- LogMessage{
-								ContainerID: containerID,
-								Timestamp:   time.Now(),
-								Entry:       entry,
-							}
-							lineCount++
-							sentCount++
-						} else {
+
+						trimmed := strings.TrimSpace(line)
+						if trimmed == "" {
 							emptyCount++
+							continue
+						}
+
+						// Check if this line starts with a timestamp
+						lineHasTimestamp := hasTimestamp(line)
+
+						if lineHasTimestamp {
+							// New log entry - flush any buffered content first
+							flushLog()
+							bufferedLog.WriteString(trimmed)
+						} else {
+							// Check if this is a continuation line (indented)
+							isContinuationLine := bufferedLog.Len() > 0 && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t"))
+
+							if isContinuationLine {
+								// Add to buffer
+								bufferedLog.WriteString("\n")
+								bufferedLog.WriteString(trimmed)
+							} else {
+								// Standalone line without timestamp - flush buffer and process
+								flushLog()
+								entry := ParseLogLine(trimmed)
+								logChan <- LogMessage{
+									ContainerID: containerID,
+									Timestamp:   time.Now(),
+									Entry:       entry,
+								}
+								lineCount++
+								sentCount++
+							}
 						}
 					}
+
 					if sentCount > 0 {
 						slog.Debug("Container sent messages to logChan", "container_id", containerID[:12], "messages", sentCount)
 					}
@@ -149,10 +224,12 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 				}
 
 				if err == io.EOF {
+					flushLog()
 					slog.Debug("Container reached EOF, total lines processed", "container_id", containerID[:12], "lines", lineCount)
 					return
 				}
 				if err != nil {
+					flushLog()
 					return
 				}
 			}
