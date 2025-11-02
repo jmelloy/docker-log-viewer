@@ -81,11 +81,7 @@ const app = createApp({
   methods: {
     async loadRequestDetail(requestId) {
       try {
-        const response = await fetch(`/api/executions/${requestId}`);
-        if (!response.ok) {
-          throw new Error(`Failed to load request: ${response.statusText}`);
-        }
-        this.requestDetail = await response.json();
+        this.requestDetail = await API.get(`/api/executions/${requestId}`);
         this.loading = false;
       } catch (error) {
         console.error("Failed to load request detail:", error);
@@ -257,15 +253,7 @@ const app = createApp({
           connectionString: connectionString,
         };
 
-        const response = await fetch("/api/explain", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const result = await response.json();
+        const result = await API.post("/api/explain", payload);
 
         if (result.error) {
           alert(`EXPLAIN Error: ${result.error}`);
