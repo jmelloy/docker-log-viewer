@@ -13,6 +13,11 @@ import (
 	"github.com/docker/docker/client"
 )
 
+var (
+	timestampPatternRegex = regexp.MustCompile(`^\d{4}[-/]\d{2}[-/]\d{2}|\d{1,2}\s+\w+\s+\d{4}|\d{2}:\d{2}:\d{2}`)
+	fieldPatternRegex     = regexp.MustCompile(`\b\w+(\.\w+)*=`)
+)
+
 type DockerClient struct {
 	cli *client.Client
 }
@@ -49,27 +54,13 @@ func hasTimestamp(line string) bool {
 		}
 	}
 	// Check for numeric timestamp patterns (YYYY-MM-DD, etc.)
-	timestampPattern := regexp.MustCompile(`^\d{4}[-/]\d{2}[-/]\d{2}|\d{1,2}\s+\w+\s+\d{4}|\d{2}:\d{2}:\d{2}`)
-	return timestampPattern.MatchString(trimmed)
+	return timestampPatternRegex.MatchString(trimmed)
 }
 
 // hasFields checks if a line contains key=value field patterns
 func hasFields(line string) bool {
 	// Look for key=value patterns
-	fieldPattern := regexp.MustCompile(`\b\w+(\.\w+)*=`)
-	return fieldPattern.MatchString(line)
-}
-
-// startsWithSQL checks if a line contains [sql]: without substantial content after
-func startsWithSQL(line string) bool {
-	if !strings.Contains(line, "[sql]:") {
-		return false
-	}
-	// Extract part after [sql]:
-	idx := strings.Index(line, "[sql]:")
-	after := strings.TrimSpace(line[idx+6:])
-	// If nothing after or just whitespace, or no fields, it's a multiline SQL start
-	return after == "" || !hasFields(after)
+	return fieldPatternRegex.MatchString(line)
 }
 
 func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container, error) {
