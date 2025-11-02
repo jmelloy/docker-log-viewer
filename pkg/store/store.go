@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"docker-log-parser/pkg/logs"
+	"docker-log-parser/pkg/sqlexplain"
 
 	"github.com/pressly/goose/v3"
 	"gorm.io/driver/sqlite"
@@ -150,12 +151,13 @@ func (SQLQuery) TableName() string {
 
 // ExecutionDetail includes execution with related logs and SQL analysis
 type ExecutionDetail struct {
-	Execution   ExecutedRequest `json:"execution"`
-	Request     *SampleQuery    `json:"request,omitempty"`
-	Logs        []ExecutionLog  `json:"logs"`
-	SQLQueries  []SQLQuery      `json:"sqlQueries"`
-	SQLAnalysis *SQLAnalysis    `json:"sqlAnalysis,omitempty"`
-	Server      *Server         `json:"server,omitempty"`
+	Execution     ExecutedRequest          `json:"execution"`
+	Request       *SampleQuery             `json:"request,omitempty"`
+	Logs          []ExecutionLog           `json:"logs"`
+	SQLQueries    []SQLQuery               `json:"sqlQueries"`
+	SQLAnalysis   *SQLAnalysis             `json:"sqlAnalysis,omitempty"`
+	IndexAnalysis *sqlexplain.IndexAnalysis `json:"indexAnalysis,omitempty"`
+	Server        *Server                  `json:"server,omitempty"`
 }
 
 // SQLAnalysis provides statistics about SQL queries
@@ -552,6 +554,9 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 	// Calculate SQL analysis
 	if len(sqlQueries) > 0 {
 		detail.SQLAnalysis = s.analyzeSQLQueries(sqlQueries)
+		
+		// Calculate index analysis
+		detail.IndexAnalysis = s.analyzeIndexUsage(sqlQueries)
 	}
 
 	return detail, nil
@@ -604,6 +609,30 @@ func (s *Store) analyzeSQLQueries(queries []SQLQuery) *SQLAnalysis {
 	}
 
 	return analysis
+}
+
+// analyzeIndexUsage performs index usage analysis on SQL queries
+func (s *Store) analyzeIndexUsage(queries []SQLQuery) *sqlexplain.IndexAnalysis {
+	// Convert SQLQuery to QueryWithPlan format for sqlexplain package
+	queryWithPlans := make([]sqlexplain.QueryWithPlan, 0, len(queries))
+	
+	for _, q := range queries {
+		qwp := sqlexplain.QueryWithPlan{
+			Query:           q.Query,
+			NormalizedQuery: q.NormalizedQuery,
+			OperationName:   q.GraphQLOperation,
+			Timestamp:       q.CreatedAt.Unix(),
+			DurationMS:      q.DurationMS,
+			QueriedTable:    q.QueriedTable,
+			Operation:       q.Operation,
+			Rows:            q.Rows,
+			ExplainPlan:     q.ExplainPlan,
+			Variables:       q.Variables,
+		}
+		queryWithPlans = append(queryWithPlans, qwp)
+	}
+	
+	return sqlexplain.AnalyzeIndexUsage(queryWithPlans)
 }
 
 // ComputeQueryHash computes a SHA256 hash of the normalized query
