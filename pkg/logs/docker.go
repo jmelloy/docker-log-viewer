@@ -15,7 +15,7 @@ import (
 
 var (
 	timestampPatternRegex = regexp.MustCompile(`^\d{4}[-/]\d{2}[-/]\d{2}|\d{1,2}\s+\w+\s+\d{4}|\d{2}:\d{2}:\d{2}`)
-	fieldPatternRegex     = regexp.MustCompile(`\b\w+(\.\w+)*=`)
+	timestampMonths       = []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
 )
 
 type DockerClient struct {
@@ -47,20 +47,13 @@ func NewDockerClient() (*DockerClient, error) {
 func hasTimestamp(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	// Check for common timestamp patterns at the start
-	months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
-	for _, month := range months {
+	for _, month := range timestampMonths {
 		if strings.HasPrefix(trimmed, month+" ") {
 			return true
 		}
 	}
 	// Check for numeric timestamp patterns (YYYY-MM-DD, etc.)
 	return timestampPatternRegex.MatchString(trimmed)
-}
-
-// hasFields checks if a line contains key=value field patterns
-func hasFields(line string) bool {
-	// Look for key=value patterns
-	return fieldPatternRegex.MatchString(line)
 }
 
 func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container, error) {
@@ -182,6 +175,8 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							bufferedLog.WriteString(trimmed)
 						} else {
 							// Check if this is a continuation line (indented)
+							// Note: we check raw 'line' for whitespace prefix, not 'trimmed',
+							// because indentation is the indicator of continuation
 							isContinuationLine := bufferedLog.Len() > 0 && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t"))
 
 							if isContinuationLine {
