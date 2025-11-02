@@ -81,11 +81,7 @@ const app = createApp({
   methods: {
     async loadRequestDetail(requestId) {
       try {
-        const response = await fetch(`/api/executions/${requestId}`);
-        if (!response.ok) {
-          throw new Error(`Failed to load request: ${response.statusText}`);
-        }
-        this.requestDetail = await response.json();
+        this.requestDetail = await API.get(`/api/executions/${requestId}`);
         this.loading = false;
       } catch (error) {
         console.error("Failed to load request detail:", error);
@@ -257,15 +253,7 @@ const app = createApp({
           connectionString: connectionString,
         };
 
-        const response = await fetch("/api/explain", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const result = await response.json();
+        const result = await API.post("/api/explain", payload);
 
         if (result.error) {
           alert(`EXPLAIN Error: ${result.error}`);
@@ -289,11 +277,7 @@ const app = createApp({
       <header class="app-header">
         <div style="display: flex; align-items: center; gap: 1rem">
           <h1 style="margin: 0">🔱 Logseidon</h1>
-          <nav style="display: flex; gap: 1rem; align-items: center">
-            <a href="/">Log Viewer</a>
-            <a href="/requests.html">Request Manager</a>
-            <a href="/settings.html">Settings</a>
-          </nav>
+          <app-nav></app-nav>
         </div>
       </header>
 
@@ -497,5 +481,9 @@ const app = createApp({
     </div>
   `,
 });
+
+// Register components
+app.component('app-nav', createNavigation('request-detail'));
+app.component("pev2", pev2.Plan);
 
 app.mount("#app");
