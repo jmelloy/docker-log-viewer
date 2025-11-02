@@ -157,7 +157,7 @@ Instead of converting to SPA, consider these targeted improvements:
 
 #### 1. Extract Shared Components (Stay MPA)
 
-**Current Issue**: Navigation is duplicated across all 4 pages (lines 1101-1103 in app.js, 283-285 in requests.js, etc.)
+**Current Issue**: Navigation is duplicated across all 4 pages (in the template section of each JavaScript file)
 
 **Solution**: Create shared navigation component:
 
@@ -181,9 +181,12 @@ export function createNavigation(activePage) {
 
 **Usage in each page**:
 ```javascript
-import { createNavigation } from './shared/navigation.js';
+// Example: web/js/app.js
+import { createNavigation } from '/js/shared/navigation.js';
 app.component('app-nav', createNavigation('viewer'));
 ```
+
+Note: This assumes creating a new `web/js/shared/` directory for shared components.
 
 #### 2. Create Shared Utility Library
 ```javascript
