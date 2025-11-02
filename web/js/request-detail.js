@@ -1,3 +1,7 @@
+import { createNavigation } from "./shared/navigation.js";
+import { API } from "./shared/api.js";
+import { formatSQL } from "./utils.js";
+
 const { createApp } = Vue;
 
 const app = createApp({
@@ -9,6 +13,8 @@ const app = createApp({
       explainPlanData: null,
       showExplainPlanPanel: false,
       pev2App: null,
+      showRequestModal: false,
+      showResponseModal: false,
     };
   },
 
@@ -54,8 +60,7 @@ const app = createApp({
     },
 
     responseBody() {
-      if (!this.requestDetail?.execution.responseBody)
-        return "(no response)";
+      if (!this.requestDetail?.execution.responseBody) return "(no response)";
       try {
         const data = JSON.parse(this.requestDetail.execution.responseBody);
         return JSON.stringify(data, null, 2);
@@ -63,12 +68,93 @@ const app = createApp({
         return this.requestDetail.execution.responseBody;
       }
     },
+
+    sqlAnalysisData() {
+      if (
+        !this.requestDetail?.sqlQueries ||
+        this.requestDetail.sqlQueries.length === 0
+      ) {
+        return null;
+      }
+
+      const queries = this.requestDetail.sqlQueries.map((q) => ({
+        query: q.query,
+        duration: q.durationMs,
+        table: q.tableName || "unknown",
+        operation: q.operation || "SELECT",
+        rows: q.rows || 0,
+        variables: q.variables
+          ? typeof q.variables === "string"
+            ? JSON.parse(q.variables)
+            : q.variables
+          : {},
+        normalized: this.normalizeQuery(q.query),
+      }));
+
+      const totalQueries = queries.length;
+      const totalDuration = queries.reduce((sum, q) => sum + q.duration, 0);
+      const avgDuration = totalDuration / totalQueries;
+
+      const queryGroups = {};
+      queries.forEach((q) => {
+        if (!queryGroups[q.normalized]) {
+          queryGroups[q.normalized] = {
+            queries: [],
+            count: 0,
+          };
+        }
+        queryGroups[q.normalized].queries.push(q);
+        queryGroups[q.normalized].count++;
+      });
+
+      const uniqueQueries = Object.keys(queryGroups).length;
+
+      const slowestQueries = [...queries]
+        .sort((a, b) => b.duration - a.duration)
+        .slice(0, 5);
+
+      const frequentQueries = Object.entries(queryGroups)
+        .map(([normalized, data]) => ({
+          normalized,
+          count: data.count,
+          example: data.queries[0],
+          avgDuration:
+            data.queries.reduce((sum, q) => sum + q.duration, 0) / data.count,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      const nPlusOne = frequentQueries.filter((item) => item.count > 5);
+
+      const tables = {};
+      queries.forEach((q) => {
+        if (!tables[q.table]) {
+          tables[q.table] = 0;
+        }
+        tables[q.table]++;
+      });
+
+      const tablesList = Object.entries(tables)
+        .sort((a, b) => b[1] - a[1])
+        .map(([table, count]) => ({ table, count }));
+
+      return {
+        totalQueries,
+        uniqueQueries,
+        avgDuration,
+        totalDuration,
+        slowestQueries,
+        frequentQueries,
+        nPlusOne,
+        tables: tablesList,
+      };
+    },
   },
 
   async mounted() {
     const params = new URLSearchParams(window.location.search);
     const requestId = params.get("id");
-    
+
     if (!requestId) {
       this.error = "No request ID provided";
       this.loading = false;
@@ -270,6 +356,39 @@ const app = createApp({
     formatSQL(sql) {
       return formatSQL(sql);
     },
+
+    normalizeQuery(query) {
+      return query
+        .replace(/\$\d+/g, "$N")
+        .replace(/'[^']*'/g, "'?'")
+        .replace(/\d+/g, "N")
+        .replace(/\s+/g, " ")
+        .trim();
+    },
+
+    async copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        // Show a brief notification
+        const notification = document.createElement("div");
+        notification.textContent = "Copied to clipboard!";
+        notification.style.cssText =
+          "position: fixed; top: 20px; right: 20px; background: #238636; color: white; padding: 0.75rem 1rem; border-radius: 4px; z-index: 10000; font-size: 0.875rem;";
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 2000);
+      } catch (err) {
+        console.error("Failed to copy:", err);
+        alert("Failed to copy to clipboard");
+      }
+    },
+
+    viewBigger(type) {
+      if (type === "request") {
+        this.showRequestModal = true;
+      } else {
+        this.showResponseModal = true;
+      }
+    },
   },
 
   template: `
@@ -328,13 +447,28 @@ const app = createApp({
             </div>
 
             <div class="modal-section">
-              <h4>Request Body</h4>
-              <pre class="json-display">{{ requestData }}</pre>
-            </div>
-
-            <div class="modal-section">
-              <h4>Response</h4>
-              <pre class="json-display">{{ responseBody }}</pre>
+              <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 300px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h4 style="margin: 0;">Request Body</h4>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <button @click="copyToClipboard(requestData)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Copy request">📋 Copy</button>
+                      <button @click="viewBigger('request')" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="View bigger">🔍 View</button>
+                    </div>
+                  </div>
+                  <pre class="json-display" style="max-height: 20em;">{{ requestData }}</pre>
+                </div>
+                <div style="flex: 1; min-width: 300px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h4 style="margin: 0;">Response</h4>
+                    <div style="display: flex; gap: 0.5rem;">
+                      <button @click="copyToClipboard(responseBody)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Copy response">📋 Copy</button>
+                      <button @click="viewBigger('response')" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="View bigger">🔍 View</button>
+                    </div>
+                  </div>
+                  <pre class="json-display" style="max-height: 20em;">{{ responseBody }}</pre>
+                </div>
+              </div>
             </div>
 
             <div v-if="requestDetail.execution.error" class="modal-section">
@@ -342,38 +476,102 @@ const app = createApp({
               <pre class="error-display">{{ requestDetail.execution.error }}</pre>
             </div>
 
-            <div v-if="requestDetail.sqlAnalysis && requestDetail.sqlAnalysis.totalQueries > 0" class="modal-section">
-              <h4>SQL Analysis</h4>
-              <div class="stats-grid">
-                <div class="stat-item">
-                  <span class="stat-label">Total Queries</span>
-                  <span class="stat-value">{{ requestDetail.sqlAnalysis.totalQueries }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Unique Queries</span>
-                  <span class="stat-value">{{ requestDetail.sqlAnalysis.uniqueQueries }}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Avg Duration</span>
-                  <span class="stat-value">{{ requestDetail.sqlAnalysis.avgDuration.toFixed(2) }}ms</span>
+            <div v-if="sqlAnalysisData" class="modal-section">
+              <h4>SQL Query Analyzer</h4>
+              
+              <div class="analyzer-subsection" style="margin-bottom: 1.5rem;">
+                <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Overview</h5>
+                <div class="stats-grid-compact">
+                  <div class="stat-item">
+                    <span class="stat-label">Total Queries</span>
+                    <span class="stat-value">{{ sqlAnalysisData.totalQueries }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Unique</span>
+                    <span class="stat-value">{{ sqlAnalysisData.uniqueQueries }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Avg Duration</span>
+                    <span class="stat-value">{{ sqlAnalysisData.avgDuration.toFixed(2) }}ms</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Total Duration</span>
+                    <span class="stat-value">{{ sqlAnalysisData.totalDuration.toFixed(2) }}ms</span>
+                  </div>
                 </div>
               </div>
-              <br/>
 
-              <div class="sql-queries-list">
-                <div v-for="(q, idx) in requestDetail.sqlQueries" :key="idx" class="sql-query-item">
-                  <div class="sql-query-header">
-                    <span>{{ q.tableName || 'unknown' }} - {{ q.operation || 'SELECT' }}</span>
-                    <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
+              <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                <div v-if="sqlAnalysisData.slowestQueries.length > 0" class="analyzer-subsection" style="flex: 1; min-width: 280px;">
+                  <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Slowest Queries</h5>
+                  <div class="query-list-compact">
+                    <div v-for="(q, index) in sqlAnalysisData.slowestQueries.slice(0, 5)" :key="index" class="query-item-compact">
+                      <div class="query-header-compact">
+                        <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }">{{ q.duration.toFixed(2) }}ms</span>
+                        <span class="query-meta-inline">{{ q.table }} · {{ q.operation }}</span>
+                      </div>
+                      <div class="query-text-compact">{{ q.query.substring(0, 100) }}{{ q.query.length > 100 ? '...' : '' }}</div>
+                      <button class="btn-explain-compact" @click="handleExplainClick(Math.max(0, requestDetail.sqlQueries.findIndex(sq => sq.query === q.query)))">EXPLAIN</button>
+                    </div>
                   </div>
-                  <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
-                  <div class="query-actions">
-                    <button v-if="!q.explainPlan || q.explainPlan.length === 0" 
-                            class="btn-explain" 
-                            @click="handleExplainClick(idx)">Run EXPLAIN</button>
-                    <button v-if="q.explainPlan && q.explainPlan.length > 0" 
-                            class="btn-explain btn-secondary" 
-                            @click="handleExplainClick(idx)">View Saved Plan</button>
+                </div>
+
+                <div v-if="sqlAnalysisData.frequentQueries.length > 0" class="analyzer-subsection" style="flex: 1; min-width: 280px;">
+                  <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Most Frequent</h5>
+                  <div class="query-list-compact">
+                    <div v-for="(item, index) in sqlAnalysisData.frequentQueries.slice(0, 5)" :key="index" class="query-item-compact">
+                      <div class="query-header-compact">
+                        <span class="query-count">{{ item.count }}x</span>
+                        <span class="query-meta-inline">{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span>
+                      </div>
+                      <div class="query-text-compact">{{ item.example.query.substring(0, 100) }}{{ item.example.query.length > 100 ? '...' : '' }}</div>
+                      <button class="btn-explain-compact" @click="handleExplainClick(Math.max(0, requestDetail.sqlQueries.findIndex(sq => sq.query === item.example.query)))">EXPLAIN</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="requestDetail.indexAnalysis && requestDetail.indexAnalysis.recommendations && requestDetail.indexAnalysis.recommendations.length > 0" class="analyzer-subsection" style="flex: 1; min-width: 280px;">
+                  <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Index Recommendations</h5>
+                  <div class="query-list-compact">
+                    <div v-for="(rec, index) in requestDetail.indexAnalysis.recommendations.slice(0, 5)" :key="index" class="query-item-compact">
+                      <div class="query-header-compact">
+                        <span class="index-priority-badge" :class="'priority-' + rec.priority" style="font-size: 0.65rem; padding: 0.15rem 0.3rem;">{{ rec.priority.toUpperCase() }}</span>
+                        <span class="query-meta-inline">{{ rec.tableName }}</span>
+                      </div>
+                      <div style="font-size: 0.7rem; color: #c9d1d9; margin-bottom: 0.25rem;">{{ rec.reason }}</div>
+                      <div style="font-size: 0.65rem; color: #8b949e; margin-bottom: 0.25rem;">{{ rec.columns.join(', ') }}</div>
+                      <div style="font-size: 0.65rem; color: #7ee787;">{{ rec.estimatedImpact }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="sqlAnalysisData.tables.length > 0" class="analyzer-subsection" style="margin-bottom: 1.5rem;">
+                <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Tables</h5>
+                <div class="table-list-compact">
+                  <span v-for="(item, index) in sqlAnalysisData.tables" :key="index" class="table-badge-compact">
+                    {{ item.table }}<span class="table-count">({{ item.count }})</span>
+                  </span>
+                </div>
+              </div>
+
+              <div class="analyzer-subsection">
+                <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">All Queries</h5>
+                <div class="sql-queries-list">
+                  <div v-for="(q, idx) in requestDetail.sqlQueries" :key="idx" class="sql-query-item">
+                    <div class="sql-query-header">
+                      <span>{{ q.tableName || 'unknown' }} - {{ q.operation || 'SELECT' }}</span>
+                      <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
+                    </div>
+                    <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
+                    <div class="query-actions">
+                      <button v-if="!q.explainPlan || q.explainPlan.length === 0" 
+                              class="btn-explain" 
+                              @click="handleExplainClick(idx)">Run EXPLAIN</button>
+                      <button v-if="q.explainPlan && q.explainPlan.length > 0" 
+                              class="btn-explain btn-secondary" 
+                              @click="handleExplainClick(idx)">View Saved Plan</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -453,6 +651,38 @@ const app = createApp({
       </div>
     </div>
 
+    <!-- Request Body Modal -->
+    <div v-if="showRequestModal" class="modal" @click="showRequestModal = false">
+      <div class="modal-content" @click.stop style="max-width: 900px;">
+        <div class="modal-header">
+          <h3>Request Body</h3>
+          <div style="display: flex; gap: 0.5rem;">
+            <button @click="copyToClipboard(requestData)" class="btn-secondary" style="padding: 0.5rem 1rem;">📋 Copy</button>
+            <button @click="showRequestModal = false">✕</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <pre style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word;">{{ requestData }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Response Body Modal -->
+    <div v-if="showResponseModal" class="modal" @click="showResponseModal = false">
+      <div class="modal-content" @click.stop style="max-width: 900px;">
+        <div class="modal-header">
+          <h3>Response Body</h3>
+          <div style="display: flex; gap: 0.5rem;">
+            <button @click="copyToClipboard(responseBody)" class="btn-secondary" style="padding: 0.5rem 1rem;">📋 Copy</button>
+            <button @click="showResponseModal = false">✕</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <pre style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word;">{{ responseBody }}</pre>
+        </div>
+      </div>
+    </div>
+
     <!-- EXPLAIN Plan Side Panel -->
     <div v-if="showExplainPlanPanel" class="side-panel-overlay" @click="closeExplainPlanModal">
       <div class="side-panel" @click.stop>
@@ -475,6 +705,7 @@ const app = createApp({
           <div
             id="pev2ExplainApp"
             class="d-flex flex-column"
+            style="height: 100%;"
           ></div>
         </div>
       </div>
@@ -483,7 +714,7 @@ const app = createApp({
 });
 
 // Register components
-app.component('app-nav', createNavigation('request-detail'));
+app.component("app-nav", createNavigation("request-detail"));
 app.component("pev2", pev2.Plan);
 
 app.mount("#app");
