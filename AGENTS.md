@@ -44,8 +44,9 @@ go test ./...
   - `explain.go`: Database connection, query execution, variable substitution
 
 ### Frontend
-- **web/**: Vue 3 single-page application
-  - Fully reactive data binding with Vue's composition
+- **web/**: Vue 3 multi-page application (MPA)
+  - 4 separate HTML pages, each with its own Vue app instance
+  - Fully reactive data binding with Vue's composition API
   - Real-time WebSocket updates
   - SQL analyzer panel
   - PEV2-powered EXPLAIN visualization
@@ -97,7 +98,7 @@ Auto-activates when filtering by trace/request/span:
 - Container monitoring every 5 seconds
 
 ### Vue.js (Frontend)
-- Single Vue 3 application with reactive data
+- Each HTML page is a separate Vue 3 application with reactive data
 - Computed properties for derived state
 - v-model for two-way data binding
 - Template-based rendering with v-for and v-if
