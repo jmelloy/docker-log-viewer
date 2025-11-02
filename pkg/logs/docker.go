@@ -67,6 +67,19 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 	return result, nil
 }
 
+func hasTimestamp(line string) bool {
+	if len(line) < 5 {
+		return false
+	}
+	months := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+	for _, month := range months {
+		if strings.HasPrefix(line, month+" ") {
+			return true
+		}
+	}
+	return false
+}
+
 func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logChan chan<- LogMessage) error {
 	options := types.ContainerLogsOptions{
 		ShowStdout: true,
@@ -87,11 +100,27 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		defer reader.Close()
 		buf := make([]byte, 8192)
 		var leftover []byte
+		var bufferedLog strings.Builder
 		lineCount := 0
+
+		flushLog := func() {
+			if bufferedLog.Len() > 0 {
+				logText := bufferedLog.String()
+				entry := ParseLogLine(logText)
+				logChan <- LogMessage{
+					ContainerID: containerID,
+					Timestamp:   time.Now(),
+					Entry:       entry,
+				}
+				bufferedLog.Reset()
+				lineCount++
+			}
+		}
 
 		for {
 			select {
 			case <-ctx.Done():
+				flushLog()
 				slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12])
 				return
 			default:
@@ -124,17 +153,37 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							leftover = []byte(line)
 							continue
 						}
-						if strings.TrimSpace(line) != "" {
-							entry := ParseLogLine(line)
-							logChan <- LogMessage{
-								ContainerID: containerID,
-								Timestamp:   time.Now(),
-								Entry:       entry,
-							}
-							lineCount++
+
+						trimmed := strings.TrimSpace(line)
+						if trimmed == "" {
+							emptyCount++
+							continue
+						}
+
+						// Check if line starts with timestamp
+						if hasTimestamp(trimmed) {
+							flushLog()
+							bufferedLog.WriteString(trimmed)
 							sentCount++
 						} else {
-							emptyCount++
+							// Check if this is a continuation line (starts with whitespace)
+							isContinuationLine := bufferedLog.Len() > 0 && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t"))
+
+							if isContinuationLine {
+								bufferedLog.WriteString("\n")
+								bufferedLog.WriteString(trimmed)
+							} else {
+								// Not a continuation line, flush and process as standalone
+								flushLog()
+								entry := ParseLogLine(trimmed)
+								logChan <- LogMessage{
+									ContainerID: containerID,
+									Timestamp:   time.Now(),
+									Entry:       entry,
+								}
+								lineCount++
+								sentCount++
+							}
 						}
 					}
 					if sentCount > 0 {
@@ -149,10 +198,12 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 				}
 
 				if err == io.EOF {
+					flushLog()
 					slog.Debug("Container reached EOF, total lines processed", "container_id", containerID[:12], "lines", lineCount)
 					return
 				}
 				if err != nil {
+					flushLog()
 					return
 				}
 			}
