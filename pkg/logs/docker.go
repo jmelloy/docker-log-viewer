@@ -87,11 +87,25 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		defer reader.Close()
 		buf := make([]byte, 8192)
 		var leftover []byte
+		var bufferedEntry *LogEntry
 		lineCount := 0
+
+		flushBuffered := func() {
+			if bufferedEntry != nil {
+				logChan <- LogMessage{
+					ContainerID: containerID,
+					Timestamp:   time.Now(), // Will be updated below if bufferedEntry has timestamp
+					Entry:       bufferedEntry,
+				}
+				bufferedEntry = nil
+				lineCount++
+			}
+		}
 
 		for {
 			select {
 			case <-ctx.Done():
+				flushBuffered()
 				slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12])
 				return
 			default:
@@ -124,17 +138,44 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							leftover = []byte(line)
 							continue
 						}
-						if strings.TrimSpace(line) != "" {
-							entry := ParseLogLine(line)
-							logChan <- LogMessage{
-								ContainerID: containerID,
-								Timestamp:   time.Now(),
-								Entry:       entry,
-							}
-							lineCount++
-							sentCount++
-						} else {
+						
+						trimmed := strings.TrimSpace(line)
+						if trimmed == "" {
 							emptyCount++
+							continue
+						}
+
+						entry := ParseLogLine(trimmed)
+						
+						// Check if this is a continuation line for a [sql] entry
+						// Continuation lines have no timestamp and the buffered entry contains [sql]
+						if entry.Timestamp == "" && bufferedEntry != nil && strings.Contains(bufferedEntry.Message, "[sql]") {
+							// Combine with the buffered entry
+							bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
+							// Re-parse the combined raw text
+							bufferedEntry = ParseLogLine(bufferedEntry.Raw)
+							// If the buffered entry now has fields, flush it
+							if len(bufferedEntry.Fields) > 0 {
+								flushBuffered()
+							}
+						} else {
+							// Flush any buffered entry first
+							flushBuffered()
+							
+							// Check if this new entry contains [sql] and has no fields (needs combining)
+							if strings.Contains(entry.Message, "[sql]") && entry.Timestamp != "" && len(entry.Fields) == 0 {
+								// Buffer it, waiting for continuation lines
+								bufferedEntry = entry
+							} else {
+								// Send immediately
+								logChan <- LogMessage{
+									ContainerID: containerID,
+									Timestamp:   time.Now(),
+									Entry:       entry,
+								}
+								lineCount++
+								sentCount++
+							}
 						}
 					}
 					if sentCount > 0 {
@@ -149,10 +190,12 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 				}
 
 				if err == io.EOF {
+					flushBuffered()
 					slog.Debug("Container reached EOF, total lines processed", "container_id", containerID[:12], "lines", lineCount)
 					return
 				}
 				if err != nil {
+					flushBuffered()
 					return
 				}
 			}
