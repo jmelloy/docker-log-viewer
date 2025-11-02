@@ -195,8 +195,7 @@ const app = createApp({
 
     async loadContainers() {
       try {
-        const response = await fetch("/api/containers");
-        const data = await response.json();
+        const data = await API.get("/api/containers");
 
         // Handle both old format (array) and new format (object with containers and portToServerMap)
         if (Array.isArray(data)) {
@@ -245,8 +244,7 @@ const app = createApp({
 
     async loadInitialLogs() {
       try {
-        const response = await fetch("/api/logs");
-        const logs = await response.json();
+        const logs = await API.get("/api/logs");
         this.logs = logs;
         this.$nextTick(() => this.scrollToBottom());
       } catch (error) {
@@ -614,20 +612,8 @@ const app = createApp({
           sqlQueries: sqlQueries,
         };
 
-        const response = await fetch("/api/save-trace", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          alert(`Trace saved successfully! ID: ${result.id}`);
-        } else {
-          alert("Failed to save trace");
-        }
+        const result = await API.post("/api/save-trace", payload);
+        alert(`Trace saved successfully! ID: ${result.id}`);
       } catch (error) {
         console.error("Error saving trace:", error);
         alert(`Failed to save trace: ${error.message}`);
@@ -893,15 +879,7 @@ const app = createApp({
           connectionString: connectionString,
         };
 
-        const response = await fetch("/api/explain", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const result = await response.json();
+        const result = await API.post("/api/explain", payload);
 
         if (result.error) {
           this.explainData.error = result.error;
@@ -957,26 +935,17 @@ const app = createApp({
 
     async saveRetention() {
       try {
-        const response = await fetch("/api/retention", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            containerName: this.retentionContainer,
-            retentionType: this.retentionForm.type,
-            retentionValue: this.retentionForm.value,
-          }),
+        const data = await API.post("/api/retention", {
+          containerName: this.retentionContainer,
+          retentionType: this.retentionForm.type,
+          retentionValue: this.retentionForm.value,
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          this.retentions[this.retentionContainer] = {
-            type: data.retentionType,
-            value: data.retentionValue,
-          };
-          this.showRetentionModal = false;
-        } else {
-          console.error("Failed to save retention:", await response.text());
-        }
+        this.retentions[this.retentionContainer] = {
+          type: data.retentionType,
+          value: data.retentionValue,
+        };
+        this.showRetentionModal = false;
       } catch (error) {
         console.error("Error saving retention:", error);
       }
@@ -984,16 +953,9 @@ const app = createApp({
 
     async deleteRetention() {
       try {
-        const response = await fetch(`/api/retention/${encodeURIComponent(this.retentionContainer)}`, {
-          method: "DELETE",
-        });
-
-        if (response.ok) {
-          delete this.retentions[this.retentionContainer];
-          this.showRetentionModal = false;
-        } else {
-          console.error("Failed to delete retention:", await response.text());
-        }
+        await API.delete(`/api/retention/${encodeURIComponent(this.retentionContainer)}`);
+        delete this.retentions[this.retentionContainer];
+        this.showRetentionModal = false;
       } catch (error) {
         console.error("Error deleting retention:", error);
       }

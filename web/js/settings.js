@@ -49,12 +49,7 @@ const app = createApp({
   methods: {
     async loadServers() {
       try {
-        const response = await fetch("/api/servers");
-        if (response.ok) {
-          this.servers = await response.json();
-        } else {
-          console.error("Failed to load servers:", response.statusText);
-        }
+        this.servers = await API.get("/api/servers");
       } catch (error) {
         console.error("Error loading servers:", error);
       }
@@ -62,12 +57,7 @@ const app = createApp({
 
     async loadDatabaseURLs() {
       try {
-        const response = await fetch("/api/database-urls");
-        if (response.ok) {
-          this.databaseURLs = await response.json();
-        } else {
-          console.error("Failed to load database URLs:", response.statusText);
-        }
+        this.databaseURLs = await API.get("/api/database-urls");
       } catch (error) {
         console.error("Error loading database URLs:", error);
       }
@@ -150,16 +140,8 @@ const app = createApp({
       }
 
       try {
-        const response = await fetch(`/api/servers/${id}`, {
-          method: "DELETE",
-        });
-
-        if (response.ok) {
-          await this.loadServers();
-        } else {
-          const errorText = await response.text();
-          alert(`Failed to delete server: ${errorText}`);
-        }
+        await API.delete(`/api/servers/${id}`);
+        await this.loadServers();
       } catch (error) {
         console.error("Error deleting server:", error);
         alert("Error deleting server");
@@ -237,16 +219,8 @@ const app = createApp({
       }
 
       try {
-        const response = await fetch(`/api/database-urls/${id}`, {
-          method: "DELETE",
-        });
-
-        if (response.ok) {
-          await this.loadDatabaseURLs();
-        } else {
-          const errorText = await response.text();
-          alert(`Failed to delete database URL: ${errorText}`);
-        }
+        await API.delete(`/api/database-urls/${id}`);
+        await this.loadDatabaseURLs();
       } catch (error) {
         console.error("Error deleting database URL:", error);
         alert("Error deleting database URL");

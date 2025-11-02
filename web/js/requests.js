@@ -102,8 +102,7 @@ const app = createApp({
   methods: {
     async loadServers() {
       try {
-        const response = await fetch("/api/servers");
-        this.servers = await response.json();
+        this.servers = await API.get("/api/servers");
       } catch (error) {
         console.error("Failed to load servers:", error);
         this.servers = [];
@@ -112,8 +111,7 @@ const app = createApp({
 
     async loadSampleQueries() {
       try {
-        const response = await fetch("/api/requests");
-        this.sampleQueries = await response.json();
+        this.sampleQueries = await API.get("/api/requests");
       } catch (error) {
         console.error("Failed to load sample queries:", error);
       }
@@ -121,15 +119,13 @@ const app = createApp({
 
     async loadAllRequests() {
       try {
-        const response = await fetch("/api/all-executions");
-        const executions = await response.json();
+        const executions = await API.get("/api/all-executions");
 
         // Fetch additional details for each request to get sample query name
         this.allRequests = await Promise.all(
           executions.slice(0, 20).map(async (req) => {
             try {
-              const response = await fetch(`/api/executions/${req.id}`);
-              const detail = await response.json();
+              const detail = await API.get(`/api/executions/${req.id}`);
 
               // Use sample query name if available, otherwise operation name from request body
               let displayName = "Unknown";
@@ -178,10 +174,7 @@ const app = createApp({
 
     async loadRequests(sampleQueryId) {
       try {
-        const response = await fetch(
-          `/api/executions?request_id=${sampleQueryId}`
-        );
-        this.requests = await response.json();
+        this.requests = await API.get(`/api/executions?request_id=${sampleQueryId}`);
       } catch (error) {
         console.error("Failed to load requests for sample query:", error);
         this.requests = [];
@@ -238,10 +231,7 @@ const app = createApp({
 
       // Fetch details for both requests
       const [detail1, detail2] = await Promise.all(
-        ids.map(async (id) => {
-          const response = await fetch(`/api/executions/${id}`);
-          return await response.json();
-        })
+        ids.map(id => API.get(`/api/executions/${id}`))
       );
 
       this.comparisonData = { detail1, detail2 };
