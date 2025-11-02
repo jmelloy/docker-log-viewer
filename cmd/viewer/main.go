@@ -210,6 +210,26 @@ func NewWebApp() (*WebApp, error) {
 	return app, nil
 }
 
+func (wa *WebApp) loadContainerRetentions() error {
+	retentionList, err := wa.store.ListContainerRetentions()
+	if err != nil {
+		return err
+	}
+	for _, retention := range retentionList {
+		for _, container := range wa.containers {
+			if container.Name == retention.ContainerName {
+				containerID := container.ID
+				slog.Info("setting container retention", "containerID", containerID, "retention", retention)
+				wa.logStore.SetContainerRetention(containerID, logstore.ContainerRetentionPolicy{
+					Type:  retention.RetentionType,
+					Value: retention.RetentionValue,
+				})
+			}
+		}
+	}
+	return nil
+}
+
 func (wa *WebApp) handleContainers(w http.ResponseWriter, r *http.Request) {
 	containers, err := wa.docker.ListRunningContainers(wa.ctx)
 	if err != nil {
@@ -796,8 +816,8 @@ func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 	data, _ := json.Marshal(update)
 	wsMsg.Data = data
 
-	wa.clientsMutex.RLock()
-	defer wa.clientsMutex.RUnlock()
+	wa.clientsMutex.Lock()
+	defer wa.clientsMutex.Unlock()
 
 	for client := range wa.clients {
 		err := client.conn.WriteJSON(wsMsg)
@@ -1676,6 +1696,13 @@ func normalizeQuery(query string) string {
 	return strings.TrimSpace(normalized)
 }
 
+func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
+		next(w, r)
+	}
+}
+
 func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
@@ -1700,6 +1727,17 @@ func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
 		if err := wa.store.SaveContainerRetention(&retention); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		for _, container := range wa.containers {
+			if container.Name == retention.ContainerName {
+				containerID := container.ID
+				slog.Info("setting container retention", "containerID", containerID, "retention", retention)
+				wa.logStore.SetContainerRetention(containerID, logstore.ContainerRetentionPolicy{
+					Type:  retention.RetentionType,
+					Value: retention.RetentionValue,
+				})
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(retention)
@@ -1759,32 +1797,35 @@ func (wa *WebApp) Run(addr string) error {
 
 	go wa.processLogs()
 	go wa.monitorContainers()
+	if err := wa.loadContainerRetentions(); err != nil {
+		slog.Error("failed to load container retentions", "error", err)
+	}
 
-	http.HandleFunc("/api/containers", wa.handleContainers)
-	http.HandleFunc("/api/logs", wa.handleLogs)
-	http.HandleFunc("/api/ws", wa.handleWebSocket)
-	http.HandleFunc("/api/explain", wa.handleExplain)
-	http.HandleFunc("/api/save-trace", wa.handleSaveTrace)
-	http.HandleFunc("/debug", wa.handleDebug)
+	http.HandleFunc("/api/containers", loggingMiddleware(wa.handleContainers))
+	http.HandleFunc("/api/logs", loggingMiddleware(wa.handleLogs))
+	http.HandleFunc("/api/ws", loggingMiddleware(wa.handleWebSocket))
+	http.HandleFunc("/api/explain", loggingMiddleware(wa.handleExplain))
+	http.HandleFunc("/api/save-trace", loggingMiddleware(wa.handleSaveTrace))
+	http.HandleFunc("/debug", loggingMiddleware(wa.handleDebug))
 
 	// Request management endpoints
-	http.HandleFunc("/api/servers", wa.handleServers)
-	http.HandleFunc("/api/servers/", wa.handleServerDetail)
-	http.HandleFunc("/api/database-urls", wa.handleDatabaseURLs)
-	http.HandleFunc("/api/database-urls/", wa.handleDatabaseURLDetail)
-	http.HandleFunc("/api/requests", wa.handleRequests)
-	http.HandleFunc("/api/requests/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/servers", loggingMiddleware(wa.handleServers))
+	http.HandleFunc("/api/servers/", loggingMiddleware(wa.handleServerDetail))
+	http.HandleFunc("/api/database-urls", loggingMiddleware(wa.handleDatabaseURLs))
+	http.HandleFunc("/api/database-urls/", loggingMiddleware(wa.handleDatabaseURLDetail))
+	http.HandleFunc("/api/requests", loggingMiddleware(wa.handleRequests))
+	http.HandleFunc("/api/requests/", loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/execute") {
 			wa.handleExecuteRequest(w, r)
 		} else {
 			wa.handleRequestDetail(w, r)
 		}
-	})
-	http.HandleFunc("/api/executions", wa.handleExecutions)
-	http.HandleFunc("/api/all-executions", wa.handleAllExecutions)
-	http.HandleFunc("/api/executions/", wa.handleExecutionDetail)
-	http.HandleFunc("/api/retention", wa.handleRetention)
-	http.HandleFunc("/api/retention/", wa.handleRetentionDetail)
+	}))
+	http.HandleFunc("/api/executions", loggingMiddleware(wa.handleExecutions))
+	http.HandleFunc("/api/all-executions", loggingMiddleware(wa.handleAllExecutions))
+	http.HandleFunc("/api/executions/", loggingMiddleware(wa.handleExecutionDetail))
+	http.HandleFunc("/api/retention", loggingMiddleware(wa.handleRetention))
+	http.HandleFunc("/api/retention/", loggingMiddleware(wa.handleRetentionDetail))
 
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 
