@@ -763,8 +763,8 @@ func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 	data, _ := json.Marshal(update)
 	wsMsg.Data = data
 
-	wa.clientsMutex.RLock()
-	defer wa.clientsMutex.RUnlock()
+	wa.clientsMutex.Lock()
+	defer wa.clientsMutex.Unlock()
 
 	for client := range wa.clients {
 		err := client.conn.WriteJSON(wsMsg)
