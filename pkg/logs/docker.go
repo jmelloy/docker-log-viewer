@@ -155,13 +155,6 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							// Re-parse the combined raw text
 							bufferedEntry = ParseLogLine(bufferedEntry.Raw)
 						} else {
-							// If this is a continuation line (no timestamp) and we have a buffered entry,
-							// add it to the buffered entry before flushing
-							if entry.Timestamp == "" && bufferedEntry != nil {
-								bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
-								bufferedEntry = ParseLogLine(bufferedEntry.Raw)
-							}
-							
 							// Flush any buffered entry first
 							flushBuffered()
 							
