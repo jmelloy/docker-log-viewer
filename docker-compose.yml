@@ -8,6 +8,8 @@ services:
     volumes:
       - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
+      - /app/tmp
+      - /app/bin
       - go-modules:/go/pkg/mod
     environment:
       - DATABASE_URL=${DATABASE_URL:-}
