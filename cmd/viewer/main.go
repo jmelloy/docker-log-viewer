@@ -46,21 +46,23 @@ type Client struct {
 }
 
 type WebApp struct {
-	docker           *logs.DockerClient
-	logStore         *logstore.LogStore // Indexed log storage
-	containers       []logs.Container
-	containerIDNames map[string]string // Maps container ID to name
-	containerMutex   sync.RWMutex
-	clients          map[*Client]bool
-	clientsMutex     sync.RWMutex
-	logChan          chan logs.LogMessage
-	batchChan        chan struct{}
-	logBatch         []logs.LogMessage
-	batchMutex       sync.Mutex
-	ctx              context.Context
-	cancel           context.CancelFunc
-	upgrader         websocket.Upgrader
-	store            *store.Store
+	docker               *logs.DockerClient
+	logStore             *logstore.LogStore // Indexed log storage
+	containers           []logs.Container
+	containerIDNames     map[string]string // Maps container ID to name
+	containerMutex       sync.RWMutex
+	clients              map[*Client]bool
+	clientsMutex         sync.RWMutex
+	logChan              chan logs.LogMessage
+	batchChan            chan struct{}
+	logBatch             []logs.LogMessage
+	batchMutex           sync.Mutex
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	upgrader             websocket.Upgrader
+	store                *store.Store
+	lastTimestamps       map[string]time.Time // Last timestamp seen per container
+	lastTimestampsMutex  sync.RWMutex
 }
 
 type WSMessage struct {
@@ -201,7 +203,8 @@ func NewWebApp() (*WebApp, error) {
 				return true
 			},
 		},
-		store: db,
+		store:          db,
+		lastTimestamps: make(map[string]time.Time),
 	}
 
 	return app, nil
@@ -597,10 +600,40 @@ func (wa *WebApp) processLogs() {
 				slog.Debug("processLogs received message", "receivedCount", receivedCount, "containerID", msg.ContainerID[:12])
 			}
 
+			// Determine the timestamp to use for this log entry
+			var logTimestamp time.Time
+			
+			// Try to parse the timestamp from the log entry
+			if msg.Entry != nil && msg.Entry.Timestamp != "" {
+				if parsedTime, ok := logs.ParseTimestamp(msg.Entry.Timestamp); ok {
+					logTimestamp = parsedTime
+					
+					// Update last timestamp for this container
+					wa.lastTimestampsMutex.Lock()
+					wa.lastTimestamps[msg.ContainerID] = parsedTime
+					wa.lastTimestampsMutex.Unlock()
+				}
+			}
+			
+			// If we couldn't parse a timestamp, check if we have a last timestamp for this container
+			if logTimestamp.IsZero() {
+				wa.lastTimestampsMutex.RLock()
+				lastTS, hasLastTS := wa.lastTimestamps[msg.ContainerID]
+				wa.lastTimestampsMutex.RUnlock()
+				
+				if hasLastTS {
+					// Use the last timestamp for this container (interpolation)
+					logTimestamp = lastTS
+				} else {
+					// No timestamp available, fall back to time.Now()
+					logTimestamp = msg.Timestamp
+				}
+			}
+
 			// Convert logs.LogMessage to logstore.LogMessage and add to store
 			message, fields := serializeLogEntry(msg.Entry)
 			storeMsg := &logstore.LogMessage{
-				Timestamp:   msg.Timestamp,
+				Timestamp:   logTimestamp,
 				ContainerID: msg.ContainerID,
 				Message:     message,
 				Fields:      fields,
