@@ -203,6 +203,11 @@ func TestMultilineSQLParsing(t *testing.T) {
 		t.Errorf("Expected level TRC, got %s", entry.Level)
 	}
 
+	// Should have timestamp extracted
+	if entry.Timestamp != "Oct  6 18:09:28.984986" {
+		t.Errorf("Expected timestamp 'Oct  6 18:09:28.984986', got '%s'", entry.Timestamp)
+	}
+
 	// Should contain the SQL UNION statement
 	if !strings.Contains(entry.Raw, "UNION") {
 		t.Errorf("Expected SQL to contain UNION, raw log: %s", entry.Raw)
