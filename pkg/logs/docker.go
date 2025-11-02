@@ -169,7 +169,8 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							}
 							bufferedLog.WriteString(trimmed)
 						} else {
-							// Check if this is a continuation line (starts with whitespace)
+							// Check if this is a continuation line (starts with whitespace in original line)
+							// We check the original 'line' not 'trimmed' to preserve indentation information
 							isContinuationLine := bufferedLog.Len() > 0 && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t"))
 
 							if isContinuationLine {
