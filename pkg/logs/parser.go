@@ -447,8 +447,8 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 			if len(timestampStr) == 13 {
 				// Milliseconds
 				return time.Unix(0, ts*1e6), true
-			} else if len(timestampStr) == 10 {
-				// Seconds
+			} else {
+				// Seconds (length is 10)
 				return time.Unix(ts, 0), true
 			}
 		}
