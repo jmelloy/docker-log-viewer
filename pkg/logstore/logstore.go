@@ -725,7 +725,7 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 			}
 		}
 		if toRemove > 1 {
-			slog.Info("removed count", "containerID", containerID, "toRemove", toRemove)
+			slog.Debug("removed count", "containerID", containerID, "toRemove", toRemove)
 		}
 	case "time":
 		// Remove logs older than specified seconds, but always keep at least 100
@@ -739,16 +739,13 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 			elem := e.Value.(*list.Element)
 			msg := elem.Value.(*LogMessage)
 
-			slog.Debug("msg timestamp", "timestamp", msg.Timestamp, "cutoff", cutoff)
 			if msg.Timestamp.Before(cutoff) {
 				ls.removeMessage(elem, msg)
 				count--
 				removedCount++
-			} else {
-				break
 			}
 		}
-		slog.Info("removed count", "containerID", containerID, "removedCount", removedCount)
+		slog.Info("removed count based on time", "containerID", containerID, "removedCount", removedCount)
 	}
 
 }
