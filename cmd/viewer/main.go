@@ -11,11 +11,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"docker-log-parser/pkg/logs"
@@ -25,6 +27,7 @@ import (
 	"docker-log-parser/pkg/utils"
 
 	"github.com/gorilla/websocket"
+	"github.com/lmittmann/tint"
 )
 
 type ClientFilter struct {
@@ -46,23 +49,24 @@ type Client struct {
 }
 
 type WebApp struct {
-	docker               *logs.DockerClient
-	logStore             *logstore.LogStore // Indexed log storage
-	containers           []logs.Container
-	containerIDNames     map[string]string // Maps container ID to name
-	containerMutex       sync.RWMutex
-	clients              map[*Client]bool
-	clientsMutex         sync.RWMutex
-	logChan              chan logs.LogMessage
-	batchChan            chan struct{}
-	logBatch             []logs.LogMessage
-	batchMutex           sync.Mutex
-	ctx                  context.Context
-	cancel               context.CancelFunc
-	upgrader             websocket.Upgrader
-	store                *store.Store
-	lastTimestamps       map[string]time.Time // Last timestamp seen per container
-	lastTimestampsMutex  sync.RWMutex
+	docker              *logs.DockerClient
+	logStore            *logstore.LogStore // Indexed log storage
+	containers          []logs.Container
+	containerIDNames    map[string]string // Maps container ID to name
+	containerMutex      sync.RWMutex
+	clients             map[*Client]bool
+	clientsMutex        sync.RWMutex
+	logChan             chan logs.LogMessage
+	batchChan           chan struct{}
+	logBatch            []logs.LogMessage
+	batchMutex          sync.Mutex
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	upgrader            websocket.Upgrader
+	store               *store.Store
+	lastTimestamps      map[string]time.Time // Last timestamp seen per container
+	lastTimestampsMutex sync.RWMutex
+	shutdownOnce        sync.Once // Ensure shutdown happens only once
 }
 
 type WSMessage struct {
@@ -169,7 +173,7 @@ func NewWebApp() (*WebApp, error) {
 	if os.Getenv("DEBUG") != "" {
 		logLevel = slog.LevelDebug
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
 		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
@@ -402,7 +406,7 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 
 	// Convert client filter to LogStore FilterOptions
 	filterOpts := wa.clientFilterToLogStoreFilter(filter)
-	
+
 	// Use LogStore's Filter method to get filtered logs directly
 	recentStoreLogs := wa.logStore.Filter(filterOpts, 10000)
 
@@ -606,14 +610,19 @@ func (wa *WebApp) processLogs() {
 	logCount := 0
 	receivedCount := 0
 
-	slog.Debug("processLogs goroutine started")
+	slog.Info("processLogs goroutine started")
 
 	for {
 		select {
 		case <-wa.ctx.Done():
-			slog.Debug("processLogs goroutine exiting")
+			slog.Info("processLogs goroutine exiting", "totalReceived", receivedCount, "totalProcessed", logCount)
 			return
-		case msg := <-wa.logChan:
+		case msg, ok := <-wa.logChan:
+			if !ok {
+				// Channel closed, exit
+				slog.Info("processLogs goroutine exiting (channel closed)", "totalReceived", receivedCount, "totalProcessed", logCount)
+				return
+			}
 			receivedCount++
 
 			if receivedCount <= 10 || receivedCount%100 == 0 {
@@ -622,25 +631,25 @@ func (wa *WebApp) processLogs() {
 
 			// Determine the timestamp to use for this log entry
 			var logTimestamp time.Time
-			
+
 			// Try to parse the timestamp from the log entry
 			if msg.Entry != nil && msg.Entry.Timestamp != "" {
 				if parsedTime, ok := logs.ParseTimestamp(msg.Entry.Timestamp); ok {
 					logTimestamp = parsedTime
-					
+
 					// Update last timestamp for this container
 					wa.lastTimestampsMutex.Lock()
 					wa.lastTimestamps[msg.ContainerID] = parsedTime
 					wa.lastTimestampsMutex.Unlock()
 				}
 			}
-			
+
 			// If we couldn't parse a timestamp, check if we have a last timestamp for this container
 			if logTimestamp.IsZero() {
 				wa.lastTimestampsMutex.RLock()
 				lastTS, hasLastTS := wa.lastTimestamps[msg.ContainerID]
 				wa.lastTimestampsMutex.RUnlock()
-				
+
 				if hasLastTS {
 					// Use the last timestamp for this container (interpolation)
 					logTimestamp = lastTS
@@ -702,17 +711,21 @@ func (wa *WebApp) loadContainers() error {
 	wa.containerMutex.Unlock()
 
 	for _, c := range containers {
+		slog.Info("starting log stream for container", "container_id", c.ID[:12], "container_name", c.Name)
 		if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan); err != nil {
-			slog.Error("failed to stream logs", "container_id", c.ID, "error", err)
+			slog.Error("failed to stream logs", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
 		}
 	}
 
+	slog.Info("loaded containers and started log streams", "container_count", len(containers))
 	return nil
 }
 
 func (wa *WebApp) monitorContainers() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+
+	slog.Info("monitorContainers goroutine started")
 
 	previousIDs := make(map[string]bool)
 	for _, c := range wa.containers {
@@ -722,6 +735,7 @@ func (wa *WebApp) monitorContainers() {
 	for {
 		select {
 		case <-wa.ctx.Done():
+			slog.Info("monitorContainers goroutine exiting", "containersTracked", len(previousIDs))
 			return
 		case <-ticker.C:
 			containers, err := wa.docker.ListRunningContainers(wa.ctx)
@@ -743,8 +757,9 @@ func (wa *WebApp) monitorContainers() {
 					wa.containerIDNames[c.ID] = c.Name
 					wa.containerMutex.Unlock()
 
+					slog.Info("starting log stream for new container", "container_id", c.ID[:12], "container_name", c.Name)
 					if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan); err != nil {
-						slog.Error("failed to stream logs for new container", "container_id", c.ID, "error", err)
+						slog.Error("failed to stream logs for new container", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
 					}
 				}
 			}
@@ -1746,6 +1761,22 @@ func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// shutdown safely cancels context and closes channels, ensuring it only happens once
+func (wa *WebApp) shutdown() {
+	wa.shutdownOnce.Do(func() {
+		slog.Info("cancelling context to stop goroutines")
+		wa.cancel()
+
+		// Give goroutines time to see context cancellation and exit
+		// This prevents them from trying to send on a closed channel
+		time.Sleep(300 * time.Millisecond)
+
+		// Close logChan to signal that no more logs will be processed
+		// sync.Once ensures this only happens once
+		close(wa.logChan)
+	})
+}
+
 func (wa *WebApp) handleRetentionDetail(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
@@ -1795,10 +1826,14 @@ func (wa *WebApp) Run(addr string) error {
 		slog.Info("database connection established for EXPLAIN queries")
 	}
 
+	slog.Info("starting background goroutines")
 	go wa.processLogs()
 	go wa.monitorContainers()
+
 	if err := wa.loadContainerRetentions(); err != nil {
 		slog.Error("failed to load container retentions", "error", err)
+	} else {
+		slog.Info("loaded container retentions")
 	}
 
 	http.HandleFunc("/api/containers", loggingMiddleware(wa.handleContainers))
@@ -1829,21 +1864,85 @@ func (wa *WebApp) Run(addr string) error {
 
 	http.Handle("/", http.FileServer(http.Dir("./web")))
 
-	slog.Info("server starting", "address", "http://localhost"+addr)
-	return http.ListenAndServe(addr, nil)
+	// Create HTTP server with graceful shutdown
+	server := &http.Server{
+		Addr:    addr,
+		Handler: nil,
+	}
+
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Start server in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		slog.Info("server starting", "address", "http://localhost"+addr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- err
+		}
+	}()
+
+	// Wait for interrupt signal or server error
+	select {
+	case err := <-errChan:
+		slog.Error("server error, shutting down", "error", err)
+		wa.shutdown()
+		return err
+	case sig := <-sigChan:
+		slog.Info("received shutdown signal", "signal", sig)
+
+		// Shutdown gracefully
+		wa.shutdown()
+
+		// Give goroutines a moment to exit
+		time.Sleep(200 * time.Millisecond)
+
+		// Create shutdown context with timeout
+		slog.Info("initiating graceful server shutdown", "timeout", "5s")
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+
+		// Shutdown server gracefully
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			slog.Error("server shutdown error", "error", err)
+			return err
+		}
+
+		slog.Info("server shutdown complete")
+		return nil
+	}
 }
 
 func main() {
+	slog.Info("application starting")
+
 	app, err := NewWebApp()
 	if err != nil {
 		slog.Error("failed to create app", "error", err)
 		os.Exit(1)
 	}
 
-	defer sqlexplain.Close()
-	if app.store != nil {
-		defer app.store.Close()
-	}
+	defer func() {
+		slog.Info("application shutting down, cleaning up resources")
+		// Shutdown will handle context cancellation
+		app.shutdown()
+
+		slog.Info("closing SQL explain connection")
+		sqlexplain.Close()
+
+		if app.store != nil {
+			slog.Info("closing database store")
+			app.store.Close()
+		}
+
+		if app.docker != nil {
+			slog.Info("closing Docker client")
+			app.docker.Close()
+		}
+
+		slog.Info("cleanup complete")
+	}()
 
 	if err := app.Run(":9000"); err != nil {
 		slog.Error("failed to run server", "error", err)
