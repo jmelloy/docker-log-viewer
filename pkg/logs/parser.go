@@ -424,7 +424,6 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 		"15:04:05.000000",
 		"15:04:05.000",
 		"15:04:05",
-		// Unix timestamp (10-13 digits)
 	}
 
 	for _, format := range formats {
@@ -442,8 +441,8 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 		}
 	}
 
-	// Try parsing as unix timestamp
-	if len(timestampStr) >= 10 && len(timestampStr) <= 13 {
+	// Try parsing as unix timestamp (10 digits for seconds, 13 digits for milliseconds)
+	if len(timestampStr) == 10 || len(timestampStr) == 13 {
 		if ts, err := strconv.ParseInt(timestampStr, 10, 64); err == nil {
 			if len(timestampStr) == 13 {
 				// Milliseconds
