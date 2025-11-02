@@ -155,6 +155,13 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							// Re-parse the combined raw text
 							bufferedEntry = ParseLogLine(bufferedEntry.Raw)
 						} else {
+							// If this is a continuation line (no timestamp) and we have a buffered entry,
+							// add it to the buffered entry before flushing
+							if entry.Timestamp == "" && bufferedEntry != nil {
+								bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
+								bufferedEntry = ParseLogLine(bufferedEntry.Raw)
+							}
+							
 							// Flush any buffered entry first
 							flushBuffered()
 							
@@ -162,7 +169,8 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							if strings.Contains(entry.Message, "[sql]") && entry.Timestamp != "" && len(entry.Fields) == 0 {
 								// Buffer it, waiting for continuation lines
 								bufferedEntry = entry
-							} else {
+							} else if entry.Timestamp != "" {
+								// Only send entries that have a timestamp (not continuation lines)
 								// Send immediately
 								logChan <- LogMessage{
 									ContainerID: containerID,
