@@ -1701,6 +1701,22 @@ button:disabled {
     color: #8b949e;
 }
 
+.query-duration {
+    font-weight: 600;
+    color: #58a6ff;
+    font-size: 0.75rem;
+}
+
+.query-duration.query-slow {
+    color: #f85149;
+}
+
+.query-count {
+    font-weight: 600;
+    color: #f0883e;
+    font-size: 0.75rem;
+}
+
 .query-text-compact {
     font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
     font-size: 0.7rem;
@@ -1715,11 +1731,12 @@ button:disabled {
     background: #238636;
     color: white;
     border: none;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.65rem;
     cursor: pointer;
-    width: 100%;
+    width: auto;
+    align-self: flex-start;
 }
 
 .btn-explain-compact:hover {
