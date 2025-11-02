@@ -41,7 +41,7 @@ export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
   - `explain.go`: Database connection, query execution, variable substitution
 
 ### Frontend (web/)
-- Vue 3 single-page application
+- Vue 3 multi-page application (MPA) - 4 separate HTML pages
 - Fully reactive data binding with Vue's composition API
 - Real-time WebSocket updates
 - SQL analyzer panel with PEV2-powered EXPLAIN visualization
@@ -57,7 +57,7 @@ export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 - Container monitoring polling interval: 5 seconds
 
 ### Vue.js Frontend
-- Single Vue 3 application with reactive data
+- Each HTML page is a separate Vue 3 application with reactive data
 - Use computed properties for derived state
 - Use v-model for two-way data binding
 - Template-based rendering with v-for and v-if directives
