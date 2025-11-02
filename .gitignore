@@ -33,6 +33,13 @@ go.work.sum
 
 bin/
 
+# Build artifacts
+viewer
+compare
+analyze
+graphql-tester
+test-parser
+
 # Generated output files
 *.html
 !web/*.html

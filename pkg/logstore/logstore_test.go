@@ -595,3 +595,160 @@ func TestLimitParameter(t *testing.T) {
 		t.Errorf("Expected 3 results with limit, got %d", len(results))
 	}
 }
+
+func TestFilter(t *testing.T) {
+	store := NewLogStore(100, 1*time.Hour)
+
+	// Add test messages with various attributes
+	messages := []*LogMessage{
+		{
+			Timestamp:   time.Now(),
+			ContainerID: "container1",
+			Message:     "Error in authentication",
+			Fields: map[string]string{
+				"_level":     "ERR",
+				"request_id": "req1",
+				"user_id":    "user123",
+			},
+		},
+		{
+			Timestamp:   time.Now(),
+			ContainerID: "container1",
+			Message:     "Debug message for user",
+			Fields: map[string]string{
+				"_level":     "DBG",
+				"request_id": "req2",
+				"user_id":    "user123",
+			},
+		},
+		{
+			Timestamp:   time.Now(),
+			ContainerID: "container2",
+			Message:     "Info: Processing request",
+			Fields: map[string]string{
+				"_level":     "INF",
+				"request_id": "req1",
+				"service":    "api",
+			},
+		},
+		{
+			Timestamp:   time.Now(),
+			ContainerID: "container2",
+			Message:     "Warning: High memory usage",
+			Fields: map[string]string{
+				"_level":  "WRN",
+				"service": "api",
+			},
+		},
+		{
+			Timestamp:   time.Now(),
+			ContainerID: "container3",
+			Message:     "No level message",
+			Fields: map[string]string{
+				"request_id": "req3",
+			},
+		},
+	}
+
+	for _, msg := range messages {
+		store.Add(msg)
+	}
+
+	// Test 1: Filter by container only
+	opts := FilterOptions{
+		ContainerIDs: []string{"container1"},
+	}
+	results := store.Filter(opts, 100)
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results for container1, got %d", len(results))
+	}
+
+	// Test 2: Filter by level
+	opts = FilterOptions{
+		Levels: []string{"ERR", "WRN"},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results for ERR/WRN levels, got %d", len(results))
+	}
+
+	// Test 3: Filter by search term
+	opts = FilterOptions{
+		SearchTerms: []string{"user"},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results containing 'user', got %d", len(results))
+	}
+
+	// Test 4: Filter by field
+	opts = FilterOptions{
+		FieldFilters: []FieldFilter{
+			{Name: "request_id", Value: "req1"},
+		},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results with request_id=req1, got %d", len(results))
+	}
+
+	// Test 5: Combined filters (container + level)
+	opts = FilterOptions{
+		ContainerIDs: []string{"container1"},
+		Levels:       []string{"ERR"},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 1 {
+		t.Errorf("Expected 1 result for container1 + ERR, got %d", len(results))
+	}
+	if len(results) > 0 && results[0].Message != "Error in authentication" {
+		t.Errorf("Expected 'Error in authentication', got %s", results[0].Message)
+	}
+
+	// Test 6: Multiple search terms (AND logic)
+	opts = FilterOptions{
+		SearchTerms: []string{"user", "debug"},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 1 {
+		t.Errorf("Expected 1 result matching both 'user' AND 'debug', got %d", len(results))
+	}
+
+	// Test 7: Filter by NONE level
+	opts = FilterOptions{
+		Levels: []string{"NONE"},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 1 {
+		t.Errorf("Expected 1 result with no level (NONE), got %d", len(results))
+	}
+
+	// Test 8: Filter with limit
+	opts = FilterOptions{}
+	results = store.Filter(opts, 3)
+	if len(results) != 3 {
+		t.Errorf("Expected 3 results with limit, got %d", len(results))
+	}
+
+	// Test 9: No matching results
+	opts = FilterOptions{
+		ContainerIDs: []string{"nonexistent"},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results for nonexistent container, got %d", len(results))
+	}
+
+	// Test 10: Complex filter - multiple containers + level + field
+	opts = FilterOptions{
+		ContainerIDs: []string{"container1", "container2"},
+		Levels:       []string{"ERR", "INF"},
+		FieldFilters: []FieldFilter{
+			{Name: "request_id", Value: "req1"},
+		},
+	}
+	results = store.Filter(opts, 100)
+	if len(results) != 2 {
+		t.Errorf("Expected 2 results for complex filter, got %d", len(results))
+	}
+}
