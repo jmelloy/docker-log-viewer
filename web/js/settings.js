@@ -1,3 +1,6 @@
+import { createNavigation } from './shared/navigation.js';
+import { API } from './shared/api.js';
+
 const { createApp } = Vue;
 
 const app = createApp({
@@ -261,11 +264,7 @@ const app = createApp({
       <header class="app-header">
         <div style="display: flex; align-items: center; gap: 1rem">
           <h1 style="margin: 0">🔱 Logseidon</h1>
-          <nav style="display: flex; gap: 1rem; align-items: center">
-            <a href="/">Log Viewer</a>
-            <a href="/requests.html">Request Manager</a>
-            <a href="/settings.html" class="active">Settings</a>
-          </nav>
+          <app-nav></app-nav>
         </div>
       </header>
 
@@ -415,5 +414,8 @@ const app = createApp({
     </div>
   `,
 });
+
+// Register components
+app.component('app-nav', createNavigation('settings'));
 
 app.mount("#app");
