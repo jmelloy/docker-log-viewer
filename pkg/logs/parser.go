@@ -398,6 +398,65 @@ func (e *LogEntry) FormattedString() string {
 	return sb.String()
 }
 
+// ParseTimestamp attempts to parse the timestamp string from a log entry
+// Returns the parsed time and true if successful, otherwise returns zero time and false
+func ParseTimestamp(timestampStr string) (time.Time, bool) {
+	if timestampStr == "" {
+		return time.Time{}, false
+	}
+
+	// Try various timestamp formats
+	formats := []string{
+		// Oct  3 19:57:52.076536
+		"Jan  2 15:04:05.000000",
+		"Jan _2 15:04:05.000000",
+		// 2024-10-03T19:57:52.076536Z
+		time.RFC3339Nano,
+		time.RFC3339,
+		// 2024-10-03 19:57:52.076536
+		"2006-01-02T15:04:05.000000",
+		"2006-01-02 15:04:05.000000",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		// [19:57:52.076]
+		"[15:04:05.000]",
+		// 19:57:52.076536
+		"15:04:05.000000",
+		"15:04:05.000",
+		"15:04:05",
+	}
+
+	for _, format := range formats {
+		t, err := time.Parse(format, timestampStr)
+		if err == nil {
+			// For formats without year/date, add current year/date
+			if format == "Jan  2 15:04:05.000000" || format == "Jan _2 15:04:05.000000" {
+				now := time.Now()
+				t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
+			} else if format == "[15:04:05.000]" || format == "15:04:05.000000" || format == "15:04:05.000" || format == "15:04:05" {
+				now := time.Now()
+				t = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
+			}
+			return t, true
+		}
+	}
+
+	// Try parsing as unix timestamp (10 digits for seconds, 13 digits for milliseconds)
+	if len(timestampStr) == 10 || len(timestampStr) == 13 {
+		if ts, err := strconv.ParseInt(timestampStr, 10, 64); err == nil {
+			if len(timestampStr) == 13 {
+				// Milliseconds
+				return time.Unix(0, ts*1e6), true
+			} else {
+				// Seconds (length is 10)
+				return time.Unix(ts, 0), true
+			}
+		}
+	}
+
+	return time.Time{}, false
+}
+
 func init() {
 	time.Local = time.UTC
 }
