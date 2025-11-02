@@ -1,3 +1,6 @@
+import { createNavigation } from './shared/navigation.js';
+import { API } from './shared/api.js';
+
 const { createApp } = Vue;
 
 const app = createApp({
@@ -1097,11 +1100,7 @@ const app = createApp({
       <header class="app-header">
         <div style="display: flex; align-items: center; gap: 1rem; width: 100%;">
           <h1 style="margin: 0">🔱 Logseidon</h1>
-          <nav style="display: flex; gap: 1rem; align-items: center;">
-            <a href="/" class="active">Log Viewer</a>
-            <a href="/requests.html">Request Manager</a>
-            <a href="/settings.html">Settings</a>
-          </nav>
+          <app-nav></app-nav>
           <div class="header-controls">
             <div class="search-box">
               <input type="text" v-model="searchQuery" placeholder="Search logs...">
@@ -1434,7 +1433,8 @@ const app = createApp({
   `,
 });
 
-// Register PEV2 component
+// Register components
+app.component('app-nav', createNavigation('viewer'));
 app.component("pev2", pev2.Plan);
 
 // Mount the app

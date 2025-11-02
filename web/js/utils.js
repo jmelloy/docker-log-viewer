@@ -1,6 +1,6 @@
 // Shared utility functions
 
-function formatSQL(sql) {
+export function formatSQL(sql) {
   if (!sql?.trim()) return sql;
 
   let formatted = sql.replace(/\s+/g, " ").trim();
