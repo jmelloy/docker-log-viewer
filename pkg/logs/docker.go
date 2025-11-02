@@ -94,7 +94,7 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 			if bufferedEntry != nil {
 				logChan <- LogMessage{
 					ContainerID: containerID,
-					Timestamp:   time.Now(),
+					Timestamp:   time.Now(), // Will be updated below if bufferedEntry has timestamp
 					Entry:       bufferedEntry,
 				}
 				bufferedEntry = nil
@@ -154,14 +154,11 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
 							// Re-parse the combined raw text
 							bufferedEntry = ParseLogLine(bufferedEntry.Raw)
-						} else {
-							// If this is a continuation line (no timestamp) and we have a buffered entry,
-							// add it to the buffered entry before flushing
-							if entry.Timestamp == "" && bufferedEntry != nil {
-								bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
-								bufferedEntry = ParseLogLine(bufferedEntry.Raw)
+							// If the buffered entry now has fields, flush it
+							if len(bufferedEntry.Fields) > 0 {
+								flushBuffered()
 							}
-							
+						} else {
 							// Flush any buffered entry first
 							flushBuffered()
 							
@@ -169,8 +166,7 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							if strings.Contains(entry.Message, "[sql]") && entry.Timestamp != "" && len(entry.Fields) == 0 {
 								// Buffer it, waiting for continuation lines
 								bufferedEntry = entry
-							} else if entry.Timestamp != "" {
-								// Only send entries that have a timestamp (not continuation lines)
+							} else {
 								// Send immediately
 								logChan <- LogMessage{
 									ContainerID: containerID,
