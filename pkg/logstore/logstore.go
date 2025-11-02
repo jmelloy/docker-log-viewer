@@ -2,6 +2,7 @@ package logstore
 
 import (
 	"container/list"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -524,23 +525,29 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 				}
 			}
 		}
+		slog.Info("removed count", "containerID", containerID, "removedCount", removedCount)
 	case "time":
 		// Remove logs older than specified seconds, but always keep at least 100
 		cutoff := time.Now().Add(-time.Duration(policy.Value) * time.Second)
 
 		count := containerList.Len()
 		minToKeep := 100
-		// Count how many would be removed by time
+
+		removedCount := 0
 		for e := containerList.Back(); e != nil && count > minToKeep; e = e.Prev() {
 			elem := e.Value.(*list.Element)
 			msg := elem.Value.(*LogMessage)
 
+			slog.Debug("msg timestamp", "timestamp", msg.Timestamp, "cutoff", cutoff)
 			if msg.Timestamp.Before(cutoff) {
 				ls.removeMessage(elem, msg)
 				count--
+				removedCount++
 			} else {
 				break
 			}
 		}
+		slog.Info("removed count", "containerID", containerID, "removedCount", removedCount)
 	}
+
 }
