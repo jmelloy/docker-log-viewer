@@ -103,7 +103,7 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		var bufferedLog strings.Builder
 		lineCount := 0
 
-		flushLog := func() {
+		flushLog := func() bool {
 			if bufferedLog.Len() > 0 {
 				logText := bufferedLog.String()
 				entry := ParseLogLine(logText)
@@ -114,13 +114,15 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 				}
 				bufferedLog.Reset()
 				lineCount++
+				return true
 			}
+			return false
 		}
 
 		for {
 			select {
 			case <-ctx.Done():
-				flushLog()
+				_ = flushLog()
 				slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12])
 				return
 			default:
@@ -162,9 +164,10 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 
 						// Check if line starts with timestamp
 						if hasTimestamp(trimmed) {
-							flushLog()
+							if flushLog() {
+								sentCount++
+							}
 							bufferedLog.WriteString(trimmed)
-							sentCount++
 						} else {
 							// Check if this is a continuation line (starts with whitespace)
 							isContinuationLine := bufferedLog.Len() > 0 && (strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t"))
@@ -174,7 +177,9 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 								bufferedLog.WriteString(trimmed)
 							} else {
 								// Not a continuation line, flush and process as standalone
-								flushLog()
+								if flushLog() {
+									sentCount++
+								}
 								entry := ParseLogLine(trimmed)
 								logChan <- LogMessage{
 									ContainerID: containerID,
@@ -198,12 +203,12 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 				}
 
 				if err == io.EOF {
-					flushLog()
+					_ = flushLog()
 					slog.Debug("Container reached EOF, total lines processed", "container_id", containerID[:12], "lines", lineCount)
 					return
 				}
 				if err != nil {
-					flushLog()
+					_ = flushLog()
 					return
 				}
 			}
