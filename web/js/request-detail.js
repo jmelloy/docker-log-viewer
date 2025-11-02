@@ -7,7 +7,7 @@ const app = createApp({
       loading: true,
       error: null,
       explainPlanData: null,
-      showExplainPlanModal: false,
+      showExplainPlanPanel: false,
       pev2App: null,
     };
   },
@@ -127,9 +127,9 @@ const app = createApp({
         error: null,
       };
 
-      this.showExplainPlanModal = true;
+      this.showExplainPlanPanel = true;
 
-      // Need to mount PEV2 after modal is visible
+      // Need to mount PEV2 after panel is visible
       this.$nextTick(() => {
         this.mountPEV2(planData, query);
       });
@@ -166,7 +166,7 @@ const app = createApp({
     },
 
     closeExplainPlanModal() {
-      this.showExplainPlanModal = false;
+      this.showExplainPlanPanel = false;
       if (this.pev2App) {
         this.pev2App.unmount();
         this.pev2App = null;
@@ -395,6 +395,59 @@ const app = createApp({
               </div>
             </div>
 
+            <div v-if="requestDetail.indexAnalysis && (requestDetail.indexAnalysis.sequentialScans.length > 0 || requestDetail.indexAnalysis.recommendations.length > 0)" class="modal-section">
+              <h4>Index Analysis</h4>
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-label">Sequential Scans</span>
+                  <span class="stat-value" :class="{ 'text-warning': requestDetail.indexAnalysis.summary.sequentialScans > 0 }">{{ requestDetail.indexAnalysis.summary.sequentialScans }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Index Scans</span>
+                  <span class="stat-value">{{ requestDetail.indexAnalysis.summary.indexScans }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Recommendations</span>
+                  <span class="stat-value" :class="{ 'text-warning': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }">{{ requestDetail.indexAnalysis.summary.totalRecommendations }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">High Priority</span>
+                  <span class="stat-value" :class="{ 'text-danger': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }">{{ requestDetail.indexAnalysis.summary.highPriorityRecs }}</span>
+                </div>
+              </div>
+              
+              <div v-if="requestDetail.indexAnalysis.sequentialScans.length > 0" style="margin-top: 1rem;">
+                <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem;">Sequential Scan Issues</h5>
+                <div class="index-issues-list">
+                  <div v-for="(issue, idx) in requestDetail.indexAnalysis.sequentialScans.slice(0, 5)" :key="idx" class="index-issue-item">
+                    <div class="index-issue-header">
+                      <span class="index-issue-table">{{ issue.tableName }}</span>
+                      <span class="index-issue-stats">{{ issue.occurrences }}x · {{ issue.durationMs.toFixed(2) }}ms · cost: {{ issue.cost.toFixed(0) }}</span>
+                    </div>
+                    <div v-if="issue.filterCondition" class="index-issue-filter">Filter: {{ issue.filterCondition }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="requestDetail.indexAnalysis.recommendations.length > 0" style="margin-top: 1rem;">
+                <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem;">Index Recommendations</h5>
+                <div class="index-recommendations-list">
+                  <div v-for="(rec, idx) in requestDetail.indexAnalysis.recommendations.slice(0, 5)" :key="idx" class="index-recommendation-item">
+                    <div class="index-recommendation-header">
+                      <span class="index-priority-badge" :class="'priority-' + rec.priority">{{ rec.priority.toUpperCase() }}</span>
+                      <span class="index-recommendation-table">{{ rec.tableName }}</span>
+                    </div>
+                    <div class="index-recommendation-reason">{{ rec.reason }}</div>
+                    <div class="index-recommendation-columns">Columns: {{ rec.columns.join(', ') }}</div>
+                    <div class="index-recommendation-impact">Impact: {{ rec.estimatedImpact }}</div>
+                    <div class="index-recommendation-sql">
+                      <code>{{ rec.sqlCommand }}</code>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="modal-section">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                 <h4 style="margin: 0;">Logs (<span>{{ filteredRequestLogs.length }}</span>) <span v-if="requestDetail.logs.length > filteredRequestLogs.length" style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span></h4>
@@ -416,10 +469,10 @@ const app = createApp({
       </div>
     </div>
 
-    <!-- EXPLAIN Plan Modal -->
-    <div v-if="showExplainPlanModal" class="modal">
-      <div class="modal-content explain-modal-content">
-        <div class="modal-header">
+    <!-- EXPLAIN Plan Side Panel -->
+    <div v-if="showExplainPlanPanel" class="side-panel-overlay" @click="closeExplainPlanModal">
+      <div class="side-panel" @click.stop>
+        <div class="side-panel-header">
           <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
           <div style="display: flex; gap: 0.5rem;">
             <button @click="shareExplainPlan" class="btn-secondary" style="padding: 0.5rem 1rem;">
@@ -428,7 +481,7 @@ const app = createApp({
             <button @click="closeExplainPlanModal">✕</button>
           </div>
         </div>
-        <div class="modal-body">
+        <div class="side-panel-body">
           <div
             v-if="explainPlanData && explainPlanData.error"
             class="alert alert-danger"
