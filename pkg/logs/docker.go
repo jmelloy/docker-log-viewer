@@ -67,7 +67,7 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 	return result, nil
 }
 
-func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logChan chan<- LogMessage) error {
+func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logChan chan<- LogMessage, onStreamEnd func()) error {
 	options := types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -85,6 +85,9 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 
 	go func() {
 		defer reader.Close()
+		if onStreamEnd != nil {
+			defer onStreamEnd()
+		}
 		buf := make([]byte, 8192)
 		var leftover []byte
 		var bufferedEntry *LogEntry

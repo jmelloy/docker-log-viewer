@@ -1,5 +1,5 @@
-import { createNavigation } from './shared/navigation.js';
-import { API } from './shared/api.js';
+import { createNavigation } from "./shared/navigation.js";
+import { API } from "./shared/api.js";
 
 const { createApp } = Vue;
 
@@ -460,6 +460,18 @@ const app = createApp({
       if (data.portToServerMap) {
         this.portToServerMap = data.portToServerMap;
         console.log("Updated port to server map:", this.portToServerMap);
+      }
+
+      // Update log counts
+      if (data.logCounts) {
+        this.logCounts = data.logCounts;
+        console.log("Updated log counts:", this.logCounts);
+      }
+
+      // Update retentions
+      if (data.retentions) {
+        this.retentions = data.retentions;
+        console.log("Updated retentions:", this.retentions);
       }
 
       if (this.hasTraceFilters) {
@@ -929,7 +941,9 @@ const app = createApp({
       if (retention.type === "count") {
         return `Retention: ${retention.value} logs`;
       } else {
-        return `Retention: ${retention.value} seconds (${Math.floor(retention.value / 3600)}h ${Math.floor((retention.value % 3600) / 60)}m)`;
+        return `Retention: ${retention.value} seconds (${Math.floor(
+          retention.value / 3600
+        )}h ${Math.floor((retention.value % 3600) / 60)}m)`;
       }
     },
 
@@ -953,7 +967,9 @@ const app = createApp({
 
     async deleteRetention() {
       try {
-        await API.delete(`/api/retention/${encodeURIComponent(this.retentionContainer)}`);
+        await API.delete(
+          `/api/retention/${encodeURIComponent(this.retentionContainer)}`
+        );
         delete this.retentions[this.retentionContainer];
         this.showRetentionModal = false;
       } catch (error) {
@@ -1396,7 +1412,7 @@ const app = createApp({
 });
 
 // Register components
-app.component('app-nav', createNavigation('viewer'));
+app.component("app-nav", createNavigation("viewer"));
 app.component("pev2", pev2.Plan);
 
 // Mount the app

@@ -3,6 +3,7 @@ package logstore
 import (
 	"container/list"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -546,25 +547,35 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 		return results
 	}
 
-	// Multiple containers - iterate through each container's index
+	// Multiple containers - collect all matching logs and interleave by timestamp
 	if len(opts.ContainerIDs) > 1 {
+		// Collect all matching logs from all selected containers
+		candidateResults := make([]*LogMessage, 0)
 		for _, containerID := range opts.ContainerIDs {
 			containerList := ls.byContainer[containerID]
 			if containerList == nil {
 				continue
 			}
 
-			for e := containerList.Front(); e != nil && count < limit; e = e.Next() {
+			for e := containerList.Front(); e != nil; e = e.Next() {
 				elem := e.Value.(*list.Element)
 				msg := elem.Value.(*LogMessage)
 				if ls.matchesFilterOptions(msg, opts) {
-					results = append(results, msg)
-					count++
-					if count >= limit {
-						return results
-					}
+					candidateResults = append(candidateResults, msg)
 				}
 			}
+		}
+
+		// Sort by timestamp (most recent first to match single-container behavior)
+		sort.Slice(candidateResults, func(i, j int) bool {
+			return candidateResults[i].Timestamp.After(candidateResults[j].Timestamp)
+		})
+
+		// Apply limit
+		if len(candidateResults) > limit {
+			results = candidateResults[:limit]
+		} else {
+			results = candidateResults
 		}
 		return results
 	}

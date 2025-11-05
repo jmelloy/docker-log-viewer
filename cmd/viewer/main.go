@@ -66,7 +66,9 @@ type WebApp struct {
 	store               *store.Store
 	lastTimestamps      map[string]time.Time // Last timestamp seen per container
 	lastTimestampsMutex sync.RWMutex
-	shutdownOnce        sync.Once // Ensure shutdown happens only once
+	shutdownOnce        sync.Once       // Ensure shutdown happens only once
+	activeStreams       map[string]bool // Tracks which containers have active log streams
+	activeStreamsMutex  sync.RWMutex
 }
 
 type WSMessage struct {
@@ -209,6 +211,7 @@ func NewWebApp() (*WebApp, error) {
 		},
 		store:          db,
 		lastTimestamps: make(map[string]time.Time),
+		activeStreams:  make(map[string]bool),
 	}
 
 	return app, nil
@@ -712,8 +715,21 @@ func (wa *WebApp) loadContainers() error {
 
 	for _, c := range containers {
 		slog.Info("starting log stream for container", "container_id", c.ID[:12], "container_name", c.Name)
-		if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan); err != nil {
+		containerID := c.ID
+		onStreamEnd := func() {
+			wa.activeStreamsMutex.Lock()
+			delete(wa.activeStreams, containerID)
+			wa.activeStreamsMutex.Unlock()
+			slog.Info("stream ended, removed from active streams", "container_id", containerID[:12])
+		}
+		wa.activeStreamsMutex.Lock()
+		wa.activeStreams[c.ID] = true
+		wa.activeStreamsMutex.Unlock()
+		if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan, onStreamEnd); err != nil {
 			slog.Error("failed to stream logs", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
+			wa.activeStreamsMutex.Lock()
+			delete(wa.activeStreams, c.ID)
+			wa.activeStreamsMutex.Unlock()
 		}
 	}
 
@@ -749,17 +765,60 @@ func (wa *WebApp) monitorContainers() {
 				currentIDs[c.ID] = true
 			}
 
-			for _, c := range containers {
-				if !previousIDs[c.ID] {
+			wa.activeStreamsMutex.RLock()
+			activeStreams := make(map[string]bool)
+			for id := range wa.activeStreams {
+				activeStreams[id] = true
+			}
+			wa.activeStreamsMutex.RUnlock()
 
+			for _, c := range containers {
+				// Check if container is new or if it's running but doesn't have an active stream
+				if !previousIDs[c.ID] {
+					// New container - start stream
 					// Add to container name map
 					wa.containerMutex.Lock()
 					wa.containerIDNames[c.ID] = c.Name
 					wa.containerMutex.Unlock()
 
 					slog.Info("starting log stream for new container", "container_id", c.ID[:12], "container_name", c.Name)
-					if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan); err != nil {
+					containerID := c.ID
+					onStreamEnd := func() {
+						wa.activeStreamsMutex.Lock()
+						delete(wa.activeStreams, containerID)
+						wa.activeStreamsMutex.Unlock()
+						slog.Info("stream ended, removed from active streams", "container_id", containerID[:12])
+					}
+					wa.activeStreamsMutex.Lock()
+					wa.activeStreams[c.ID] = true
+					wa.activeStreamsMutex.Unlock()
+					if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan, onStreamEnd); err != nil {
 						slog.Error("failed to stream logs for new container", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
+						wa.activeStreamsMutex.Lock()
+						delete(wa.activeStreams, c.ID)
+						wa.activeStreamsMutex.Unlock()
+					}
+				} else if !activeStreams[c.ID] {
+					// Container is running but stream ended (e.g., EOF) - restart it
+					// Remove from previousIDs so it will be checked again
+					delete(previousIDs, c.ID)
+
+					slog.Info("container stream ended, restarting stream", "container_id", c.ID[:12], "container_name", c.Name)
+					containerID := c.ID
+					onStreamEnd := func() {
+						wa.activeStreamsMutex.Lock()
+						delete(wa.activeStreams, containerID)
+						wa.activeStreamsMutex.Unlock()
+						slog.Info("stream ended, removed from active streams", "container_id", containerID[:12])
+					}
+					wa.activeStreamsMutex.Lock()
+					wa.activeStreams[c.ID] = true
+					wa.activeStreamsMutex.Unlock()
+					if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan, onStreamEnd); err != nil {
+						slog.Error("failed to restart stream for container", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
+						wa.activeStreamsMutex.Lock()
+						delete(wa.activeStreams, c.ID)
+						wa.activeStreamsMutex.Unlock()
 					}
 				}
 			}
@@ -772,6 +831,11 @@ func (wa *WebApp) monitorContainers() {
 					wa.containerMutex.Lock()
 					delete(wa.containerIDNames, id)
 					wa.containerMutex.Unlock()
+
+					// Remove from active streams if present
+					wa.activeStreamsMutex.Lock()
+					delete(wa.activeStreams, id)
+					wa.activeStreamsMutex.Unlock()
 				}
 			}
 
@@ -820,9 +884,34 @@ func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]stri
 }
 
 func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
+	portToServerMap := wa.buildPortToServerMap(containers)
+
+	// Get log counts for each container
+	logCounts := make(map[string]int)
+	for _, container := range containers {
+		count := wa.logStore.CountByContainer(container.ID)
+		logCounts[container.Name] = count
+	}
+
+	// Get retention settings for all containers
+	retentions := make(map[string]RetentionInfo)
+	if wa.store != nil {
+		retentionList, err := wa.store.ListContainerRetentions()
+		if err == nil {
+			for _, r := range retentionList {
+				retentions[r.ContainerName] = RetentionInfo{
+					Type:  r.RetentionType,
+					Value: r.RetentionValue,
+				}
+			}
+		}
+	}
+
 	update := ContainersUpdateMessage{
 		Containers:      containers,
-		PortToServerMap: wa.buildPortToServerMap(containers),
+		PortToServerMap: portToServerMap,
+		LogCounts:       logCounts,
+		Retentions:      retentions,
 	}
 
 	wsMsg := WSMessage{
