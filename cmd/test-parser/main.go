@@ -94,7 +94,7 @@ func readFromDockerContainer(containerID string, tail int, follow bool, debug bo
 	logChan := make(chan logs.LogMessage, 1000)
 
 	// Start streaming logs
-	err = dockerClient.StreamLogs(ctx, containerID, logChan)
+	err = dockerClient.StreamLogs(ctx, containerID, logChan, nil)
 	if err != nil {
 		fmt.Printf("Error streaming logs: %v\n", err)
 		os.Exit(1)

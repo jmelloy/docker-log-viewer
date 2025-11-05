@@ -319,7 +319,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	for _, c := range containers {
-		if err := docker.StreamLogs(ctx, c.ID, logChan); err != nil {
+		if err := docker.StreamLogs(ctx, c.ID, logChan, nil); err != nil {
 			log.Printf("failed to stream logs for container %s: %v", c.ID, err)
 		}
 	}
