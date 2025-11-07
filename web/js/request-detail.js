@@ -15,6 +15,14 @@ const app = createApp({
       pev2App: null,
       showRequestModal: false,
       showResponseModal: false,
+      showExecuteModal: false,
+      executeForm: {
+        tokenOverride: "",
+        devIdOverride: "",
+        requestDataOverride: "",
+        graphqlVariables: {},
+      },
+      servers: [],
     };
   },
 
@@ -162,6 +170,7 @@ const app = createApp({
     }
 
     await this.loadRequestDetail(requestId);
+    await this.loadServers();
   },
 
   methods: {
@@ -389,6 +398,184 @@ const app = createApp({
         this.showResponseModal = true;
       }
     },
+
+    async loadServers() {
+      try {
+        this.servers = await API.get("/api/servers");
+      } catch (error) {
+        console.error("Failed to load servers:", error);
+      }
+    },
+
+    openExecuteModal() {
+      // Pre-populate with current token and dev ID
+      const server =
+        this.requestDetail?.server || this.requestDetail?.execution?.server;
+      this.executeForm = {
+        tokenOverride: server?.bearerToken || "",
+        devIdOverride: server?.devId || "",
+        requestDataOverride: this.requestDetail?.execution?.requestBody || "",
+        graphqlVariables: {},
+      };
+
+      // Parse GraphQL variables from request body
+      this.parseGraphQLVariables();
+
+      this.showExecuteModal = true;
+    },
+
+    parseGraphQLVariables() {
+      try {
+        const requestBody = this.requestDetail?.execution?.requestBody;
+        if (!requestBody) return;
+
+        let parsed;
+        if (typeof requestBody === "string") {
+          parsed = JSON.parse(requestBody);
+        } else {
+          parsed = requestBody;
+        }
+
+        // Look for variables in GraphQL format
+        // GraphQL requests typically have: { query: "...", variables: {...} }
+        if (parsed.variables && typeof parsed.variables === "object") {
+          // Deep clone to avoid reference issues
+          this.executeForm.graphqlVariables = JSON.parse(
+            JSON.stringify(parsed.variables)
+          );
+        } else if (Array.isArray(parsed)) {
+          // Handle array of requests - look for variables in each
+          const allVariables = {};
+          parsed.forEach((item, index) => {
+            if (item.variables && typeof item.variables === "object") {
+              Object.assign(allVariables, item.variables);
+            }
+          });
+          if (Object.keys(allVariables).length > 0) {
+            this.executeForm.graphqlVariables = allVariables;
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to parse GraphQL variables:", error);
+        this.executeForm.graphqlVariables = {};
+      }
+    },
+
+    updateGraphQLVariable(key, value) {
+      // Try to parse as JSON if it looks like JSON, otherwise use as string
+      let parsedValue = value;
+      try {
+        if (value.trim().startsWith("{") || value.trim().startsWith("[")) {
+          parsedValue = JSON.parse(value);
+        } else if (value.trim() === "true" || value.trim() === "false") {
+          parsedValue = value.trim() === "true";
+        } else if (!isNaN(value) && value.trim() !== "") {
+          parsedValue = Number(value);
+        }
+      } catch (e) {
+        // Not valid JSON, use as string
+        parsedValue = value;
+      }
+
+      this.executeForm.graphqlVariables[key] = parsedValue;
+      this.updateRequestDataWithVariables();
+    },
+
+    removeGraphQLVariable(key) {
+      delete this.executeForm.graphqlVariables[key];
+      // Create new object to trigger reactivity
+      this.executeForm.graphqlVariables = {
+        ...this.executeForm.graphqlVariables,
+      };
+      this.updateRequestDataWithVariables();
+    },
+
+    addGraphQLVariable() {
+      const key = prompt("Enter variable name:");
+      if (key && key.trim()) {
+        this.executeForm.graphqlVariables[key.trim()] = "";
+        // Create new object to trigger reactivity
+        this.executeForm.graphqlVariables = {
+          ...this.executeForm.graphqlVariables,
+        };
+      }
+    },
+
+    updateRequestDataWithVariables() {
+      try {
+        // Use the current requestDataOverride as the base, or fall back to original
+        let baseData = this.executeForm.requestDataOverride;
+        if (!baseData) {
+          baseData = this.requestDetail?.execution?.requestBody;
+        }
+        if (!baseData) return;
+
+        let parsed;
+        if (typeof baseData === "string") {
+          parsed = JSON.parse(baseData);
+        } else {
+          parsed = baseData;
+        }
+
+        // Update variables
+        if (Array.isArray(parsed)) {
+          // If it's an array, update variables in each item
+          parsed.forEach((item) => {
+            if (item.variables !== undefined) {
+              item.variables = this.executeForm.graphqlVariables;
+            }
+          });
+        } else {
+          // Single object
+          parsed.variables = this.executeForm.graphqlVariables;
+        }
+
+        // Update the request data override
+        this.executeForm.requestDataOverride = JSON.stringify(parsed, null, 2);
+      } catch (error) {
+        console.warn("Failed to update request data with variables:", error);
+      }
+    },
+
+    async executeRequest() {
+      try {
+        const requestBody = this.executeForm.requestDataOverride;
+        if (!requestBody) {
+          alert("Please provide request data");
+          return;
+        }
+
+        // Determine server ID
+        const server =
+          this.requestDetail?.server || this.requestDetail?.execution?.server;
+        const serverId = server?.id || this.requestDetail?.execution?.serverId;
+
+        if (!serverId) {
+          alert("No server found for this request");
+          return;
+        }
+
+        const payload = {
+          serverId: serverId,
+          requestData: requestBody,
+          bearerTokenOverride: this.executeForm.tokenOverride || undefined,
+          devIdOverride: this.executeForm.devIdOverride || undefined,
+        };
+
+        const result = await API.post("/api/execute", payload);
+
+        // Close modal
+        this.showExecuteModal = false;
+
+        // Navigate to new execution detail
+        if (result.executionId) {
+          window.location.href = `/request-detail.html?id=${result.executionId}`;
+        }
+      } catch (error) {
+        console.error("Failed to execute request:", error);
+        alert(`Failed to execute request: ${error.message}`);
+      }
+    },
   },
 
   template: `
@@ -418,9 +605,10 @@ const app = createApp({
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
               <div>
                 <button @click="goBack" class="btn-secondary" style="margin-bottom: 0.5rem;">← Back to Requests</button>
-                <h2 style="margin: 0;">{{ requestDetail.request?.name || '(unnamed)' }}</h2>
+                <h2 style="margin: 0;">{{ requestDetail.requesxt?.displayName || requestDetail.request?.name || '(unnamed)' }}</h2>
                 <p style="color: #8b949e; margin: 0.25rem 0 0 0;">{{ requestDetail.server?.name || requestDetail.execution.server?.name || 'N/A' }}</p>
               </div>
+              <button @click="openExecuteModal" class="btn-primary">▶ Re-execute Request</button>
             </div>
 
             <div class="execution-overview">
@@ -707,6 +895,79 @@ const app = createApp({
             class="d-flex flex-column"
             style="height: 100%;"
           ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execute Request Modal -->
+    <div v-if="showExecuteModal" class="modal" @click="showExecuteModal = false">
+      <div class="modal-content" @click.stop style="max-width: 900px;">
+        <div class="modal-header">
+          <h3>Re-execute Request</h3>
+          <button @click="showExecuteModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="executeToken">Bearer Token Override (optional):</label>
+            <input 
+              type="text" 
+              id="executeToken" 
+              v-model="executeForm.tokenOverride" 
+              placeholder="Override token"
+            />
+          </div>
+          <div class="form-group">
+            <label for="executeDevID">Dev ID Override (optional):</label>
+            <input
+              type="text"
+              id="executeDevID"
+              v-model="executeForm.devIdOverride"
+              placeholder="Override dev ID"
+            />
+          </div>
+
+          <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <label style="margin: 0;">GraphQL Variables:</label>
+              <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">+ Add Variable</button>
+            </div>
+            <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem;">
+              <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem;">
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem;">
+                  <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem;">{{ key }}:</label>
+                  <button @click="removeGraphQLVariable(key)" style="background: #da3633; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; margin-left: auto;">Remove</button>
+                </div>
+                <textarea
+                  :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
+                  @input="updateGraphQLVariable(key, $event.target.value)"
+                  style="width: 100%; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; padding: 0.5rem; border-radius: 4px; font-family: monospace; font-size: 0.875rem; min-height: 60px; resize: vertical;"
+                  placeholder="Enter value (JSON if object/array)"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+          <div v-else class="form-group" style="margin-top: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <label style="margin: 0;">GraphQL Variables:</label>
+              <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">+ Add Variable</button>
+            </div>
+            <p style="color: #8b949e; font-size: 0.875rem; margin: 0;">No variables found in request body. Click "Add Variable" to add one.</p>
+          </div>
+
+          <div class="form-group" style="margin-top: 1.5rem;">
+            <label for="executeRequestData">Request Data:</label>
+            <textarea 
+              id="executeRequestData" 
+              v-model="executeForm.requestDataOverride" 
+              placeholder="Enter or edit request data (JSON)"
+              rows="12"
+              style="font-family: monospace; font-size: 0.875rem;"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="executeRequest" class="btn-primary">Execute</button>
+          <button @click="showExecuteModal = false" class="btn-secondary">Cancel</button>
         </div>
       </div>
     </div>
