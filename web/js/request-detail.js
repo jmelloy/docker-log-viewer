@@ -48,6 +48,46 @@ const app = createApp({
       return statusCode >= 200 && statusCode < 300 ? "success" : "error";
     },
 
+    isGraphQLRequest() {
+      if (!this.requestDetail?.execution.requestBody) return false;
+      try {
+        const data = JSON.parse(this.requestDetail.execution.requestBody);
+        return !!(data.query || data.operationName);
+      } catch (e) {
+        return false;
+      }
+    },
+
+    graphqlQuery() {
+      if (!this.isGraphQLRequest) return null;
+      try {
+        const data = JSON.parse(this.requestDetail.execution.requestBody);
+        return data.query || "";
+      } catch (e) {
+        return null;
+      }
+    },
+
+    graphqlOperationName() {
+      if (!this.isGraphQLRequest) return null;
+      try {
+        const data = JSON.parse(this.requestDetail.execution.requestBody);
+        return data.operationName || null;
+      } catch (e) {
+        return null;
+      }
+    },
+
+    graphqlVariables() {
+      if (!this.isGraphQLRequest) return null;
+      try {
+        const data = JSON.parse(this.requestDetail.execution.requestBody);
+        return data.variables ? JSON.stringify(data.variables, null, 2) : null;
+      } catch (e) {
+        return null;
+      }
+    },
+
     requestData() {
       if (!this.requestDetail?.execution.requestBody)
         return "(no request data)";
@@ -450,13 +490,31 @@ const app = createApp({
               <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                 <div style="flex: 1; min-width: 300px;">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <h4 style="margin: 0;">Request Body</h4>
+                    <h4 style="margin: 0;">Request Body<span v-if="isGraphQLRequest" style="color: #8b949e; font-size: 0.75rem; margin-left: 0.5rem;">GraphQL</span></h4>
                     <div style="display: flex; gap: 0.5rem;">
                       <button @click="copyToClipboard(requestData)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="Copy request">📋 Copy</button>
                       <button @click="viewBigger('request')" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" title="View bigger">🔍 View</button>
                     </div>
                   </div>
-                  <pre class="json-display" style="max-height: 20em;">{{ requestData }}</pre>
+                  
+                  <!-- GraphQL Request Display -->
+                  <div v-if="isGraphQLRequest">
+                    <div v-if="graphqlOperationName" style="margin-bottom: 0.5rem;">
+                      <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem;">Operation:</div>
+                      <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 0.5rem; font-family: monospace; font-size: 0.875rem; color: #79c0ff;">{{ graphqlOperationName }}</div>
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                      <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem;">Query:</div>
+                      <pre class="json-display" style="max-height: 12em; white-space: pre-wrap;">{{ graphqlQuery }}</pre>
+                    </div>
+                    <div v-if="graphqlVariables" style="margin-bottom: 0.5rem;">
+                      <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem;">Variables:</div>
+                      <pre class="json-display" style="max-height: 8em;">{{ graphqlVariables }}</pre>
+                    </div>
+                  </div>
+                  
+                  <!-- Standard Request Display -->
+                  <pre v-else class="json-display" style="max-height: 20em;">{{ requestData }}</pre>
                 </div>
                 <div style="flex: 1; min-width: 300px;">
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -655,14 +713,31 @@ const app = createApp({
     <div v-if="showRequestModal" class="modal" @click="showRequestModal = false">
       <div class="modal-content" @click.stop style="max-width: 900px;">
         <div class="modal-header">
-          <h3>Request Body</h3>
+          <h3>Request Body<span v-if="isGraphQLRequest" style="color: #8b949e; font-size: 0.875rem; margin-left: 0.5rem;">GraphQL</span></h3>
           <div style="display: flex; gap: 0.5rem;">
             <button @click="copyToClipboard(requestData)" class="btn-secondary" style="padding: 0.5rem 1rem;">📋 Copy</button>
             <button @click="showRequestModal = false">✕</button>
           </div>
         </div>
         <div class="modal-body">
-          <pre style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word;">{{ requestData }}</pre>
+          <!-- GraphQL Request Display -->
+          <div v-if="isGraphQLRequest">
+            <div v-if="graphqlOperationName" style="margin-bottom: 1rem;">
+              <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem;">Operation:</h4>
+              <div style="background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 0.75rem; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; color: #79c0ff;">{{ graphqlOperationName }}</div>
+            </div>
+            <div style="margin-bottom: 1rem;">
+              <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem;">Query:</h4>
+              <pre style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; max-height: 400px;">{{ graphqlQuery }}</pre>
+            </div>
+            <div v-if="graphqlVariables">
+              <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem;">Variables:</h4>
+              <pre style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; max-height: 300px;">{{ graphqlVariables }}</pre>
+            </div>
+          </div>
+          
+          <!-- Standard Request Display -->
+          <pre v-else style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word;">{{ requestData }}</pre>
         </div>
       </div>
     </div>
