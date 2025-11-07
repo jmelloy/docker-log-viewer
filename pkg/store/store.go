@@ -61,6 +61,7 @@ type SampleQuery struct {
 	ServerID    *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
 	Server      *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
 	RequestData string         `gorm:"not null;column:request_data" json:"requestData"`
+	DisplayName string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
 	CreatedAt   time.Time      `json:"createdAt"`
 	UpdatedAt   time.Time      `json:"updatedAt"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
@@ -83,6 +84,7 @@ type ExecutedRequest struct {
 	ResponseBody    string         `gorm:"column:response_body" json:"responseBody,omitempty"`
 	ResponseHeaders string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
 	Error           string         `json:"error,omitempty"`
+	DisplayName     string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
 	ExecutedAt      time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
 	CreatedAt       time.Time      `json:"createdAt"`
 	UpdatedAt       time.Time      `json:"updatedAt"`
@@ -151,13 +153,14 @@ func (SQLQuery) TableName() string {
 
 // ExecutionDetail includes execution with related logs and SQL analysis
 type ExecutionDetail struct {
-	Execution     ExecutedRequest          `json:"execution"`
-	Request       *SampleQuery             `json:"request,omitempty"`
-	Logs          []ExecutionLog           `json:"logs"`
-	SQLQueries    []SQLQuery               `json:"sqlQueries"`
-	SQLAnalysis   *SQLAnalysis             `json:"sqlAnalysis,omitempty"`
+	Execution     ExecutedRequest           `json:"execution"`
+	Request       *SampleQuery              `json:"request,omitempty"`
+	Logs          []ExecutionLog            `json:"logs"`
+	SQLQueries    []SQLQuery                `json:"sqlQueries"`
+	SQLAnalysis   *SQLAnalysis              `json:"sqlAnalysis,omitempty"`
 	IndexAnalysis *sqlexplain.IndexAnalysis `json:"indexAnalysis,omitempty"`
-	Server        *Server                  `json:"server,omitempty"`
+	Server        *Server                   `json:"server,omitempty"`
+	DisplayName   string                    `json:"displayName"` // Computed field
 }
 
 // SQLAnalysis provides statistics about SQL queries
@@ -238,6 +241,8 @@ func (s *Store) GetRequest(id int64) (*SampleQuery, error) {
 		}
 		return nil, fmt.Errorf("failed to get request: %w", result.Error)
 	}
+	// Compute displayName
+	req.DisplayName = computeDisplayName(req.Name, req.RequestData)
 	return &req, nil
 }
 
@@ -247,6 +252,10 @@ func (s *Store) ListRequests() ([]SampleQuery, error) {
 	result := s.db.Preload("Server").Order("updated_at DESC").Find(&requests)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
+	}
+	// Compute displayName for each request
+	for i := range requests {
+		requests[i].DisplayName = computeDisplayName(requests[i].Name, requests[i].RequestData)
 	}
 	return requests, nil
 }
@@ -414,6 +423,22 @@ func (s *Store) ListAllExecutions() ([]ExecutedRequest, error) {
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list all executions: %w", result.Error)
 	}
+	// Compute displayName for each execution
+	for i := range executions {
+		displayName := "Unknown"
+		// If execution has a sample query, use its name
+		if executions[i].SampleID != nil {
+			sampleQuery, err := s.GetRequest(int64(*executions[i].SampleID))
+			if err == nil && sampleQuery != nil {
+				displayName = computeDisplayName(sampleQuery.Name, sampleQuery.RequestData)
+			}
+		}
+		// If no sample query or couldn't fetch it, extract from requestBody
+		if displayName == "Unknown" && executions[i].RequestBody != "" {
+			displayName = computeDisplayName("", executions[i].RequestBody)
+		}
+		executions[i].DisplayName = displayName
+	}
 	return executions, nil
 }
 
@@ -543,18 +568,30 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		return nil, err
 	}
 
+	// Compute displayName for execution
+	displayName := "Unknown"
+	if req != nil {
+		// Use sample query name if available
+		displayName = computeDisplayName(req.Name, req.RequestData)
+	} else if exec.RequestBody != "" {
+		// Extract from requestBody if no sample query
+		displayName = computeDisplayName("", exec.RequestBody)
+	}
+	exec.DisplayName = displayName
+
 	detail := &ExecutionDetail{
-		Execution:  *exec,
-		Request:    req,
-		Logs:       logs,
-		SQLQueries: sqlQueries,
-		Server:     server,
+		Execution:   *exec,
+		Request:     req,
+		Logs:        logs,
+		SQLQueries:  sqlQueries,
+		Server:      server,
+		DisplayName: displayName,
 	}
 
 	// Calculate SQL analysis
 	if len(sqlQueries) > 0 {
 		detail.SQLAnalysis = s.analyzeSQLQueries(sqlQueries)
-		
+
 		// Calculate index analysis
 		detail.IndexAnalysis = s.analyzeIndexUsage(sqlQueries)
 	}
@@ -615,7 +652,7 @@ func (s *Store) analyzeSQLQueries(queries []SQLQuery) *SQLAnalysis {
 func (s *Store) analyzeIndexUsage(queries []SQLQuery) *sqlexplain.IndexAnalysis {
 	// Convert SQLQuery to QueryWithPlan format for sqlexplain package
 	queryWithPlans := make([]sqlexplain.QueryWithPlan, 0, len(queries))
-	
+
 	for _, q := range queries {
 		qwp := sqlexplain.QueryWithPlan{
 			Query:           q.Query,
@@ -631,7 +668,7 @@ func (s *Store) analyzeIndexUsage(queries []SQLQuery) *sqlexplain.IndexAnalysis 
 		}
 		queryWithPlans = append(queryWithPlans, qwp)
 	}
-	
+
 	return sqlexplain.AnalyzeIndexUsage(queryWithPlans)
 }
 
@@ -691,4 +728,26 @@ func (s *Store) DeleteContainerRetention(containerName string) error {
 		return fmt.Errorf("failed to delete retention: %w", result.Error)
 	}
 	return nil
+}
+
+// computeDisplayName computes a display name for a sample query or execution
+// For sample queries: uses the name field, or extracts operationName from requestData
+// For executions: uses sample query name if available, or extracts operationName from requestBody
+func computeDisplayName(name string, requestData string) string {
+	// If we have an explicit name, use it
+	if name != "" {
+		return name
+	}
+
+	// Try to extract operationName from requestData (JSON)
+	if requestData != "" {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(requestData), &data); err == nil {
+			if opName, ok := data["operationName"].(string); ok && opName != "" {
+				return opName
+			}
+		}
+	}
+
+	return "Unknown"
 }

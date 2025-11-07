@@ -119,44 +119,16 @@ const app = createApp({
     async loadAllRequests() {
       try {
         const executions = await API.get("/api/all-executions");
-
-        // Fetch additional details for each request to get sample query name
-        this.allRequests = await Promise.all(
-          executions.slice(0, 20).map(async (req) => {
-            try {
-              const detail = await API.get(`/api/executions/${req.id}`);
-
-              // Use sample query name if available, otherwise operation name from request body
-              let displayName = "Unknown";
-              if (detail.request && detail.request.name) {
-                displayName = detail.request.name;
-              } else if (detail.execution.requestBody) {
-                try {
-                  const requestData = JSON.parse(detail.execution.requestBody);
-                  displayName = requestData.operationName || "Unknown";
-                } catch (e) {
-                  console.warn("Failed to parse request body:", e);
-                }
-              }
-
-              return { ...req, displayName };
-            } catch (e) {
-              return { ...req, displayName: "Unknown" };
-            }
-          })
-        );
+        // Backend now provides displayName, so we can use it directly
+        this.allRequests = executions.slice(0, 20);
       } catch (error) {
         console.error("Failed to load requests:", error);
       }
     },
 
     getSampleQueryDisplayName(sq) {
-      try {
-        const data = JSON.parse(sq.requestData);
-        return sq.name || data.operationName;
-      } catch (e) {
-        return sq.name;
-      }
+      // Backend now provides displayName
+      return sq.displayName || sq.name || "Unknown";
     },
 
     isSampleQuerySelected(sqId) {
