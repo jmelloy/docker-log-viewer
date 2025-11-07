@@ -1,6 +1,6 @@
-import { createNavigation } from './shared/navigation.js';
-import { API } from './shared/api.js';
-import { formatSQL } from './utils.js';
+import { createNavigation } from "./shared/navigation.js";
+import { API } from "./shared/api.js";
+import { formatSQL } from "./utils.js";
 
 const { createApp } = Vue;
 
@@ -90,7 +90,6 @@ const app = createApp({
         return null;
       }
     },
-
   },
 
   async mounted() {
@@ -174,7 +173,9 @@ const app = createApp({
 
     async loadRequests(sampleQueryId) {
       try {
-        this.requests = await API.get(`/api/executions?request_id=${sampleQueryId}`);
+        this.requests = await API.get(
+          `/api/executions?request_id=${sampleQueryId}`
+        );
       } catch (error) {
         console.error("Failed to load requests for sample query:", error);
         this.requests = [];
@@ -231,7 +232,7 @@ const app = createApp({
 
       // Fetch details for both requests
       const [detail1, detail2] = await Promise.all(
-        ids.map(id => API.get(`/api/executions/${id}`))
+        ids.map((id) => API.get(`/api/executions/${id}`))
       );
 
       this.comparisonData = { detail1, detail2 };
@@ -265,8 +266,184 @@ const app = createApp({
     formatSQL(sql) {
       return formatSQL(sql);
     },
-  },
 
+    openNewSampleQueryModal() {
+      // Reset form
+      this.newQueryForm = {
+        name: "",
+        requestData: "",
+        serverId: "",
+        createNewServer: false,
+        url: "",
+        bearerToken: "",
+        devId: "",
+      };
+      this.showNewSampleQueryModal = true;
+    },
+
+    openExecuteNewModal() {
+      // Reset form
+      this.selectedSampleQuery = null;
+      this.executeForm = {
+        serverId: "",
+        requestDataOverride: "",
+        urlOverride: "",
+        tokenOverride: "",
+        devIdOverride: "",
+      };
+      this.showExecuteNewModal = true;
+    },
+
+    openExecuteModalWithSampleQuery(sq) {
+      this.selectedSampleQuery = sq;
+      // Pre-populate form with sample query data
+      this.executeForm = {
+        serverId: sq.serverId ? String(sq.serverId) : "",
+        requestDataOverride: sq.requestData || "",
+        urlOverride: "",
+        tokenOverride: "",
+        devIdOverride: "",
+      };
+      this.showExecuteNewModal = true;
+    },
+
+    async saveNewSampleQuery() {
+      try {
+        const payload = {
+          name: this.newQueryForm.name,
+          requestData: this.newQueryForm.requestData,
+        };
+
+        // If using existing server
+        if (this.newQueryForm.serverId && !this.newQueryForm.createNewServer) {
+          payload.serverId = parseInt(this.newQueryForm.serverId);
+        } else if (this.newQueryForm.createNewServer && this.newQueryForm.url) {
+          // Creating new server
+          payload.url = this.newQueryForm.url;
+          payload.bearerToken = this.newQueryForm.bearerToken;
+          payload.devId = this.newQueryForm.devId;
+        }
+
+        await API.post("/api/requests", payload);
+
+        // Reload sample queries
+        await this.loadSampleQueries();
+
+        // Close modal
+        this.showNewSampleQueryModal = false;
+
+        // Reset form
+        this.newQueryForm = {
+          name: "",
+          requestData: "",
+          serverId: "",
+          createNewServer: false,
+          url: "",
+          bearerToken: "",
+          devId: "",
+        };
+      } catch (error) {
+        console.error("Failed to save sample query:", error);
+        alert(`Failed to save sample query: ${error.message}`);
+      }
+    },
+
+    selectSampleQueryForExecution() {
+      if (this.selectedSampleQuery) {
+        // Pre-populate request data from selected sample query
+        this.executeForm.requestDataOverride =
+          this.selectedSampleQuery.requestData || "";
+
+        // Pre-populate server if available
+        if (this.selectedSampleQuery.serverId) {
+          this.executeForm.serverId = String(this.selectedSampleQuery.serverId);
+        }
+      }
+    },
+
+    async executeSelectedQuery() {
+      try {
+        // Determine request data to use
+        let requestData = this.executeForm.requestDataOverride;
+        if (!requestData && this.selectedSampleQuery) {
+          requestData = this.selectedSampleQuery.requestData;
+        }
+
+        if (!requestData) {
+          alert("Please provide request data");
+          return;
+        }
+
+        // Determine server
+        let serverId = null;
+        if (this.executeForm.serverId) {
+          serverId = parseInt(this.executeForm.serverId);
+        } else if (
+          this.selectedSampleQuery &&
+          this.selectedSampleQuery.serverId
+        ) {
+          serverId = parseInt(this.selectedSampleQuery.serverId);
+        }
+
+        // If we have a sample query ID, use the execute endpoint
+        if (this.selectedSampleQuery && this.selectedSampleQuery.id) {
+          const payload = {
+            serverId: serverId || undefined,
+            urlOverride: this.executeForm.urlOverride || undefined,
+            bearerTokenOverride: this.executeForm.tokenOverride || undefined,
+            devIdOverride: this.executeForm.devIdOverride || undefined,
+            requestDataOverride: requestData,
+          };
+
+          const result = await API.post(
+            `/api/requests/${this.selectedSampleQuery.id}/execute`,
+            payload
+          );
+
+          // Reload requests to show new execution
+          await this.loadAllRequests();
+
+          // Close modal
+          this.showExecuteNewModal = false;
+
+          // Navigate to execution detail
+          if (result.executionId) {
+            window.location.href = `/request-detail.html?id=${result.executionId}`;
+          }
+        } else {
+          // No sample query - execute directly using /api/execute endpoint
+          if (!serverId) {
+            alert("Please select a server");
+            return;
+          }
+
+          const payload = {
+            serverId: serverId,
+            requestData: requestData,
+            urlOverride: this.executeForm.urlOverride || undefined,
+            bearerTokenOverride: this.executeForm.tokenOverride || undefined,
+            devIdOverride: this.executeForm.devIdOverride || undefined,
+          };
+
+          const result = await API.post("/api/execute", payload);
+
+          // Reload requests to show new execution
+          await this.loadAllRequests();
+
+          // Close modal
+          this.showExecuteNewModal = false;
+
+          // Navigate to execution detail
+          if (result.executionId) {
+            window.location.href = `/request-detail.html?id=${result.executionId}`;
+          }
+        }
+      } catch (error) {
+        console.error("Failed to execute request:", error);
+        alert(`Failed to execute request: ${error.message}`);
+      }
+    },
+  },
 
   template: `
     <div class="app-container">
@@ -552,6 +729,6 @@ const app = createApp({
 });
 
 // Register components
-app.component('app-nav', createNavigation('requests'));
+app.component("app-nav", createNavigation("requests"));
 
 app.mount("#app");

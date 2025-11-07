@@ -577,7 +577,7 @@ const app = createApp({
               </div>
             </div>
 
-            <div v-if="requestDetail.indexAnalysis && (requestDetail.indexAnalysis.sequentialScans.length > 0 || requestDetail.indexAnalysis.recommendations.length > 0)" class="modal-section">
+            <div v-if="requestDetail.indexAnalysis && (requestDetail.indexAnalysis.sequentialScans?.length > 0 || requestDetail.indexAnalysis.recommendations?.length > 0)" class="modal-section">
               <h4>Index Analysis</h4>
               <div class="stats-grid">
                 <div class="stat-item">
@@ -598,7 +598,7 @@ const app = createApp({
                 </div>
               </div>
               
-              <div v-if="requestDetail.indexAnalysis.sequentialScans.length > 0" style="margin-top: 1rem;">
+              <div v-if="requestDetail.indexAnalysis.sequentialScans?.length > 0" style="margin-top: 1rem;">
                 <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem;">Sequential Scan Issues</h5>
                 <div class="index-issues-list">
                   <div v-for="(issue, idx) in requestDetail.indexAnalysis.sequentialScans.slice(0, 5)" :key="idx" class="index-issue-item">

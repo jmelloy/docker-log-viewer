@@ -983,6 +983,60 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		requestIDHeader = input.Name
 	}
 
+	// Extract actual request body from logs
+	// Look for GraphQL request in logs - typically in fields like "query", "operation", or in message as JSON
+	requestBody := ""
+	for _, logMsg := range input.Logs {
+		if logMsg.Entry != nil && logMsg.Entry.Fields != nil {
+			// Check if this log has GraphQL query data
+			if query, ok := logMsg.Entry.Fields["query"]; ok {
+				// Found a query field - try to build GraphQL request body
+				var graphQLReq map[string]interface{}
+				if operationName, ok := logMsg.Entry.Fields["operationName"]; ok {
+					graphQLReq = map[string]interface{}{
+						"query":         query,
+						"operationName": operationName,
+					}
+					if variables, ok := logMsg.Entry.Fields["variables"]; ok {
+						var varsMap map[string]interface{}
+						if err := json.Unmarshal([]byte(variables), &varsMap); err == nil {
+							graphQLReq["variables"] = varsMap
+						} else {
+							graphQLReq["variables"] = variables
+						}
+					}
+					if bodyJSON, err := json.Marshal(graphQLReq); err == nil {
+						requestBody = string(bodyJSON)
+						break
+					}
+				} else {
+					// Just query field, create minimal request
+					graphQLReq = map[string]interface{}{"query": query}
+					if bodyJSON, err := json.Marshal(graphQLReq); err == nil {
+						requestBody = string(bodyJSON)
+						break
+					}
+				}
+			}
+		}
+		// Also check message field for JSON request body
+		if logMsg.Entry != nil && logMsg.Entry.Message != "" {
+			// Try to parse message as JSON (might be a GraphQL request)
+			var testJSON map[string]interface{}
+			if err := json.Unmarshal([]byte(logMsg.Entry.Message), &testJSON); err == nil {
+				if _, hasQuery := testJSON["query"]; hasQuery {
+					requestBody = logMsg.Entry.Message
+					break
+				}
+			}
+		}
+	}
+
+	// Fallback to metadata if no request body found
+	if requestBody == "" {
+		requestBody = fmt.Sprintf(`{"name":"%s","traceId":"%s","requestId":"%s"}`, input.Name, input.TraceID, input.RequestID)
+	}
+
 	// Calculate duration from logs
 	var durationMS int64
 	if len(input.Logs) > 1 {
@@ -995,7 +1049,7 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 
 	exec := &store.ExecutedRequest{
 		RequestIDHeader: requestIDHeader,
-		RequestBody:     fmt.Sprintf(`{"name":"%s","traceId":"%s","requestId":"%s"}`, input.Name, input.TraceID, input.RequestID),
+		RequestBody:     requestBody,
 		StatusCode:      200,
 		DurationMS:      durationMS,
 		ExecutedAt:      time.Now(),
@@ -1014,10 +1068,192 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Extract and save SQL queries from logs (trigger SQL log collection)
+	sqlQueries := extractSQLQueries(input.Logs)
+	if len(sqlQueries) > 0 {
+		if err := wa.store.SaveSQLQueries(id, sqlQueries); err != nil {
+			slog.Error("failed to save SQL queries from trace", "error", err)
+		} else {
+			slog.Info("saved SQL queries from trace", "execution_id", id, "count", len(sqlQueries))
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":      id,
 		"message": "Trace saved successfully as execution",
+	})
+}
+
+// handleExecute executes a request without requiring a saved sample query
+func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var input struct {
+		ServerID            *uint  `json:"serverId"`
+		URLOverride         string `json:"urlOverride,omitempty"`
+		BearerTokenOverride string `json:"bearerTokenOverride,omitempty"`
+		DevIDOverride       string `json:"devIdOverride,omitempty"`
+		RequestData         string `json:"requestData"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if input.RequestData == "" {
+		http.Error(w, "requestData is required", http.StatusBadRequest)
+		return
+	}
+
+	if input.ServerID == nil {
+		http.Error(w, "serverId is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get server info
+	server, err := wa.store.GetServer(int64(*input.ServerID))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if server == nil {
+		http.Error(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	url := server.URL
+	bearerToken := server.BearerToken
+	devID := server.DevID
+	experimentalMode := server.ExperimentalMode
+	connectionString := ""
+	if server.DefaultDatabase != nil {
+		connectionString = server.DefaultDatabase.ConnectionString
+	}
+
+	// Apply overrides
+	if input.URLOverride != "" {
+		url = input.URLOverride
+	}
+	if input.BearerTokenOverride != "" {
+		bearerToken = input.BearerTokenOverride
+	}
+	if input.DevIDOverride != "" {
+		devID = input.DevIDOverride
+	}
+
+	// Generate request ID
+	requestIDHeader := generateRequestID()
+
+	// Create execution record immediately with pending status
+	execution := &store.ExecutedRequest{
+		ServerID:        input.ServerID,
+		RequestIDHeader: requestIDHeader,
+		RequestBody:     input.RequestData,
+		ExecutedAt:      time.Now(),
+		StatusCode:      0, // 0 indicates pending
+	}
+
+	// Save execution immediately
+	execID, err := wa.store.CreateExecution(execution)
+	if err != nil {
+		slog.Error("failed to save execution", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Execute HTTP request in background
+	go func() {
+		startTime := time.Now()
+		statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(input.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
+		execution.DurationMS = time.Since(startTime).Milliseconds()
+		execution.StatusCode = statusCode
+		execution.ResponseBody = responseBody
+		execution.ResponseHeaders = responseHeaders
+
+		if err != nil {
+			execution.Error = err.Error()
+		}
+
+		// Update execution with results
+		execution.ID = uint(execID)
+		if err := wa.store.UpdateExecution(execution); err != nil {
+			slog.Error("failed to update execution", "error", err)
+			return
+		}
+
+		slog.Info("request executed", "header_id", requestIDHeader, "status", statusCode, "duration_ms", execution.DurationMS)
+
+		// Collect logs
+		collectedLogs := wa.collectLogsForRequest(requestIDHeader, 10*time.Second)
+
+		// Save logs
+		if len(collectedLogs) > 0 {
+			if err := wa.store.SaveExecutionLogs(execID, collectedLogs); err != nil {
+				slog.Error("failed to save logs", "error", err)
+			}
+		}
+
+		// Extract and save SQL queries
+		sqlQueries := extractSQLQueries(collectedLogs)
+		if len(sqlQueries) > 0 {
+			if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
+				slog.Error("failed to save SQL queries", "error", err)
+			}
+
+			// Auto-execute EXPLAIN for queries taking longer than 2ms
+			for i, q := range sqlQueries {
+				if q.DurationMS > 2.0 {
+					// Parse db.vars to extract parameters
+					variables := make(map[string]string)
+					if q.Variables != "" {
+						var varsArray []interface{}
+						if err := json.Unmarshal([]byte(q.Variables), &varsArray); err == nil {
+							// Convert array values to map with 1-based indices
+							for idx, val := range varsArray {
+								variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
+							}
+						} else {
+							slog.Warn("failed to parse db.vars", "query_index", i, "error", err)
+						}
+					}
+
+					// Execute EXPLAIN
+					req := sqlexplain.Request{
+						Query:            q.Query,
+						Variables:        variables,
+						ConnectionString: connectionString,
+					}
+					resp := sqlexplain.Explain(req)
+
+					if resp.Error != "" {
+						slog.Warn("auto-EXPLAIN failed", "query_index", i, "error", resp.Error)
+						continue
+					}
+
+					// Save the EXPLAIN plan to database
+					planJSON, _ := json.Marshal(resp.QueryPlan)
+					if err := wa.store.UpdateQueryExplainPlan(execID, q.QueryHash, string(planJSON)); err != nil {
+						slog.Error("failed to save EXPLAIN plan", "query_index", i, "error", err)
+					}
+				}
+			}
+		}
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":      "started",
+		"executionId": execID,
 	})
 }
 
@@ -1930,6 +2166,7 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/ws", loggingMiddleware(wa.handleWebSocket))
 	http.HandleFunc("/api/explain", loggingMiddleware(wa.handleExplain))
 	http.HandleFunc("/api/save-trace", loggingMiddleware(wa.handleSaveTrace))
+	http.HandleFunc("/api/execute", loggingMiddleware(wa.handleExecute))
 	http.HandleFunc("/debug", loggingMiddleware(wa.handleDebug))
 
 	// Request management endpoints
