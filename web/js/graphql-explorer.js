@@ -277,15 +277,6 @@ const app = createApp({
       }
     },
 
-    clearQuery() {
-      this.query = "";
-      this.operationName = "";
-      this.variables = "{}";
-      this.result = null;
-      this.error = null;
-      this.executionId = null;
-    },
-
     viewExecutionDetail() {
       if (this.executionId) {
         window.location.href = `/request-detail.html?id=${this.executionId}`;
