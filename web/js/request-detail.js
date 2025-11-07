@@ -48,55 +48,45 @@ const app = createApp({
       return statusCode >= 200 && statusCode < 300 ? "success" : "error";
     },
 
-    isGraphQLRequest() {
-      if (!this.requestDetail?.execution.requestBody) return false;
+    // Cache parsed request body to avoid multiple JSON.parse calls
+    parsedRequestBody() {
+      if (!this.requestDetail?.execution.requestBody) return null;
       try {
-        const data = JSON.parse(this.requestDetail.execution.requestBody);
-        return !!(data.query || data.operationName);
+        return JSON.parse(this.requestDetail.execution.requestBody);
       } catch (e) {
-        return false;
+        return null;
       }
+    },
+
+    isGraphQLRequest() {
+      const data = this.parsedRequestBody;
+      return !!(data && (data.query || data.operationName));
     },
 
     graphqlQuery() {
       if (!this.isGraphQLRequest) return null;
-      try {
-        const data = JSON.parse(this.requestDetail.execution.requestBody);
-        return data.query || "";
-      } catch (e) {
-        return null;
-      }
+      return this.parsedRequestBody.query || "";
     },
 
     graphqlOperationName() {
       if (!this.isGraphQLRequest) return null;
-      try {
-        const data = JSON.parse(this.requestDetail.execution.requestBody);
-        return data.operationName || null;
-      } catch (e) {
-        return null;
-      }
+      return this.parsedRequestBody.operationName || null;
     },
 
     graphqlVariables() {
       if (!this.isGraphQLRequest) return null;
-      try {
-        const data = JSON.parse(this.requestDetail.execution.requestBody);
-        return data.variables ? JSON.stringify(data.variables, null, 2) : null;
-      } catch (e) {
-        return null;
-      }
+      const variables = this.parsedRequestBody.variables;
+      return variables ? JSON.stringify(variables, null, 2) : null;
     },
 
     requestData() {
       if (!this.requestDetail?.execution.requestBody)
         return "(no request data)";
-      try {
-        const data = JSON.parse(this.requestDetail.execution.requestBody);
+      const data = this.parsedRequestBody;
+      if (data) {
         return JSON.stringify(data, null, 2);
-      } catch (e) {
-        return this.requestDetail.execution.requestBody;
       }
+      return this.requestDetail.execution.requestBody;
     },
 
     responseBody() {
