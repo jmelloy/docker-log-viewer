@@ -28,9 +28,12 @@ const app = createApp({
 
     formattedResult() {
       if (!this.result) return "";
+      // Check if result is already valid JSON string
       try {
-        return JSON.stringify(JSON.parse(this.result), null, 2);
+        const parsed = JSON.parse(this.result);
+        return JSON.stringify(parsed, null, 2);
       } catch (e) {
+        // If not valid JSON, return as-is
         return this.result;
       }
     },
