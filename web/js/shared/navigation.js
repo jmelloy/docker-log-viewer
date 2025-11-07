@@ -12,6 +12,7 @@ export function createNavigation(activePage) {
       <nav style="display: flex; gap: 1rem; align-items: center;">
         <a href="/" :class="{ active: activePage === 'viewer' }">Log Viewer</a>
         <a href="/requests.html" :class="{ active: activePage === 'requests' }">Request Manager</a>
+        <a href="/graphql-explorer.html" :class="{ active: activePage === 'graphql-explorer' }">GraphQL Explorer</a>
         <a href="/settings.html" :class="{ active: activePage === 'settings' }">Settings</a>
       </nav>
     `,
