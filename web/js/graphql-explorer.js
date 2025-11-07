@@ -17,6 +17,10 @@ const app = createApp({
       executionId: null,
       showSampleQueries: false,
       sampleQueries: [],
+      schema: null,
+      loadingSchema: false,
+      schemaError: null,
+      showSchemaSidebar: false,
     };
   },
 
@@ -40,6 +44,25 @@ const app = createApp({
 
     canExecute() {
       return this.selectedServerId && this.query.trim();
+    },
+
+    canLoadSchema() {
+      return this.selectedServerId && this.selectedServer;
+    },
+
+    schemaTypes() {
+      if (!this.schema) return [];
+      return this.schema.types || [];
+    },
+
+    queryType() {
+      if (!this.schema) return null;
+      return this.schema.queryType;
+    },
+
+    mutationType() {
+      if (!this.schema) return null;
+      return this.schema.mutationType;
     },
   },
 
@@ -166,6 +189,103 @@ const app = createApp({
       this.executionId = null;
     },
 
+    async loadGraphQLSchema() {
+      if (!this.canLoadSchema) {
+        alert("Please select a server first");
+        return;
+      }
+
+      this.loadingSchema = true;
+      this.schemaError = null;
+
+      try {
+        // GraphQL introspection query
+        const introspectionQuery = {
+          query: `
+            query IntrospectionQuery {
+              __schema {
+                queryType { name }
+                mutationType { name }
+                subscriptionType { name }
+                types {
+                  name
+                  kind
+                  description
+                  fields(includeDeprecated: true) {
+                    name
+                    description
+                    args {
+                      name
+                      description
+                      type {
+                        name
+                        kind
+                        ofType {
+                          name
+                          kind
+                        }
+                      }
+                    }
+                    type {
+                      name
+                      kind
+                      ofType {
+                        name
+                        kind
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          `
+        };
+
+        // Execute via API using the same logic as regular query execution
+        const payload = {
+          serverId: parseInt(this.selectedServerId),
+          requestData: JSON.stringify(introspectionQuery),
+        };
+
+        const response = await API.post("/api/execute", payload);
+
+        if (response.executionId) {
+          // Fetch execution details to get the response
+          const detail = await API.get(`/api/executions/${response.executionId}`);
+          
+          if (detail.execution.error) {
+            this.schemaError = detail.execution.error;
+          } else {
+            const result = JSON.parse(detail.execution.responseBody);
+            if (result.data && result.data.__schema) {
+              this.schema = result.data.__schema;
+              this.showSchemaSidebar = true;
+            } else if (result.errors) {
+              this.schemaError = result.errors.map(e => e.message).join(", ");
+            } else {
+              this.schemaError = "Invalid schema response";
+            }
+          }
+        } else {
+          this.schemaError = "No execution ID returned";
+        }
+      } catch (error) {
+        console.error("Failed to load schema:", error);
+        this.schemaError = error.message;
+      } finally {
+        this.loadingSchema = false;
+      }
+    },
+
+    clearQuery() {
+      this.query = "";
+      this.operationName = "";
+      this.variables = "{}";
+      this.result = null;
+      this.error = null;
+      this.executionId = null;
+    },
+
     viewExecutionDetail() {
       if (this.executionId) {
         window.location.href = `/request-detail.html?id=${this.executionId}`;
@@ -198,12 +318,81 @@ const app = createApp({
       </header>
 
       <div class="main-layout">
+        <!-- Schema Sidebar -->
+        <aside v-if="showSchemaSidebar" class="sidebar" style="max-width: 350px; overflow-y: auto;">
+          <div class="section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3 style="margin: 0;">GraphQL Schema</h3>
+              <button @click="showSchemaSidebar = false" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✕</button>
+            </div>
+
+            <div v-if="loadingSchema" style="color: #8b949e; padding: 1rem; text-align: center;">
+              Loading schema...
+            </div>
+
+            <div v-if="schemaError" class="alert alert-danger" style="display: block; margin-bottom: 1rem; font-size: 0.875rem;">
+              {{ schemaError }}
+            </div>
+
+            <div v-if="schema && !loadingSchema">
+              <!-- Query Type -->
+              <div v-if="queryType" class="schema-section" style="margin-bottom: 1.5rem;">
+                <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem; text-transform: uppercase;">Queries</h4>
+                <div v-for="type in schemaTypes.filter(t => t.name === queryType.name)" :key="type.name">
+                  <div v-if="type.fields" style="font-size: 0.8rem;">
+                    <div v-for="field in type.fields" :key="field.name" style="margin-bottom: 0.75rem; padding: 0.5rem; background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
+                      <div style="font-weight: 500; color: #79c0ff; margin-bottom: 0.25rem;">{{ field.name }}</div>
+                      <div v-if="field.description" style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem;">{{ field.description }}</div>
+                      <div v-if="field.args && field.args.length > 0" style="font-size: 0.75rem; color: #8b949e;">
+                        Args: {{ field.args.map(a => a.name).join(', ') }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Mutation Type -->
+              <div v-if="mutationType" class="schema-section" style="margin-bottom: 1.5rem;">
+                <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem; text-transform: uppercase;">Mutations</h4>
+                <div v-for="type in schemaTypes.filter(t => t.name === mutationType.name)" :key="type.name">
+                  <div v-if="type.fields" style="font-size: 0.8rem;">
+                    <div v-for="field in type.fields" :key="field.name" style="margin-bottom: 0.75rem; padding: 0.5rem; background: #161b22; border-radius: 4px; border: 1px solid #30363d;">
+                      <div style="font-weight: 500; color: #79c0ff; margin-bottom: 0.25rem;">{{ field.name }}</div>
+                      <div v-if="field.description" style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem;">{{ field.description }}</div>
+                      <div v-if="field.args && field.args.length > 0" style="font-size: 0.75rem; color: #8b949e;">
+                        Args: {{ field.args.map(a => a.name).join(', ') }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Types -->
+              <div class="schema-section">
+                <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem; text-transform: uppercase;">Types</h4>
+                <div style="max-height: 400px; overflow-y: auto;">
+                  <div v-for="type in schemaTypes.filter(t => !t.name.startsWith('__') && t.kind === 'OBJECT' && t.name !== queryType?.name && t.name !== mutationType?.name)" :key="type.name" style="margin-bottom: 0.5rem; font-size: 0.75rem; color: #c9d1d9;">
+                    {{ type.name }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
         <main class="content" style="margin: 0; padding: 2rem;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h2 style="margin: 0;">GraphQL Explorer</h2>
             <div style="display: flex; gap: 0.5rem;">
               <button @click="showSampleQueries = !showSampleQueries" class="btn-secondary">
                 {{ showSampleQueries ? 'Hide' : 'Load' }} Sample Queries
+              </button>
+              <button 
+                @click="loadGraphQLSchema" 
+                :disabled="!canLoadSchema || loadingSchema" 
+                class="btn-secondary"
+                :style="{ opacity: !canLoadSchema || loadingSchema ? 0.5 : 1 }">
+                {{ loadingSchema ? 'Loading...' : '📖 Schema' }}
               </button>
               <button @click="clearQuery" class="btn-secondary">Clear</button>
               <button 
@@ -286,23 +475,29 @@ const app = createApp({
             ></textarea>
           </div>
 
-          <!-- Results Section -->
-          <div v-if="error || result" class="modal-section">
+          <!-- Response Section - Always visible after execution -->
+          <div v-if="error || result || executionId" class="modal-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="margin: 0;">{{ error ? 'Error' : 'Result' }}</h4>
+              <h4 style="margin: 0;">Response</h4>
               <div style="display: flex; gap: 0.5rem;">
-                <button v-if="executionId" @click="viewExecutionDetail" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                  View Details →
+                <button v-if="executionId" @click="viewExecutionDetail" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.875rem;">
+                  View Full Details →
                 </button>
                 <button v-if="result" @click="copyToClipboard(formattedResult)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
               </div>
             </div>
             
-            <div v-if="error" class="alert alert-danger" style="display: block; margin-bottom: 0;">
+            <div v-if="error" class="alert alert-danger" style="display: block; margin-bottom: 1rem;">
               {{ error }}
             </div>
             
-            <pre v-if="result" class="json-display" style="max-height: 500px; overflow: auto;">{{ formattedResult }}</pre>
+            <div v-if="result">
+              <pre class="json-display" style="max-height: 500px; overflow: auto;">{{ formattedResult }}</pre>
+            </div>
+
+            <div v-if="!result && !error && executionId" style="color: #8b949e; padding: 1rem; text-align: center;">
+              Execution started. Click "View Full Details" to see logs and SQL queries.
+            </div>
           </div>
         </main>
       </div>
