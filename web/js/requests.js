@@ -30,9 +30,9 @@ const app = createApp({
       executeForm: {
         serverId: "",
         requestDataOverride: "",
-        urlOverride: "",
         tokenOverride: "",
         devIdOverride: "",
+        graphqlVariables: {},
       },
       // Selected data
       comparisonData: null,
@@ -287,23 +287,27 @@ const app = createApp({
       this.executeForm = {
         serverId: "",
         requestDataOverride: "",
-        urlOverride: "",
         tokenOverride: "",
         devIdOverride: "",
+        graphqlVariables: {},
       };
       this.showExecuteNewModal = true;
     },
 
     openExecuteModalWithSampleQuery(sq) {
       this.selectedSampleQuery = sq;
+      // Find the server to get token and dev ID
+      const server = this.servers.find((s) => s.id === sq.serverId);
       // Pre-populate form with sample query data
       this.executeForm = {
         serverId: sq.serverId ? String(sq.serverId) : "",
         requestDataOverride: sq.requestData || "",
-        urlOverride: "",
-        tokenOverride: "",
-        devIdOverride: "",
+        tokenOverride: server?.bearerToken || "",
+        devIdOverride: server?.devId || "",
+        graphqlVariables: {},
       };
+      // Parse GraphQL variables
+      this.parseGraphQLVariables();
       this.showExecuteNewModal = true;
     },
 
@@ -357,6 +361,26 @@ const app = createApp({
         // Pre-populate server if available
         if (this.selectedSampleQuery.serverId) {
           this.executeForm.serverId = String(this.selectedSampleQuery.serverId);
+          // Get token and dev ID from server
+          this.updateServerDefaults();
+        }
+        // Parse GraphQL variables
+        this.parseGraphQLVariables();
+      } else if (this.executeForm.serverId) {
+        // Server was selected but no sample query - update defaults
+        this.updateServerDefaults();
+      }
+    },
+
+    updateServerDefaults() {
+      if (this.executeForm.serverId) {
+        const server = this.servers.find(
+          (s) => s.id === parseInt(this.executeForm.serverId)
+        );
+        if (server) {
+          // Always set defaults from server (user can still override)
+          this.executeForm.tokenOverride = server.bearerToken || "";
+          this.executeForm.devIdOverride = server.devId || "";
         }
       }
     },
@@ -389,7 +413,6 @@ const app = createApp({
         if (this.selectedSampleQuery && this.selectedSampleQuery.id) {
           const payload = {
             serverId: serverId || undefined,
-            urlOverride: this.executeForm.urlOverride || undefined,
             bearerTokenOverride: this.executeForm.tokenOverride || undefined,
             devIdOverride: this.executeForm.devIdOverride || undefined,
             requestDataOverride: requestData,
@@ -420,7 +443,6 @@ const app = createApp({
           const payload = {
             serverId: serverId,
             requestData: requestData,
-            urlOverride: this.executeForm.urlOverride || undefined,
             bearerTokenOverride: this.executeForm.tokenOverride || undefined,
             devIdOverride: this.executeForm.devIdOverride || undefined,
           };
@@ -441,6 +463,120 @@ const app = createApp({
       } catch (error) {
         console.error("Failed to execute request:", error);
         alert(`Failed to execute request: ${error.message}`);
+      }
+    },
+
+    parseGraphQLVariables() {
+      try {
+        const requestData =
+          this.executeForm.requestDataOverride ||
+          this.selectedSampleQuery?.requestData;
+        if (!requestData) return;
+
+        let parsed;
+        if (typeof requestData === "string") {
+          parsed = JSON.parse(requestData);
+        } else {
+          parsed = requestData;
+        }
+
+        // Look for variables in GraphQL format
+        if (parsed.variables && typeof parsed.variables === "object") {
+          // Deep clone to avoid reference issues
+          this.executeForm.graphqlVariables = JSON.parse(
+            JSON.stringify(parsed.variables)
+          );
+        } else if (Array.isArray(parsed)) {
+          // Handle array of requests - look for variables in each
+          const allVariables = {};
+          parsed.forEach((item) => {
+            if (item.variables && typeof item.variables === "object") {
+              Object.assign(allVariables, item.variables);
+            }
+          });
+          if (Object.keys(allVariables).length > 0) {
+            this.executeForm.graphqlVariables = allVariables;
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to parse GraphQL variables:", error);
+        this.executeForm.graphqlVariables = {};
+      }
+    },
+
+    updateGraphQLVariable(key, value) {
+      // Try to parse as JSON if it looks like JSON, otherwise use as string
+      let parsedValue = value;
+      try {
+        if (value.trim().startsWith("{") || value.trim().startsWith("[")) {
+          parsedValue = JSON.parse(value);
+        } else if (value.trim() === "true" || value.trim() === "false") {
+          parsedValue = value.trim() === "true";
+        } else if (!isNaN(value) && value.trim() !== "") {
+          parsedValue = Number(value);
+        }
+      } catch (e) {
+        // Not valid JSON, use as string
+        parsedValue = value;
+      }
+
+      this.executeForm.graphqlVariables[key] = parsedValue;
+      this.updateRequestDataWithVariables();
+    },
+
+    removeGraphQLVariable(key) {
+      delete this.executeForm.graphqlVariables[key];
+      // Create new object to trigger reactivity
+      this.executeForm.graphqlVariables = {
+        ...this.executeForm.graphqlVariables,
+      };
+      this.updateRequestDataWithVariables();
+    },
+
+    addGraphQLVariable() {
+      const key = prompt("Enter variable name:");
+      if (key && key.trim()) {
+        this.executeForm.graphqlVariables[key.trim()] = "";
+        // Create new object to trigger reactivity
+        this.executeForm.graphqlVariables = {
+          ...this.executeForm.graphqlVariables,
+        };
+      }
+    },
+
+    updateRequestDataWithVariables() {
+      try {
+        // Use the current requestDataOverride as the base, or fall back to selected sample query
+        let baseData = this.executeForm.requestDataOverride;
+        if (!baseData && this.selectedSampleQuery) {
+          baseData = this.selectedSampleQuery.requestData;
+        }
+        if (!baseData) return;
+
+        let parsed;
+        if (typeof baseData === "string") {
+          parsed = JSON.parse(baseData);
+        } else {
+          parsed = baseData;
+        }
+
+        // Update variables
+        if (Array.isArray(parsed)) {
+          // If it's an array, update variables in each item
+          parsed.forEach((item) => {
+            if (item.variables !== undefined) {
+              item.variables = this.executeForm.graphqlVariables;
+            }
+          });
+        } else {
+          // Single object
+          parsed.variables = this.executeForm.graphqlVariables;
+        }
+
+        // Update the request data override
+        this.executeForm.requestDataOverride = JSON.stringify(parsed, null, 2);
+      } catch (error) {
+        console.warn("Failed to update request data with variables:", error);
       }
     },
   },
@@ -625,16 +761,12 @@ const app = createApp({
           </div>
           <div class="form-group">
             <label for="executeServer">Server:</label>
-            <select id="executeServer" v-model="executeForm.serverId">
+            <select id="executeServer" v-model="executeForm.serverId" @change="selectSampleQueryForExecution">
               <option value="">-- Select Server --</option>
               <option v-for="server in servers" :key="server.id" :value="server.id">
                 {{ server.name }} ({{ server.url }})
               </option>
             </select>
-          </div>
-          <div class="form-group">
-            <label for="executeUrl">URL Override (optional):</label>
-            <input type="text" id="executeUrl" v-model="executeForm.urlOverride" placeholder="Override server URL" />
           </div>
           <div class="form-group">
             <label for="executeToken">Bearer Token Override (optional):</label>
@@ -648,6 +780,34 @@ const app = createApp({
               v-model="executeForm.devIdOverride"
               placeholder="Override dev ID"
             />
+          </div>
+
+          <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <label style="margin: 0;">GraphQL Variables:</label>
+              <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">+ Add Variable</button>
+            </div>
+            <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem;">
+              <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem;">
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem;">
+                  <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem;">{{ key }}:</label>
+                  <button @click="removeGraphQLVariable(key)" style="background: #da3633; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; margin-left: auto;">Remove</button>
+                </div>
+                <textarea
+                  :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
+                  @input="updateGraphQLVariable(key, $event.target.value)"
+                  style="width: 100%; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; padding: 0.5rem; border-radius: 4px; font-family: monospace; font-size: 0.875rem; min-height: 60px; resize: vertical;"
+                  placeholder="Enter value (JSON if object/array)"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+          <div v-else class="form-group" style="margin-top: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <label style="margin: 0;">GraphQL Variables:</label>
+              <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">+ Add Variable</button>
+            </div>
+            <p style="color: #8b949e; font-size: 0.875rem; margin: 0;">No variables found in request body. Click "Add Variable" to add one.</p>
           </div>
         </div>
         <div class="modal-footer">
