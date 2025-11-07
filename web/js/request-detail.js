@@ -605,7 +605,7 @@ const app = createApp({
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
               <div>
                 <button @click="goBack" class="btn-secondary" style="margin-bottom: 0.5rem;">← Back to Requests</button>
-                <h2 style="margin: 0;">{{ requestDetail.requesxt?.displayName || requestDetail.request?.name || '(unnamed)' }}</h2>
+                <h2 style="margin: 0;">{{ requestDetail.displayName || '(unnamed)' }}</h2>
                 <p style="color: #8b949e; margin: 0.25rem 0 0 0;">{{ requestDetail.server?.name || requestDetail.execution.server?.name || 'N/A' }}</p>
               </div>
               <button @click="openExecuteModal" class="btn-primary">▶ Re-execute Request</button>
