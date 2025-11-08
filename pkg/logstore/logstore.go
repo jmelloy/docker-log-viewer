@@ -2,7 +2,6 @@ package logstore
 
 import (
 	"container/list"
-	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -735,9 +734,6 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 				}
 			}
 		}
-		if toRemove > 1 {
-			slog.Debug("removed count", "containerID", containerID, "toRemove", toRemove)
-		}
 	case "time":
 		// Remove logs older than specified seconds, but always keep at least 100
 		cutoff := time.Now().Add(-time.Duration(policy.Value) * time.Second)
@@ -760,7 +756,6 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 			}
 			e = prev
 		}
-		slog.Info("removed count based on time", "containerID", containerID, "removedCount", removedCount)
 	}
 
 }

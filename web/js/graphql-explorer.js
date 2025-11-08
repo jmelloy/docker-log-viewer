@@ -69,7 +69,7 @@ const app = createApp({
   async mounted() {
     await this.loadServers();
     await this.loadSampleQueries();
-    
+
     // Load example query if nothing is set
     if (!this.query) {
       this.query = `query ExampleQuery {
@@ -140,10 +140,12 @@ const app = createApp({
 
         if (response.executionId) {
           this.executionId = response.executionId;
-          
+
           // Fetch execution details
-          const detail = await API.get(`/api/executions/${response.executionId}`);
-          
+          const detail = await API.get(
+            `/api/executions/${response.executionId}`
+          );
+
           if (detail.execution.error) {
             this.error = detail.execution.error;
           } else {
@@ -238,7 +240,7 @@ const app = createApp({
                 }
               }
             }
-          `
+          `,
         };
 
         // Execute via API using the same logic as regular query execution
@@ -250,9 +252,13 @@ const app = createApp({
         const response = await API.post("/api/execute", payload);
 
         if (response.executionId) {
-          // Fetch execution details to get the response
-          const detail = await API.get(`/api/executions/${response.executionId}`);
-          
+          let detail = null;
+          do {
+            detail = await API.get(`/api/executions/${response.executionId}`);
+
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          } while (!detail.execution.statusCode && !detail.execution.error);
+
           if (detail.execution.error) {
             this.schemaError = detail.execution.error;
           } else {
@@ -261,7 +267,7 @@ const app = createApp({
               this.schema = result.data.__schema;
               this.showSchemaSidebar = true;
             } else if (result.errors) {
-              this.schemaError = result.errors.map(e => e.message).join(", ");
+              this.schemaError = result.errors.map((e) => e.message).join(", ");
             } else {
               this.schemaError = "Invalid schema response";
             }
