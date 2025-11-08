@@ -752,3 +752,131 @@ func TestFilter(t *testing.T) {
 		t.Errorf("Expected 2 results for complex filter, got %d", len(results))
 	}
 }
+
+func TestContainerRetentionByTime(t *testing.T) {
+	store := NewLogStore(1000, 1*time.Hour)
+
+	containerID := "test-container"
+	now := time.Now()
+
+	// Add 120 old messages (older than 5 seconds) to exceed the minimum of 100
+	for i := 0; i < 120; i++ {
+		store.Add(&LogMessage{
+			Timestamp:   now.Add(-10 * time.Second),
+			ContainerID: containerID,
+			Message:     fmt.Sprintf("Old message %d", i),
+			Fields:      map[string]string{},
+		})
+	}
+
+	// Add 5 recent messages (within last second)
+	for i := 0; i < 5; i++ {
+		store.Add(&LogMessage{
+			Timestamp:   now.Add(-1 * time.Second),
+			ContainerID: containerID,
+			Message:     fmt.Sprintf("Recent message %d", i),
+			Fields:      map[string]string{},
+		})
+	}
+
+	// Verify we have 125 messages total
+	if store.CountByContainer(containerID) != 125 {
+		t.Errorf("Expected 125 messages before retention, got %d", store.CountByContainer(containerID))
+	}
+
+	// Set time-based retention policy: keep only logs from last 5 seconds
+	policy := ContainerRetentionPolicy{
+		Type:  "time",
+		Value: 5, // 5 seconds
+	}
+	store.SetContainerRetention(containerID, policy)
+
+	// After applying retention, should keep at least 100 messages (the minimum)
+	// Since we have 5 recent + 120 old, and we want to keep only recent (5),
+	// but must keep at least 100, we should have exactly 100 messages
+	count := store.CountByContainer(containerID)
+	if count != 100 {
+		t.Errorf("Expected 100 messages after time-based retention (minimum kept), got %d", count)
+	}
+
+	// Verify we removed 25 old messages (125 - 100 = 25)
+	// The remaining 100 should be: 5 recent + 95 oldest of the old messages
+}
+
+func TestContainerRetentionByCount(t *testing.T) {
+	store := NewLogStore(1000, 1*time.Hour)
+
+	containerID := "test-container"
+
+	// Add 20 messages
+	for i := 0; i < 20; i++ {
+		store.Add(&LogMessage{
+			Timestamp:   time.Now(),
+			ContainerID: containerID,
+			Message:     fmt.Sprintf("Message %d", i),
+			Fields:      map[string]string{},
+		})
+	}
+
+	// Verify we have 20 messages
+	if store.CountByContainer(containerID) != 20 {
+		t.Errorf("Expected 20 messages before retention, got %d", store.CountByContainer(containerID))
+	}
+
+	// Set count-based retention policy: keep only 10 messages
+	policy := ContainerRetentionPolicy{
+		Type:  "count",
+		Value: 10,
+	}
+	store.SetContainerRetention(containerID, policy)
+
+	// After applying retention, should have only 10 messages
+	count := store.CountByContainer(containerID)
+	if count != 10 {
+		t.Errorf("Expected 10 messages after count-based retention, got %d", count)
+	}
+
+	// Verify the remaining messages are the most recent ones (19 down to 10)
+	results := store.SearchByContainer(containerID, 100)
+	if len(results) != 10 {
+		t.Errorf("Expected 10 results, got %d", len(results))
+	}
+	// Most recent should be "Message 19"
+	if results[0].Message != "Message 19" {
+		t.Errorf("Expected most recent message 'Message 19', got %s", results[0].Message)
+	}
+	// Oldest should be "Message 10"
+	if results[9].Message != "Message 10" {
+		t.Errorf("Expected oldest remaining message 'Message 10', got %s", results[9].Message)
+	}
+}
+
+func TestContainerRetentionMinKeep(t *testing.T) {
+	store := NewLogStore(1000, 1*time.Hour)
+
+	containerID := "test-container"
+	now := time.Now()
+
+	// Add 150 old messages (all older than cutoff)
+	for i := 0; i < 150; i++ {
+		store.Add(&LogMessage{
+			Timestamp:   now.Add(-20 * time.Second),
+			ContainerID: containerID,
+			Message:     fmt.Sprintf("Old message %d", i),
+			Fields:      map[string]string{},
+		})
+	}
+
+	// Set time-based retention with very short time
+	policy := ContainerRetentionPolicy{
+		Type:  "time",
+		Value: 1, // 1 second - all messages are older
+	}
+	store.SetContainerRetention(containerID, policy)
+
+	// Should keep at least 100 messages even though all are older than cutoff
+	count := store.CountByContainer(containerID)
+	if count != 100 {
+		t.Errorf("Expected 100 messages kept (minimum), got %d", count)
+	}
+}
