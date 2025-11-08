@@ -1,5 +1,6 @@
 import { createNavigation } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
+import { GraphQLEditorManager } from "./graphql-editor-manager.js";
 
 const { createApp } = Vue;
 
@@ -21,6 +22,7 @@ const app = createApp({
       loadingSchema: false,
       schemaError: null,
       showSchemaSidebar: false,
+      editorManager: null,
     };
   },
 
@@ -69,6 +71,14 @@ const app = createApp({
   async mounted() {
     await this.loadServers();
     await this.loadSampleQueries();
+
+    // Initialize CodeMirror editors
+    this.editorManager = new GraphQLEditorManager();
+
+    // Wait for next tick to ensure DOM is ready
+    this.$nextTick(() => {
+      this.initializeEditors();
+    });
 
     // Load example query if nothing is set
     if (!this.query) {
@@ -175,6 +185,12 @@ const app = createApp({
           this.selectedServerId = String(sampleQuery.serverId);
         }
 
+        // Update editors if they exist
+        if (this.editorManager) {
+          this.editorManager.setQueryValue(this.query);
+          this.editorManager.setVariablesValue(this.variables);
+        }
+
         this.showSampleQueries = false;
       } catch (e) {
         console.error("Failed to load sample query:", e);
@@ -189,6 +205,12 @@ const app = createApp({
       this.result = null;
       this.error = null;
       this.executionId = null;
+      
+      // Update editors if they exist
+      if (this.editorManager) {
+        this.editorManager.setQueryValue("");
+        this.editorManager.setVariablesValue("{}");
+      }
     },
 
     async loadGraphQLSchema() {
@@ -303,6 +325,53 @@ const app = createApp({
         alert("Failed to copy to clipboard");
       }
     },
+
+    initializeEditors() {
+      const queryContainer = this.$refs.queryEditorContainer;
+      const variablesContainer = this.$refs.variablesEditorContainer;
+
+      if (queryContainer) {
+        this.editorManager.initQueryEditor(
+          queryContainer,
+          (value) => {
+            this.query = value;
+          },
+          this.query
+        );
+      }
+
+      if (variablesContainer) {
+        this.editorManager.initVariablesEditor(
+          variablesContainer,
+          (value) => {
+            this.variables = value;
+          },
+          this.variables
+        );
+      }
+    },
+
+    updateEditorSchema() {
+      if (this.editorManager && this.schema) {
+        // Convert introspection result to GraphQL schema
+        // This is a simplified version - in production you might want to use buildClientSchema
+        this.editorManager.updateSchema(this.schema);
+      }
+    },
+  },
+
+  watch: {
+    schema(newSchema) {
+      if (newSchema) {
+        this.updateEditorSchema();
+      }
+    },
+  },
+
+  beforeUnmount() {
+    if (this.editorManager) {
+      this.editorManager.destroy();
+    }
   },
 
   template: `
@@ -450,12 +519,7 @@ const app = createApp({
                 placeholder="e.g., FetchUsers"
                 style="width: 100%; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace;" />
             </div>
-            <textarea
-              v-model="query"
-              placeholder="Enter your GraphQL query here..."
-              rows="15"
-              style="width: 100%; padding: 1rem; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; resize: vertical;"
-            ></textarea>
+            <div class="graphql-editor-container" ref="queryEditorContainer"></div>
           </div>
 
           <!-- Variables Editor -->
@@ -464,12 +528,7 @@ const app = createApp({
               <h4 style="margin: 0;">Variables (JSON)</h4>
               <button @click="copyToClipboard(variables)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
             </div>
-            <textarea
-              v-model="variables"
-              placeholder='{"key": "value"}'
-              rows="8"
-              style="width: 100%; padding: 1rem; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; resize: vertical;"
-            ></textarea>
+            <div class="variables-editor-container" ref="variablesEditorContainer"></div>
           </div>
 
           <!-- Response Section - Always visible after execution -->
