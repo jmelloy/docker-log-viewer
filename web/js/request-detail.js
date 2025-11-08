@@ -567,6 +567,41 @@ const app = createApp({
       }
     },
 
+    async executeAgain() {
+      try {
+        const requestBody = this.requestDetail?.execution?.requestBody;
+        if (!requestBody) {
+          alert("No request data available");
+          return;
+        }
+
+        // Determine server ID
+        const server =
+          this.requestDetail?.server || this.requestDetail?.execution?.server;
+        const serverId = server?.id || this.requestDetail?.execution?.serverId;
+
+        if (!serverId) {
+          alert("No server found for this request");
+          return;
+        }
+
+        const payload = {
+          serverId: serverId,
+          requestData: requestBody,
+        };
+
+        const result = await API.post("/api/execute", payload);
+
+        // Navigate to new execution detail
+        if (result.executionId) {
+          window.location.href = `/request-detail.html?id=${result.executionId}`;
+        }
+      } catch (error) {
+        console.error("Failed to execute request:", error);
+        alert(`Failed to execute request: ${error.message}`);
+      }
+    },
+
     async executeRequest() {
       try {
         const requestBody = this.executeForm.requestDataOverride;
@@ -638,7 +673,10 @@ const app = createApp({
                 <h2 style="margin: 0;">{{ requestDetail.displayName || '(unnamed)' }}</h2>
                 <p style="color: #8b949e; margin: 0.25rem 0 0 0;">{{ requestDetail.server?.name || requestDetail.execution.server?.name || 'N/A' }}</p>
               </div>
-              <button @click="openExecuteModal" class="btn-primary">▶ Re-execute Request</button>
+              <div style="display: flex; gap: 0.5rem;">
+                <button @click="executeAgain" class="btn-primary">▶ Execute Again</button>
+                <button @click="openExecuteModal" class="btn-secondary">⚙️ Re-execute with Options</button>
+              </div>
             </div>
 
             <div class="execution-overview">
