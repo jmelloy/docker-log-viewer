@@ -746,15 +746,19 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 		minToKeep := 100
 
 		removedCount := 0
-		for e := containerList.Back(); e != nil && count > minToKeep; e = e.Prev() {
+		for e := containerList.Back(); e != nil; {
+			// Save the previous element before potentially removing current one
+			prev := e.Prev()
 			elem := e.Value.(*list.Element)
 			msg := elem.Value.(*LogMessage)
 
-			if msg.Timestamp.Before(cutoff) {
+			// Only remove if the message is old AND we have more than minimum to keep
+			if msg.Timestamp.Before(cutoff) && count > minToKeep {
 				ls.removeMessage(elem, msg)
 				count--
 				removedCount++
 			}
+			e = prev
 		}
 		slog.Info("removed count based on time", "containerID", containerID, "removedCount", removedCount)
 	}
