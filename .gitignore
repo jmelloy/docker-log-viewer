@@ -51,3 +51,9 @@ test-parser
 *.sqlite3
 .DS_Store
 tmp/*
+
+# Node modules
+node_modules/
+web/node_modules/
+package-lock.json
+web/package-lock.json

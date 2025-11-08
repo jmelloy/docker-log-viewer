@@ -1,0 +1,175 @@
+/* CodeMirror 6 Base Styles */
+.cm-editor {
+  height: 100%;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875rem;
+}
+
+.cm-scroller {
+  overflow: auto;
+}
+
+.cm-content {
+  padding: 1rem;
+  background: #0d1117;
+  color: #c9d1d9;
+}
+
+.cm-gutters {
+  background: #0d1117;
+  color: #6e7681;
+  border-right: 1px solid #30363d;
+}
+
+.cm-activeLineGutter {
+  background: #1c2128;
+}
+
+.cm-activeLine {
+  background: #1c2128;
+}
+
+.cm-selectionBackground,
+.cm-focused .cm-selectionBackground {
+  background: #1f6feb33 !important;
+}
+
+.cm-cursor {
+  border-left-color: #58a6ff;
+}
+
+/* GraphQL Syntax Highlighting */
+.cm-graphql-keyword {
+  color: #ff7b72;
+}
+
+.cm-graphql-def {
+  color: #79c0ff;
+}
+
+.cm-graphql-property {
+  color: #7ee787;
+}
+
+.cm-graphql-qualifier {
+  color: #ffa657;
+}
+
+.cm-graphql-attribute {
+  color: #79c0ff;
+}
+
+.cm-graphql-number {
+  color: #79c0ff;
+}
+
+.cm-graphql-string {
+  color: #a5d6ff;
+}
+
+.cm-graphql-builtin {
+  color: #ffa657;
+}
+
+.cm-graphql-string-2 {
+  color: #a5d6ff;
+}
+
+.cm-graphql-variable {
+  color: #ffa657;
+}
+
+.cm-graphql-atom {
+  color: #79c0ff;
+}
+
+.cm-graphql-meta {
+  color: #8b949e;
+}
+
+.cm-graphql-comment {
+  color: #8b949e;
+  font-style: italic;
+}
+
+/* Autocomplete Popup */
+.cm-tooltip-autocomplete {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: #1f6feb;
+  color: #ffffff;
+}
+
+.cm-completionLabel {
+  color: #c9d1d9;
+}
+
+.cm-completionDetail {
+  color: #8b949e;
+  font-style: italic;
+  margin-left: 0.5em;
+}
+
+/* Lint Markers */
+.cm-lintRange-error {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23f85149' fill='none' stroke-width='.7'/%3E%3C/svg%3E");
+  background-position: left bottom;
+  background-repeat: repeat-x;
+  padding-bottom: 0.7px;
+}
+
+.cm-lintRange-warning {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23d29922' fill='none' stroke-width='.7'/%3E%3C/svg%3E");
+  background-position: left bottom;
+  background-repeat: repeat-x;
+  padding-bottom: 0.7px;
+}
+
+/* Placeholder */
+.cm-placeholder {
+  color: #6e7681;
+  font-style: italic;
+}
+
+/* Editor Container */
+.graphql-editor-container {
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  background: #0d1117;
+  min-height: 400px;
+  max-height: 600px;
+  overflow: hidden;
+}
+
+.graphql-editor-container .cm-editor {
+  height: 100%;
+}
+
+.graphql-editor-container .cm-scroller {
+  min-height: 400px;
+  max-height: 600px;
+}
+
+/* Variables Editor */
+.variables-editor-container {
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  background: #0d1117;
+  min-height: 200px;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.variables-editor-container .cm-editor {
+  height: 100%;
+}
+
+.variables-editor-container .cm-scroller {
+  min-height: 200px;
+  max-height: 300px;
+}

@@ -1,0 +1,22 @@
+{
+  "name": "docker-log-viewer-web",
+  "version": "1.0.0",
+  "description": "Web frontend for Docker Log Viewer with GraphQL Explorer",
+  "private": true,
+  "scripts": {
+    "build": "esbuild js/codemirror-graphql-bundle.js --bundle --format=esm --outfile=lib/codemirror-graphql.js"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.12.0",
+    "@codemirror/commands": "^6.3.3",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/lint": "^6.5.0",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.23.0",
+    "cm6-graphql": "^0.2.1",
+    "graphql": "^16.8.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
+  }
+}
