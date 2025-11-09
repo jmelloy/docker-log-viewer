@@ -22,16 +22,16 @@ export function createModal() {
     props: {
       title: {
         type: String,
-        required: true
-      }
+        required: true,
+      },
     },
     computed: {
       hasHeaderActions() {
-        return !!this.$slots['header-actions'];
+        return !!this.$slots["header-actions"];
       },
       hasFooter() {
         return !!this.$slots.footer;
-      }
-    }
+      },
+    },
   };
 }

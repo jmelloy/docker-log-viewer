@@ -17,10 +17,7 @@ export function formatSQL(sql) {
   ];
 
   formatted = formatted.replaceAll(
-    new RegExp(
-      `\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)\\b`,
-      "gi"
-    ),
+    new RegExp(`\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)\\b`, "gi"),
     `\n$1`
   );
 
@@ -44,9 +41,7 @@ export function formatSQL(sql) {
   const indentStack = [];
 
   for (const line of lines) {
-    if (
-      /^(SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|UNION)$/i.test(line)
-    ) {
+    if (/^(SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|UNION)$/i.test(line)) {
       indentStack.length = 0;
     }
 

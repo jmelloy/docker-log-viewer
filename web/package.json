@@ -1,10 +1,15 @@
 {
   "name": "docker-log-viewer-web",
   "version": "1.0.0",
+  "type": "module",
   "description": "Web frontend for Docker Log Viewer with GraphQL Explorer",
   "private": true,
   "scripts": {
-    "build": "esbuild js/codemirror-graphql-bundle.js --bundle --format=esm --outfile=lib/codemirror-graphql.js"
+    "build": "esbuild js/codemirror-graphql-bundle.js --bundle --format=esm --outfile=lib/codemirror-graphql.js",
+    "format": "prettier --write \"**/*.{js,html,css,json}\"",
+    "format:check": "prettier --check \"**/*.{js,html,css,json}\"",
+    "lint": "eslint \"**/*.js\"",
+    "lint:fix": "eslint \"**/*.js\" --fix"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.12.0",
@@ -19,6 +24,10 @@
     "highlight.js": "^11.11.1"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12"
+    "@eslint/js": "^9.39.1",
+    "esbuild": "^0.25.12",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.6.2"
   }
 }
