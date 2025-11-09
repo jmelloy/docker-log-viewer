@@ -30,6 +30,7 @@ const app = createApp({
       },
       expandedFields: {}, // Maps field key to expanded state
       expandedTypes: {}, // Maps type name to expanded state
+      schemaFilter: "", // Filter text for schema sidebar
     };
   },
 
@@ -72,6 +73,45 @@ const app = createApp({
     mutationType() {
       if (!this.schema) return null;
       return this.schema.mutationType;
+    },
+
+    filteredQueryFields() {
+      if (!this.schema || !this.queryType) return [];
+      const queryTypeObj = this.schemaTypes.find(t => t.name === this.queryType.name);
+      if (!queryTypeObj || !queryTypeObj.fields) return [];
+      
+      if (!this.schemaFilter) return queryTypeObj.fields;
+      
+      const filterLower = this.schemaFilter.toLowerCase();
+      return queryTypeObj.fields.filter(field => 
+        field.name.toLowerCase().includes(filterLower) ||
+        (field.description && field.description.toLowerCase().includes(filterLower))
+      );
+    },
+
+    filteredMutationFields() {
+      if (!this.schema || !this.mutationType) return [];
+      const mutationTypeObj = this.schemaTypes.find(t => t.name === this.mutationType.name);
+      if (!mutationTypeObj || !mutationTypeObj.fields) return [];
+      
+      if (!this.schemaFilter) return mutationTypeObj.fields;
+      
+      const filterLower = this.schemaFilter.toLowerCase();
+      return mutationTypeObj.fields.filter(field => 
+        field.name.toLowerCase().includes(filterLower) ||
+        (field.description && field.description.toLowerCase().includes(filterLower))
+      );
+    },
+
+    filteredObjectTypes() {
+      const objectTypes = this.getObjectTypes();
+      if (!this.schemaFilter) return objectTypes;
+      
+      const filterLower = this.schemaFilter.toLowerCase();
+      return objectTypes.filter(type =>
+        type.name.toLowerCase().includes(filterLower) ||
+        (type.description && type.description.toLowerCase().includes(filterLower))
+      );
     },
   },
 
@@ -549,25 +589,53 @@ const app = createApp({
     getExampleValue(type) {
       // Unwrap type to get the base type
       let baseType = type;
+      let isList = false;
+      
       while (baseType && baseType.ofType) {
+        if (baseType.kind === "LIST") {
+          isList = true;
+        }
         baseType = baseType.ofType;
       }
       
       const typeName = baseType?.name || "String";
+      const typeKind = baseType?.kind;
       
+      // Handle INPUT_OBJECT types by looking up their fields
+      if (typeKind === "INPUT_OBJECT") {
+        const inputType = this.schemaTypes.find(t => t.name === typeName);
+        if (inputType && inputType.inputFields) {
+          const inputObj = {};
+          inputType.inputFields.forEach(field => {
+            inputObj[field.name] = this.getExampleValue(field.type);
+          });
+          return isList ? [inputObj] : inputObj;
+        }
+        return isList ? [{}] : {};
+      }
+      
+      // Handle scalar types
+      let scalarValue;
       switch (typeName) {
         case "ID":
-          return "1";
+          scalarValue = "1";
+          break;
         case "Int":
-          return 0;
+          scalarValue = 0;
+          break;
         case "Float":
-          return 0.0;
+          scalarValue = 0.0;
+          break;
         case "Boolean":
-          return false;
+          scalarValue = false;
+          break;
         case "String":
         default:
-          return "";
+          scalarValue = "";
+          break;
       }
+      
+      return isList ? [scalarValue] : scalarValue;
     },
 
     getFieldsForType(type) {
@@ -714,6 +782,18 @@ const app = createApp({
               {{ schemaError }}
             </div>
 
+            <!-- Filter Input -->
+            <div v-if="schema && !loadingSchema" style="margin-bottom: 1rem;">
+              <input 
+                v-model="schemaFilter" 
+                type="text" 
+                placeholder="Filter schema..." 
+                style="width: 100%; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.875rem;"
+                @focus="$event.target.style.borderColor = '#58a6ff'"
+                @blur="$event.target.style.borderColor = '#30363d'"
+              />
+            </div>
+
             <div v-if="schema && !loadingSchema">
               <!-- Query Type -->
               <div v-if="queryType" class="schema-section" style="margin-bottom: 1rem;">
@@ -724,11 +804,10 @@ const app = createApp({
                   @mouseout="$event.currentTarget.style.background = '#161b22'">
                   <span :style="{ transform: expandedSections.queries ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }">▶</span>
                   <h4 style="color: #58a6ff; font-size: 0.875rem; margin: 0; text-transform: uppercase; flex: 1;">Queries</h4>
-                  <span style="color: #8b949e; font-size: 0.75rem;">{{ schemaTypes.filter(t => t.name === queryType.name)[0]?.fields?.length || 0 }}</span>
+                  <span style="color: #8b949e; font-size: 0.75rem;">{{ filteredQueryFields.length }}</span>
                 </div>
-                <div v-if="expandedSections.queries" v-for="type in schemaTypes.filter(t => t.name === queryType.name)" :key="type.name">
-                  <div v-if="type.fields" style="font-size: 0.8rem; margin-left: 0.5rem;">
-                    <div v-for="field in type.fields" :key="field.name" style="margin-bottom: 0.5rem;">
+                <div v-if="expandedSections.queries" style="font-size: 0.8rem; margin-left: 0.5rem;">
+                  <div v-for="field in filteredQueryFields" :key="field.name" style="margin-bottom: 0.5rem;">
                       <div 
                         @click="toggleField('query-' + field.name)" 
                         style="padding: 0.5rem; background: #0d1117; border-radius: 4px; border: 1px solid #30363d; cursor: pointer;"
@@ -788,11 +867,10 @@ const app = createApp({
                   @mouseout="$event.currentTarget.style.background = '#161b22'">
                   <span :style="{ transform: expandedSections.mutations ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }">▶</span>
                   <h4 style="color: #f0883e; font-size: 0.875rem; margin: 0; text-transform: uppercase; flex: 1;">Mutations</h4>
-                  <span style="color: #8b949e; font-size: 0.75rem;">{{ schemaTypes.filter(t => t.name === mutationType.name)[0]?.fields?.length || 0 }}</span>
+                  <span style="color: #8b949e; font-size: 0.75rem;">{{ filteredMutationFields.length }}</span>
                 </div>
-                <div v-if="expandedSections.mutations" v-for="type in schemaTypes.filter(t => t.name === mutationType.name)" :key="type.name">
-                  <div v-if="type.fields" style="font-size: 0.8rem; margin-left: 0.5rem;">
-                    <div v-for="field in type.fields" :key="field.name" style="margin-bottom: 0.5rem;">
+                <div v-if="expandedSections.mutations" style="font-size: 0.8rem; margin-left: 0.5rem;">
+                  <div v-for="field in filteredMutationFields" :key="field.name" style="margin-bottom: 0.5rem;">
                       <div 
                         @click="toggleField('mutation-' + field.name)" 
                         style="padding: 0.5rem; background: #0d1117; border-radius: 4px; border: 1px solid #30363d; cursor: pointer;"
@@ -852,10 +930,10 @@ const app = createApp({
                   @mouseout="$event.currentTarget.style.background = '#161b22'">
                   <span :style="{ transform: expandedSections.types ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', display: 'inline-block' }">▶</span>
                   <h4 style="color: #8b949e; font-size: 0.875rem; margin: 0; text-transform: uppercase; flex: 1;">Types</h4>
-                  <span style="color: #8b949e; font-size: 0.75rem;">{{ getObjectTypes().length }}</span>
+                  <span style="color: #8b949e; font-size: 0.75rem;">{{ filteredObjectTypes.length }}</span>
                 </div>
                 <div v-if="expandedSections.types" style="max-height: 400px; overflow-y: auto; margin-left: 0.5rem;">
-                  <div v-for="type in getObjectTypes()" :key="type.name" style="margin-bottom: 0.5rem;">
+                  <div v-for="type in filteredObjectTypes" :key="type.name" style="margin-bottom: 0.5rem;">
                     <div 
                       @click="toggleType(type.name)" 
                       style="padding: 0.5rem; background: #0d1117; border-radius: 4px; border: 1px solid #30363d; cursor: pointer;"
