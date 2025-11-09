@@ -12,7 +12,7 @@ import {
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { graphql, updateSchema } from "cm6-graphql";
-import { buildSchema } from "graphql";
+import { buildSchema, buildClientSchema } from "graphql";
 
 /**
  * Create a CodeMirror 6 editor with GraphQL support
@@ -78,24 +78,38 @@ export function createGraphQLEditor(parent, options = {}) {
 /**
  * Update the GraphQL schema in an existing editor
  * @param {EditorView} view - The CodeMirror editor view
- * @param {Object|string} schema - GraphQL schema object or SDL string
+ * @param {Object|string} schema - GraphQL schema object, introspection result, or SDL string
  */
 export function updateEditorSchema(view, schema) {
   try {
+    if (!view || !schema) {
+      console.warn("updateEditorSchema: missing view or schema");
+      return;
+    }
+
     let graphqlSchema;
 
     if (typeof schema === "string") {
-      // If schema is a string, build it
+      // If schema is a string, build it from SDL
       graphqlSchema = buildSchema(schema);
+    } else if (schema.__schema || (schema.queryType && schema.types)) {
+      // If it's an introspection result, build client schema
+      const introspectionData = schema.__schema ? schema : { __schema: schema };
+      graphqlSchema = buildClientSchema(introspectionData);
     } else {
       // Otherwise assume it's already a GraphQL schema object
       graphqlSchema = schema;
     }
 
+    console.log("Updating editor schema:", graphqlSchema);
+
     // Update the schema in the editor
     updateSchema(view, graphqlSchema);
+
+    console.log("Schema updated successfully");
   } catch (error) {
     console.error("Failed to update GraphQL schema:", error);
+    throw error;
   }
 }
 

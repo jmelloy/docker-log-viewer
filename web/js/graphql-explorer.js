@@ -205,7 +205,7 @@ const app = createApp({
       this.result = null;
       this.error = null;
       this.executionId = null;
-      
+
       // Update editors if they exist
       if (this.editorManager) {
         this.editorManager.setQueryValue("");
@@ -232,30 +232,87 @@ const app = createApp({
                 mutationType { name }
                 subscriptionType { name }
                 types {
+                  ...FullType
+                }
+                directives {
                   name
-                  kind
                   description
-                  fields(includeDeprecated: true) {
+                  locations
+                  args {
+                    ...InputValue
+                  }
+                }
+              }
+            }
+            
+            fragment FullType on __Type {
+              kind
+              name
+              description
+              fields(includeDeprecated: true) {
+                name
+                description
+                args {
+                  ...InputValue
+                }
+                type {
+                  ...TypeRef
+                }
+                isDeprecated
+                deprecationReason
+              }
+              inputFields {
+                ...InputValue
+              }
+              interfaces {
+                ...TypeRef
+              }
+              enumValues(includeDeprecated: true) {
+                name
+                description
+                isDeprecated
+                deprecationReason
+              }
+              possibleTypes {
+                ...TypeRef
+              }
+            }
+            
+            fragment InputValue on __InputValue {
+              name
+              description
+              type {
+                ...TypeRef
+              }
+              defaultValue
+            }
+            
+            fragment TypeRef on __Type {
+              kind
+              name
+              ofType {
+                kind
+                name
+                ofType {
+                  kind
+                  name
+                  ofType {
+                    kind
                     name
-                    description
-                    args {
-                      name
-                      description
-                      type {
-                        name
-                        kind
-                        ofType {
-                          name
-                          kind
-                        }
-                      }
-                    }
-                    type {
-                      name
+                    ofType {
                       kind
+                      name
                       ofType {
-                        name
                         kind
+                        name
+                        ofType {
+                          kind
+                          name
+                          ofType {
+                            kind
+                            name
+                          }
+                        }
                       }
                     }
                   }
@@ -338,6 +395,11 @@ const app = createApp({
           },
           this.query
         );
+        
+        // Focus the query editor
+        if (this.editorManager.queryEditor) {
+          this.editorManager.queryEditor.focus();
+        }
       }
 
       if (variablesContainer) {
@@ -353,8 +415,11 @@ const app = createApp({
 
     updateEditorSchema() {
       if (this.editorManager && this.schema) {
-        // Convert introspection result to GraphQL schema
-        // This is a simplified version - in production you might want to use buildClientSchema
+        console.log("updateEditorSchema called", { 
+          hasEditorManager: !!this.editorManager,
+          hasQueryEditor: !!this.editorManager.queryEditor,
+          schema: this.schema 
+        });
         this.editorManager.updateSchema(this.schema);
       }
     },
