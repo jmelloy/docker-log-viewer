@@ -101,6 +101,22 @@ export class GraphQLEditorManager {
   }
 
   /**
+   * Insert text at the current cursor position
+   * @param {string} text - Text to insert
+   */
+  insertTextAtCursor(text) {
+    if (!this.queryEditor) return;
+
+    const view = this.queryEditor;
+    const pos = view.state.selection.main.head;
+    view.dispatch({
+      changes: { from: pos, insert: text },
+      selection: { anchor: pos + text.length },
+    });
+    view.focus();
+  }
+
+  /**
    * Destroy all editors
    */
   destroy() {
