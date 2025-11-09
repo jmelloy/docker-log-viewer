@@ -12,6 +12,12 @@ const app = createApp({
       selectedSampleQuery: null,
       requests: [],
       allRequests: [],
+      // Filtering and pagination
+      hideGraphQL: false,
+      searchQuery: "",
+      currentPage: 1,
+      pageSize: 20,
+      totalRequests: 0,
       // Modal visibility
       showNewSampleQueryModal: false,
       showExecuteQueryModal: false,
@@ -90,6 +96,18 @@ const app = createApp({
         return null;
       }
     },
+
+    totalPages() {
+      return Math.ceil(this.totalRequests / this.pageSize);
+    },
+
+    hasPrevPage() {
+      return this.currentPage > 1;
+    },
+
+    hasNextPage() {
+      return this.currentPage < this.totalPages;
+    },
   },
 
   async mounted() {
@@ -118,12 +136,38 @@ const app = createApp({
 
     async loadAllRequests() {
       try {
-        const executions = await API.get("/api/all-executions");
-        // Backend now provides displayName, so we can use it directly
-        this.allRequests = executions.slice(0, 20);
+        const offset = (this.currentPage - 1) * this.pageSize;
+        const params = new URLSearchParams({
+          limit: this.pageSize,
+          offset: offset,
+          search: this.searchQuery,
+          hideIntrospection: this.hideGraphQL,
+        });
+
+        const response = await API.get(`/api/all-executions?${params}`);
+        this.allRequests = response.executions || [];
+        this.totalRequests = response.total || 0;
       } catch (error) {
         console.error("Failed to load requests:", error);
+        this.allRequests = [];
+        this.totalRequests = 0;
       }
+    },
+
+    async changePage(page) {
+      if (page < 1 || page > this.totalPages) return;
+      this.currentPage = page;
+      await this.loadAllRequests();
+    },
+
+    async handleSearchChange() {
+      this.currentPage = 1;
+      await this.loadAllRequests();
+    },
+
+    async handleFilterChange() {
+      this.currentPage = 1;
+      await this.loadAllRequests();
     },
 
     getSampleQueryDisplayName(sq) {
@@ -601,6 +645,19 @@ const app = createApp({
                 </button>
               </div>
             </div>
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
+              <input 
+                type="text" 
+                v-model="searchQuery" 
+                @input="handleSearchChange"
+                placeholder="Search requests..." 
+                style="flex: 1; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
+              />
+              <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; cursor: pointer;">
+                <input type="checkbox" v-model="hideGraphQL" @change="handleFilterChange" />
+                <span>Hide Introspection</span>
+              </label>
+            </div>
             <div class="executions-list">
               <p v-if="allRequests.length === 0" style="color: #6c757d;">No requests executed yet. Click "Execute Request" to get started.</p>
               <div v-for="req in allRequests" 
@@ -615,6 +672,13 @@ const app = createApp({
                 <span class="exec-duration">{{ req.durationMs }}ms</span>
                 <span class="exec-id">{{ req.requestIdHeader }}</span>
               </div>
+            </div>
+            <div v-if="totalPages > 1" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem;">
+              <button @click="changePage(1)" :disabled="!hasPrevPage" class="btn-secondary" style="padding: 0.5rem 1rem;">« First</button>
+              <button @click="changePage(currentPage - 1)" :disabled="!hasPrevPage" class="btn-secondary" style="padding: 0.5rem 1rem;">‹ Prev</button>
+              <span style="color: #c9d1d9;">Page {{ currentPage }} of {{ totalPages }}</span>
+              <button @click="changePage(currentPage + 1)" :disabled="!hasNextPage" class="btn-secondary" style="padding: 0.5rem 1rem;">Next ›</button>
+              <button @click="changePage(totalPages)" :disabled="!hasNextPage" class="btn-secondary" style="padding: 0.5rem 1rem;">Last »</button>
             </div>
           </div>
         </main>
