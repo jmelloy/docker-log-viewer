@@ -486,24 +486,137 @@ const app = createApp({
       return typeStr;
     },
 
-    insertFieldIntoQuery(fieldName, args, typeName = "Query") {
-      // Generate a query snippet with the field
-      let snippet = `${fieldName}`;
+    insertFieldIntoQuery(fieldName, args, typeName = "Query", returnType) {
+      // Generate a complete query structure with operation name, variables, and return types
+      const operationType = typeName.toLowerCase();
+      const operationName = this.capitalize(fieldName);
+      
+      // Build variables declaration
+      let variablesDecl = "";
+      let variablesObj = {};
+      let fieldArgs = "";
       
       if (args && args.length > 0) {
-        const argNames = args.map(a => `${a.name}: `).join(", ");
-        snippet += `(${argNames})`;
+        const varDecls = [];
+        const argPairs = [];
+        
+        args.forEach(arg => {
+          const varName = arg.name;
+          const varType = this.getTypeString(arg.type);
+          varDecls.push(`$${varName}: ${varType}`);
+          argPairs.push(`${arg.name}: $${varName}`);
+          
+          // Generate example value for variables
+          variablesObj[varName] = this.getExampleValue(arg.type);
+        });
+        
+        variablesDecl = `(${varDecls.join(", ")})`;
+        fieldArgs = `(${argPairs.join(", ")})`;
       }
       
-      snippet += ` {\n  \n}`;
+      // Get fields for the return type
+      const returnFields = this.getFieldsForType(returnType);
+      
+      // Build the complete query
+      let snippet = `${operationType} ${operationName}${variablesDecl} {\n`;
+      snippet += `  ${fieldName}${fieldArgs} {\n`;
+      snippet += returnFields;
+      snippet += `  }\n`;
+      snippet += `}`;
+      
+      // Update variables if we have them
+      if (Object.keys(variablesObj).length > 0) {
+        this.variables = JSON.stringify(variablesObj, null, 2);
+        if (this.editorManager) {
+          this.editorManager.setVariablesValue(this.variables);
+        }
+      }
       
       // Insert into the query editor
       if (this.editorManager && this.editorManager.queryEditor) {
-        this.editorManager.insertTextAtCursor(snippet);
+        this.editorManager.setQueryValue(snippet);
+        this.query = snippet;
       } else {
-        // Fallback: append to query
-        this.query += `\n${snippet}`;
+        // Fallback: replace query
+        this.query = snippet;
       }
+    },
+
+    capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    },
+
+    getExampleValue(type) {
+      // Unwrap type to get the base type
+      let baseType = type;
+      while (baseType && baseType.ofType) {
+        baseType = baseType.ofType;
+      }
+      
+      const typeName = baseType?.name || "String";
+      
+      switch (typeName) {
+        case "ID":
+          return "1";
+        case "Int":
+          return 0;
+        case "Float":
+          return 0.0;
+        case "Boolean":
+          return false;
+        case "String":
+        default:
+          return "";
+      }
+    },
+
+    getFieldsForType(type) {
+      if (!type || !this.schema) return "    # Add fields here\n";
+      
+      // Unwrap type to get the actual type name
+      let actualType = type;
+      while (actualType && actualType.ofType) {
+        actualType = actualType.ofType;
+      }
+      
+      const typeName = actualType?.name;
+      if (!typeName) return "    # Add fields here\n";
+      
+      // Find the type in schema
+      const typeObj = this.schemaTypes.find(t => t.name === typeName);
+      if (!typeObj || !typeObj.fields) return "    # Add fields here\n";
+      
+      // Get scalar fields (avoid nested objects to keep it simple)
+      const scalarFields = typeObj.fields.filter(f => {
+        const fieldType = this.getBaseType(f.type);
+        return this.isScalarType(fieldType);
+      });
+      
+      if (scalarFields.length === 0) {
+        // If no scalar fields, just add id if available, or a comment
+        const idField = typeObj.fields.find(f => f.name === 'id');
+        if (idField) {
+          return "    id\n";
+        }
+        return "    # Add fields here\n";
+      }
+      
+      // Return up to 5 scalar fields
+      return scalarFields.slice(0, 5).map(f => `    ${f.name}`).join("\n") + "\n";
+    },
+
+    getBaseType(type) {
+      let baseType = type;
+      while (baseType && baseType.ofType) {
+        baseType = baseType.ofType;
+      }
+      return baseType;
+    },
+
+    isScalarType(type) {
+      if (!type || !type.name) return false;
+      const scalarTypes = ['ID', 'String', 'Int', 'Float', 'Boolean'];
+      return scalarTypes.includes(type.name) || type.kind === 'SCALAR' || type.kind === 'ENUM';
     },
 
     getObjectTypes() {
@@ -608,7 +721,7 @@ const app = createApp({
                             <span style="color: #8b949e; font-size: 0.7rem; margin-left: 0.5rem;">: {{ getTypeString(field.type) }}</span>
                           </div>
                           <button 
-                            @click.stop="insertFieldIntoQuery(field.name, field.args, 'Query')"
+                            @click.stop="insertFieldIntoQuery(field.name, field.args, 'Query', field.type)"
                             style="background: #238636; color: white; border: none; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.65rem; cursor: pointer;"
                             @mouseover="$event.currentTarget.style.background = '#2ea043'"
                             @mouseout="$event.currentTarget.style.background = '#238636'"
@@ -657,7 +770,7 @@ const app = createApp({
                             <span style="color: #8b949e; font-size: 0.7rem; margin-left: 0.5rem;">: {{ getTypeString(field.type) }}</span>
                           </div>
                           <button 
-                            @click.stop="insertFieldIntoQuery(field.name, field.args, 'Mutation')"
+                            @click.stop="insertFieldIntoQuery(field.name, field.args, 'Mutation', field.type)"
                             style="background: #da3633; color: white; border: none; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.65rem; cursor: pointer;"
                             @mouseover="$event.currentTarget.style.background = '#f85149'"
                             @mouseout="$event.currentTarget.style.background = '#da3633'"
