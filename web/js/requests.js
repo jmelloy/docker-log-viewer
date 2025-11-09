@@ -13,7 +13,7 @@ const app = createApp({
       requests: [],
       allRequests: [],
       // Filtering and pagination
-      hideGraphQL: false,
+      showAll: false,
       searchQuery: "",
       currentPage: 1,
       pageSize: 20,
@@ -141,7 +141,7 @@ const app = createApp({
           limit: this.pageSize,
           offset: offset,
           search: this.searchQuery,
-          hideIntrospection: this.hideGraphQL,
+          showAll: this.showAll,
         });
 
         const response = await API.get(`/api/all-executions?${params}`);
@@ -654,8 +654,8 @@ const app = createApp({
                 style="flex: 1; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
               />
               <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; cursor: pointer;">
-                <input type="checkbox" v-model="hideGraphQL" @change="handleFilterChange" />
-                <span>Hide Introspection</span>
+                <input type="checkbox" v-model="showAll" @change="handleFilterChange" />
+                <span>Show All</span>
               </label>
             </div>
             <div class="executions-list">
