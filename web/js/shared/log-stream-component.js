@@ -16,6 +16,8 @@
  * - @log-clicked: Emitted when a log line is clicked with the log entry
  */
 
+import { API } from './api.js';
+
 export function createLogStreamComponent() {
   const { createApp } = Vue;
 
@@ -141,8 +143,7 @@ export function createLogStreamComponent() {
     methods: {
       async loadContainers() {
         try {
-          const response = await fetch('/api/containers');
-          const data = await response.json();
+          const data = await API.get('/api/containers');
           
           if (Array.isArray(data)) {
             this.containers = data;
