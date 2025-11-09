@@ -889,8 +889,6 @@ const app = createApp({
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
               </div>
 
               <!-- Mutation Type -->
