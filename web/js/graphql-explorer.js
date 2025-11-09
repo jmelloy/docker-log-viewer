@@ -415,11 +415,6 @@ const app = createApp({
 
     updateEditorSchema() {
       if (this.editorManager && this.schema) {
-        console.log("updateEditorSchema called", { 
-          hasEditorManager: !!this.editorManager,
-          hasQueryEditor: !!this.editorManager.queryEditor,
-          schema: this.schema 
-        });
         this.editorManager.updateSchema(this.schema);
       }
     },

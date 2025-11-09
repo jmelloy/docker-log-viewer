@@ -11,6 +11,7 @@ import {
 } from "@codemirror/commands";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
+import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { graphql, updateSchema } from "cm6-graphql";
 import { buildSchema, buildClientSchema } from "graphql";
 
@@ -35,6 +36,7 @@ export function createGraphQLEditor(parent, options = {}) {
   // Create extensions array
   const extensions = [
     graphql(),
+    syntaxHighlighting(defaultHighlightStyle),
     history(),
     autocompletion(),
     keymap.of([
@@ -83,7 +85,6 @@ export function createGraphQLEditor(parent, options = {}) {
 export function updateEditorSchema(view, schema) {
   try {
     if (!view || !schema) {
-      console.warn("updateEditorSchema: missing view or schema");
       return;
     }
 
@@ -101,12 +102,8 @@ export function updateEditorSchema(view, schema) {
       graphqlSchema = schema;
     }
 
-    console.log("Updating editor schema:", graphqlSchema);
-
     // Update the schema in the editor
     updateSchema(view, graphqlSchema);
-
-    console.log("Schema updated successfully");
   } catch (error) {
     console.error("Failed to update GraphQL schema:", error);
     throw error;
