@@ -63,11 +63,6 @@ export class GraphQLEditorManager {
    * @param {Object} schema - GraphQL schema object
    */
   updateSchema(schema) {
-    console.log("GraphQLEditorManager.updateSchema", { 
-      hasQueryEditor: !!this.queryEditor,
-      queryEditorType: this.queryEditor?.constructor?.name,
-      schema 
-    });
     if (this.queryEditor && schema) {
       updateEditorSchema(this.queryEditor, schema);
     }
