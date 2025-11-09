@@ -1,4 +1,4 @@
-import { createNavigation } from "./shared/navigation.js";
+import { createAppHeader } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 import { formatSQL } from "./utils.js";
 import { createLogStreamComponent } from "./shared/log-stream-component.js";
@@ -760,15 +760,10 @@ const app = createApp({
 
   template: `
     <div class="app-container">
-      <header class="app-header">
-        <div style="display: flex; align-items: center; gap: 1rem">
-          <h1 style="margin: 0">🔱 Logseidon</h1>
-          <app-nav></app-nav>
-        </div>
-      </header>
+      <app-header></app-header>
 
       <div class="main-layout">
-        <main class="content" style="margin: 0; padding: 2rem;">
+        <main class="content content-padded">
           <!-- Loading State -->
           <div v-if="loading" style="text-align: center; padding: 3rem;">
             <p>Loading request details...</p>
@@ -1214,8 +1209,7 @@ const app = createApp({
   `,
 });
 
-// Register components
-app.component("app-nav", createNavigation("request-detail"));
+app.component("app-header", createAppHeader("request-detail"));
 app.component("pev2", pev2.Plan);
 app.component("log-stream", createLogStreamComponent());
 

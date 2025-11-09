@@ -45,24 +45,35 @@ body {
     order: 1;
 }
 
+.content-padded {
+    margin: 0;
+    padding: 2rem;
+}
+
+.settings-container {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 2rem;
+}
+
 /* Header */
-header, .app-header {
+.app-header {
     background: #161b22;
     padding: 1rem;
     border-bottom: 1px solid #30363d;
-    display: flex;
-    gap: 1rem;
-    align-items: center;
 }
 
-header h1, .app-header h1 {
+.app-header-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+}
+
+.app-header h1 {
     font-size: 1.5rem;
     color: #58a6ff;
     margin: 0;
-}
-
-header input[type="text"] {
-    flex: 1;
 }
 
 .header-controls {
@@ -72,12 +83,13 @@ header input[type="text"] {
     margin-left: auto;
 }
 
-.app-header nav {
+.app-nav {
     display: flex;
     gap: 1rem;
+    align-items: center;
 }
 
-.app-header nav a {
+.app-nav a {
     color: rgba(255, 255, 255, 0.8);
     text-decoration: none;
     padding: 0.5rem 1rem;
@@ -85,12 +97,12 @@ header input[type="text"] {
     transition: all 0.2s;
 }
 
-.app-header nav a:hover {
+.app-nav a:hover {
     color: white;
     background: rgba(255, 255, 255, 0.1);
 }
 
-.app-header nav a.active {
+.app-nav a.active {
     color: white;
     background: rgba(255, 255, 255, 0.2);
     font-weight: 500;
@@ -109,6 +121,10 @@ header input[type="text"] {
     order: 2;
 }
 
+.sidebar-schema {
+    max-width: 350px;
+}
+
 .sidebar-footer {
     margin-top: auto;
     padding-top: 1rem;
@@ -117,6 +133,13 @@ header input[type="text"] {
 
 .section {
     padding: 1rem;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
 }
 
 .section h3 {
@@ -755,6 +778,14 @@ button:disabled {
     align-items: center;
     padding: 1rem 1.5rem;
     border-bottom: 1px solid #30363d;
+    gap: 1rem;
+}
+
+.modal-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-left: auto;
 }
 
 .modal-header h3 {
@@ -1146,9 +1177,21 @@ button:disabled {
     color: #8b949e;
 }
 
+.empty-state-box {
+    padding: 2rem;
+    text-align: center;
+    color: #6c757d;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+}
+
 .empty-state h2 {
     color: #c9d1d9;
     margin-bottom: 0.5rem;
+}
+
+.settings-section {
+    margin-bottom: 3rem;
 }
 
 .request-detail {
