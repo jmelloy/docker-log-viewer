@@ -67,7 +67,7 @@
                 </div>
                 <div style="margin-bottom: 0.5rem;">
                   <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem;">Query:</div>
-                  <pre class="json-display" style="max-height: 12em; white-space: pre-wrap;">{{ graphqlQuery }}</pre>
+                  <pre class="graphql-query" style="max-height: 12em; white-space: pre-wrap;">{{ graphqlQuery }}</pre>
                 </div>
                 <div v-if="graphqlVariables" style="margin-bottom: 0.5rem;">
                   <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem;">Variables:</div>
@@ -287,7 +287,6 @@
             :show-container="true"
           />
         </div>
-        </div>
       </div>
     </main>
   </div>
@@ -312,7 +311,7 @@
         </div>
         <div style="margin-bottom: 1rem;">
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem;">Query:</h4>
-          <pre style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; max-height: 400px;">{{ graphqlQuery }}</pre>
+          <pre class="graphql-query" style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem; overflow: auto; font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace; font-size: 0.875rem; line-height: 1.5; color: #c9d1d9; white-space: pre-wrap; word-break: break-word; max-height: 400px;">{{ graphqlQuery }}</pre>
         </div>
         <div v-if="graphqlVariables">
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem;">Variables:</h4>
