@@ -46,10 +46,7 @@ const app = createApp({
     },
 
     requestViewerLink() {
-      if (
-        !this.requestDetail ||
-        !this.requestDetail.execution.requestIdHeader
-      ) {
+      if (!this.requestDetail || !this.requestDetail.execution.requestIdHeader) {
         return null;
       }
       const requestId = this.requestDetail.execution.requestIdHeader;
@@ -95,8 +92,7 @@ const app = createApp({
     },
 
     requestData() {
-      if (!this.requestDetail?.execution.requestBody)
-        return "(no request data)";
+      if (!this.requestDetail?.execution.requestBody) return "(no request data)";
       const data = this.parsedRequestBody;
       if (data) {
         return JSON.stringify(data, null, 2);
@@ -123,10 +119,7 @@ const app = createApp({
     },
 
     sqlAnalysisData() {
-      if (
-        !this.requestDetail?.sqlQueries ||
-        this.requestDetail.sqlQueries.length === 0
-      ) {
+      if (!this.requestDetail?.sqlQueries || this.requestDetail.sqlQueries.length === 0) {
         return null;
       }
 
@@ -136,11 +129,7 @@ const app = createApp({
         table: q.tableName || "unknown",
         operation: q.operation || "SELECT",
         rows: q.rows || 0,
-        variables: q.variables
-          ? typeof q.variables === "string"
-            ? JSON.parse(q.variables)
-            : q.variables
-          : {},
+        variables: q.variables ? (typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables) : {},
         normalized: this.normalizeQuery(q.query),
       }));
 
@@ -162,17 +151,14 @@ const app = createApp({
 
       const uniqueQueries = Object.keys(queryGroups).length;
 
-      const slowestQueries = [...queries]
-        .sort((a, b) => b.duration - a.duration)
-        .slice(0, 5);
+      const slowestQueries = [...queries].sort((a, b) => b.duration - a.duration).slice(0, 5);
 
       const frequentQueries = Object.entries(queryGroups)
         .map(([normalized, data]) => ({
           normalized,
           count: data.count,
           example: data.queries[0],
-          avgDuration:
-            data.queries.reduce((sum, q) => sum + q.duration, 0) / data.count,
+          avgDuration: data.queries.reduce((sum, q) => sum + q.duration, 0) / data.count,
         }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
@@ -254,44 +240,38 @@ const app = createApp({
       });
 
       // Highlight GraphQL queries
-      document
-        .querySelectorAll(".graphql-query:not(.hljs)")
-        .forEach((block) => {
-          try {
-            const text = block.textContent.trim();
-            const highlighted = hljs.highlight(text, { language: "graphql" });
-            block.innerHTML = highlighted.value;
-            block.classList.add("hljs");
-          } catch (e) {
-            // If highlighting fails, leave as is
-          }
-        });
+      document.querySelectorAll(".graphql-query:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent.trim();
+          const highlighted = hljs.highlight(text, { language: "graphql" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        } catch (e) {
+          // If highlighting fails, leave as is
+        }
+      });
 
       // Highlight SQL queries
-      document
-        .querySelectorAll(".sql-query-text:not(.hljs)")
-        .forEach((block) => {
-          try {
-            const text = block.textContent;
-            const highlighted = hljs.highlight(text, { language: "sql" });
-            block.innerHTML = highlighted.value;
-            block.classList.add("hljs");
-          } catch (e) {
-            // If highlighting fails, leave as is
-          }
-        });
-      document
-        .querySelectorAll(".sql-query-text:not(.hljs)")
-        .forEach((block) => {
-          try {
-            const text = block.textContent;
-            const highlighted = hljs.highlight(text, { language: "sql" });
-            block.innerHTML = highlighted.value;
-            block.classList.add("hljs");
-          } catch (e) {
-            // If highlighting fails, leave as is
-          }
-        });
+      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent;
+          const highlighted = hljs.highlight(text, { language: "sql" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        } catch (e) {
+          // If highlighting fails, leave as is
+        }
+      });
+      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent;
+          const highlighted = hljs.highlight(text, { language: "sql" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        } catch (e) {
+          // If highlighting fails, leave as is
+        }
+      });
     },
     async loadRequestDetail(requestId) {
       try {
@@ -302,16 +282,12 @@ const app = createApp({
         const ageMinutes = this.requestAgeMinutes;
         if (ageMinutes < 3) {
           this.showLiveLogStream = true;
-          console.log(
-            `Request is ${ageMinutes.toFixed(1)} minutes old - defaulting to live stream`
-          );
+          console.log(`Request is ${ageMinutes.toFixed(1)} minutes old - defaulting to live stream`);
         }
 
         // Set up auto-refresh timer if request is less than 1 minute old
         if (ageMinutes < 1) {
-          console.log(
-            `Request is ${ageMinutes.toFixed(1)} minutes old - setting up 30s refresh timer`
-          );
+          console.log(`Request is ${ageMinutes.toFixed(1)} minutes old - setting up 30s refresh timer`);
           this.setupRefreshTimer(requestId);
         }
       } catch (error) {
@@ -339,9 +315,7 @@ const app = createApp({
             // Still less than 1 minute old, refresh again
             this.setupRefreshTimer(requestId);
           } else {
-            console.log(
-              "Request is now over 1 minute old - stopping auto-refresh"
-            );
+            console.log("Request is now over 1 minute old - stopping auto-refresh");
           }
         } catch (error) {
           console.error("Failed to auto-refresh request details:", error);
@@ -367,11 +341,7 @@ const app = createApp({
       } else {
         // Run new EXPLAIN
         const variables = query.variables ? JSON.parse(query.variables) : {};
-        this.runExplain(
-          query.query,
-          variables,
-          this.requestDetail?.server?.defaultDatabase?.connectionString
-        );
+        this.runExplain(query.query, variables, this.requestDetail?.server?.defaultDatabase?.connectionString);
       }
     },
 
@@ -468,19 +438,13 @@ const app = createApp({
         const planInput = document.createElement("input");
         planInput.type = "hidden";
         planInput.name = "plan";
-        planInput.value = JSON.stringify(
-          this.explainPlanData.planData,
-          null,
-          2
-        );
+        planInput.value = JSON.stringify(this.explainPlanData.planData, null, 2);
         form.appendChild(planInput);
 
         const queryInput = document.createElement("input");
         queryInput.type = "hidden";
         queryInput.name = "query";
-        queryInput.value =
-          this.formatSQL(this.explainPlanData.query) ||
-          this.explainPlanData.query;
+        queryInput.value = this.formatSQL(this.explainPlanData.query) || this.explainPlanData.query;
         form.appendChild(queryInput);
 
         document.body.appendChild(form);
@@ -572,8 +536,7 @@ const app = createApp({
 
     openExecuteModal() {
       // Pre-populate with current token and dev ID
-      const server =
-        this.requestDetail?.server || this.requestDetail?.execution?.server;
+      const server = this.requestDetail?.server || this.requestDetail?.execution?.server;
       this.executeForm = {
         tokenOverride: server?.bearerToken || "",
         devIdOverride: server?.devId || "",
@@ -603,9 +566,7 @@ const app = createApp({
         // GraphQL requests typically have: { query: "...", variables: {...} }
         if (parsed.variables && typeof parsed.variables === "object") {
           // Deep clone to avoid reference issues
-          this.executeForm.graphqlVariables = JSON.parse(
-            JSON.stringify(parsed.variables)
-          );
+          this.executeForm.graphqlVariables = JSON.parse(JSON.stringify(parsed.variables));
         } else if (Array.isArray(parsed)) {
           // Handle array of requests - look for variables in each
           const allVariables = {};
@@ -709,8 +670,7 @@ const app = createApp({
         }
 
         // Determine server ID
-        const server =
-          this.requestDetail?.server || this.requestDetail?.execution?.server;
+        const server = this.requestDetail?.server || this.requestDetail?.execution?.server;
         const serverId = server?.id || this.requestDetail?.execution?.serverId;
 
         if (!serverId) {
@@ -744,8 +704,7 @@ const app = createApp({
         }
 
         // Determine server ID
-        const server =
-          this.requestDetail?.server || this.requestDetail?.execution?.server;
+        const server = this.requestDetail?.server || this.requestDetail?.execution?.server;
         const serverId = server?.id || this.requestDetail?.execution?.serverId;
 
         if (!serverId) {

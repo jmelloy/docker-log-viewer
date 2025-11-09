@@ -7,7 +7,7 @@
         <h2>Servers</h2>
         <button @click="openNewServerModal" class="btn btn-primary">+ New Server</button>
       </div>
-      
+
       <div v-if="servers.length === 0" class="empty-state-box">
         No servers configured. Click "New Server" to add one.
       </div>
@@ -28,7 +28,13 @@
             <td>{{ server.defaultDatabase ? server.defaultDatabase.name : 'None' }}</td>
             <td>
               <button @click="openEditServerModal(server)" class="btn btn-sm btn-outline-primary">Edit</button>
-              <button @click="deleteServer(server.id)" class="btn btn-sm btn-outline-danger" style="margin-left: 0.5rem">Delete</button>
+              <button
+                @click="deleteServer(server.id)"
+                class="btn btn-sm btn-outline-danger"
+                style="margin-left: 0.5rem"
+              >
+                Delete
+              </button>
             </td>
           </tr>
         </tbody>
@@ -40,7 +46,7 @@
         <h2>Database URLs</h2>
         <button @click="openNewDatabaseModal" class="btn btn-primary">+ New Database URL</button>
       </div>
-      
+
       <div v-if="databaseURLs.length === 0" class="empty-state-box">
         No database URLs configured. Click "New Database URL" to add one.
       </div>
@@ -58,10 +64,14 @@
           <tr v-for="db in databaseURLs" :key="db.id">
             <td>{{ db.name }}</td>
             <td>{{ db.databaseType }}</td>
-            <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ db.connectionString }}</td>
+            <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
+              {{ db.connectionString }}
+            </td>
             <td>
               <button @click="openEditDatabaseModal(db)" class="btn btn-sm btn-outline-primary">Edit</button>
-              <button @click="deleteDatabase(db.id)" class="btn btn-sm btn-outline-danger" style="margin-left: 0.5rem">Delete</button>
+              <button @click="deleteDatabase(db.id)" class="btn btn-sm btn-outline-danger" style="margin-left: 0.5rem">
+                Delete
+              </button>
             </td>
           </tr>
         </tbody>
@@ -70,7 +80,12 @@
   </div>
 
   <!-- Server Modal -->
-  <div v-if="showServerModal" class="modal" style="display: block; background: rgba(0,0,0,0.5)" @click.self="closeServerModal">
+  <div
+    v-if="showServerModal"
+    class="modal"
+    style="display: block; background: rgba(0, 0, 0, 0.5)"
+    @click.self="closeServerModal"
+  >
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
@@ -84,7 +99,13 @@
           </div>
           <div class="mb-3">
             <label class="form-label">URL *</label>
-            <input v-model="serverForm.url" type="text" class="form-control" placeholder="https://api.example.com/graphql" required />
+            <input
+              v-model="serverForm.url"
+              type="text"
+              class="form-control"
+              placeholder="https://api.example.com/graphql"
+              required
+            />
           </div>
           <div class="mb-3">
             <label class="form-label">Bearer Token</label>
@@ -111,7 +132,12 @@
   </div>
 
   <!-- Database URL Modal -->
-  <div v-if="showDatabaseModal" class="modal" style="display: block; background: rgba(0,0,0,0.5)" @click.self="closeDatabaseModal">
+  <div
+    v-if="showDatabaseModal"
+    class="modal"
+    style="display: block; background: rgba(0, 0, 0, 0.5)"
+    @click.self="closeDatabaseModal"
+  >
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
@@ -132,7 +158,13 @@
           </div>
           <div class="mb-3">
             <label class="form-label">Connection String *</label>
-            <input v-model="databaseForm.connectionString" type="text" class="form-control" placeholder="postgresql://user:pass@localhost:5432/dbname" required />
+            <input
+              v-model="databaseForm.connectionString"
+              type="text"
+              class="form-control"
+              placeholder="postgresql://user:pass@localhost:5432/dbname"
+              required
+            />
           </div>
         </div>
         <div class="modal-footer">

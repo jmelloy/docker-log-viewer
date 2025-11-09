@@ -174,9 +174,7 @@ const app = createApp({
         params.set(key, value);
       }
 
-      const newURL = params.toString()
-        ? `${window.location.pathname}?${params.toString()}`
-        : window.location.pathname;
+      const newURL = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
 
       // Update URL without reloading
       window.history.replaceState({}, "", newURL);
@@ -345,12 +343,9 @@ const app = createApp({
         log.entry?.fields?.operationName ||
         log.entry?.fields?.["gql.operationName"];
       const method = log.entry?.fields?.method;
-      const statusCode =
-        log.entry?.fields?.status_code || log.entry?.fields?.statusCode;
+      const statusCode = log.entry?.fields?.status_code || log.entry?.fields?.statusCode;
       const latency =
-        log.entry?.fields?.latency ||
-        log.entry?.fields?.duration ||
-        log.entry?.fields?.["request.duration"];
+        log.entry?.fields?.latency || log.entry?.fields?.duration || log.entry?.fields?.["request.duration"];
       const timestamp = log.entry?.timestamp || log.timestamp;
 
       if (!requestId || !path) return;
@@ -358,9 +353,7 @@ const app = createApp({
       if (latency && latency < 5) return;
 
       // Check if request ID already exists
-      const existingIndex = this.recentRequests.findIndex(
-        (r) => r.requestId === requestId
-      );
+      const existingIndex = this.recentRequests.findIndex((r) => r.requestId === requestId);
 
       if (existingIndex !== -1) {
         // Update existing request with new info
@@ -414,13 +407,8 @@ const app = createApp({
           if (recentLog.entry?.fields?.request_id === requestId) {
             const gqlOp = recentLog.entry?.fields?.["gql.operationName"];
             if (gqlOp) {
-              const idx = this.recentRequests.findIndex(
-                (r) => r.requestId === requestId
-              );
-              if (
-                idx !== -1 &&
-                !this.recentRequests[idx].operations.includes(gqlOp)
-              ) {
+              const idx = this.recentRequests.findIndex((r) => r.requestId === requestId);
+              if (idx !== -1 && !this.recentRequests[idx].operations.includes(gqlOp)) {
                 this.recentRequests[idx].operations.push(gqlOp);
               }
             }
@@ -439,9 +427,7 @@ const app = createApp({
         selectedContainers: Array.from(this.selectedContainers),
         selectedLevels: Array.from(this.selectedLevels),
         searchQuery: this.searchQuery,
-        traceFilters: Array.from(this.traceFilters.entries()).map(
-          ([type, value]) => ({ type, value })
-        ),
+        traceFilters: Array.from(this.traceFilters.entries()).map(([type, value]) => ({ type, value })),
       };
 
       console.log("Sending filter update:", filter);
@@ -536,9 +522,7 @@ const app = createApp({
 
     toggleProject(project) {
       const projectContainers = this.containersByProject[project];
-      const allSelected = projectContainers.every((c) =>
-        this.selectedContainers.has(c.Name)
-      );
+      const allSelected = projectContainers.every((c) => this.selectedContainers.has(c.Name));
 
       projectContainers.forEach((c) => {
         if (allSelected) {
@@ -553,19 +537,13 @@ const app = createApp({
 
     isProjectSelected(project) {
       const projectContainers = this.containersByProject[project];
-      return projectContainers.every((c) =>
-        this.selectedContainers.has(c.Name)
-      );
+      return projectContainers.every((c) => this.selectedContainers.has(c.Name));
     },
 
     isProjectIndeterminate(project) {
       const projectContainers = this.containersByProject[project];
-      const someSelected = projectContainers.some((c) =>
-        this.selectedContainers.has(c.Name)
-      );
-      const allSelected = projectContainers.every((c) =>
-        this.selectedContainers.has(c.Name)
-      );
+      const someSelected = projectContainers.some((c) => this.selectedContainers.has(c.Name));
+      const allSelected = projectContainers.every((c) => this.selectedContainers.has(c.Name));
       return someSelected && !allSelected;
     },
 
@@ -582,9 +560,7 @@ const app = createApp({
     },
 
     getContainerName(containerId) {
-      return (
-        this.containers.find((c) => c.ID === containerId)?.Name || containerId
-      );
+      return this.containers.find((c) => c.ID === containerId)?.Name || containerId;
     },
 
     setTraceFilter(type, value, event) {
@@ -698,8 +674,7 @@ const app = createApp({
             const dbVars = log.entry?.fields?.["db.vars"];
             if (dbVars) {
               try {
-                const varsArray =
-                  typeof dbVars === "string" ? JSON.parse(dbVars) : dbVars;
+                const varsArray = typeof dbVars === "string" ? JSON.parse(dbVars) : dbVars;
                 if (Array.isArray(varsArray)) {
                   varsArray.forEach((val, idx) => {
                     variables[String(idx + 1)] = String(val);
@@ -768,17 +743,14 @@ const app = createApp({
 
       const uniqueQueries = Object.keys(queryGroups).length;
 
-      const slowestQueries = [...queries]
-        .sort((a, b) => b.duration - a.duration)
-        .slice(0, 5);
+      const slowestQueries = [...queries].sort((a, b) => b.duration - a.duration).slice(0, 5);
 
       const frequentQueries = Object.entries(queryGroups)
         .map(([normalized, data]) => ({
           normalized,
           count: data.count,
           example: data.queries[0],
-          avgDuration:
-            data.queries.reduce((sum, q) => sum + q.duration, 0) / data.count,
+          avgDuration: data.queries.reduce((sum, q) => sum + q.duration, 0) / data.count,
         }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
@@ -846,11 +818,7 @@ const app = createApp({
         if (match.index > lastIndex) {
           const content = text.substring(lastIndex, match.index);
           if (currentClasses.length > 0) {
-            parts.push(
-              `<span class="${currentClasses.join(" ")}">${this.escapeHtml(
-                content
-              )}</span>`
-            );
+            parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
           } else {
             parts.push(this.escapeHtml(content));
           }
@@ -870,11 +838,7 @@ const app = createApp({
       if (lastIndex < text.length) {
         const content = text.substring(lastIndex);
         if (currentClasses.length > 0) {
-          parts.push(
-            `<span class="${currentClasses.join(" ")}">${this.escapeHtml(
-              content
-            )}</span>`
-          );
+          parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
         } else {
           parts.push(this.escapeHtml(content));
         }
@@ -890,10 +854,7 @@ const app = createApp({
 
         for (const port of container.Ports) {
           if (port.publicPort && this.portToServerMap[port.publicPort]) {
-            console.log(
-              `Using database for port ${port.publicPort}:`,
-              this.portToServerMap[port.publicPort]
-            );
+            console.log(`Using database for port ${port.publicPort}:`, this.portToServerMap[port.publicPort]);
             return this.portToServerMap[port.publicPort];
           }
         }
@@ -991,9 +952,7 @@ const app = createApp({
 
     async deleteRetention() {
       try {
-        await API.delete(
-          `/api/retention/${encodeURIComponent(this.retentionContainer)}`
-        );
+        await API.delete(`/api/retention/${encodeURIComponent(this.retentionContainer)}`);
         delete this.retentions[this.retentionContainer];
         this.showRetentionModal = false;
       } catch (error) {
@@ -1067,9 +1026,8 @@ const app = createApp({
     },
 
     formatFieldValue(value) {
-      const shortValue =
-        value.length > 100 ? value.substring(0, 100) + "..." : value;
-      return shortValue;
+      const s = String(value);
+      return s.length > 50 ? s.substring(0, 50) + "..." : s;
     },
 
     isJsonField(value) {
@@ -1087,10 +1045,7 @@ const app = createApp({
 
     saveContainerState() {
       try {
-        localStorage.setItem(
-          "selectedContainers",
-          JSON.stringify([...this.selectedContainers])
-        );
+        localStorage.setItem("selectedContainers", JSON.stringify([...this.selectedContainers]));
       } catch (e) {
         console.warn("Failed to save container state:", e);
       }

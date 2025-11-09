@@ -84,9 +84,7 @@ const app = createApp({
 
     filteredQueryFields() {
       if (!this.schema || !this.queryType) return [];
-      const queryTypeObj = this.schemaTypes.find(
-        (t) => t.name === this.queryType.name
-      );
+      const queryTypeObj = this.schemaTypes.find((t) => t.name === this.queryType.name);
       if (!queryTypeObj || !queryTypeObj.fields) return [];
 
       if (!this.schemaFilter) return queryTypeObj.fields;
@@ -95,16 +93,13 @@ const app = createApp({
       return queryTypeObj.fields.filter(
         (field) =>
           field.name.toLowerCase().includes(filterLower) ||
-          (field.description &&
-            field.description.toLowerCase().includes(filterLower))
+          (field.description && field.description.toLowerCase().includes(filterLower))
       );
     },
 
     filteredMutationFields() {
       if (!this.schema || !this.mutationType) return [];
-      const mutationTypeObj = this.schemaTypes.find(
-        (t) => t.name === this.mutationType.name
-      );
+      const mutationTypeObj = this.schemaTypes.find((t) => t.name === this.mutationType.name);
       if (!mutationTypeObj || !mutationTypeObj.fields) return [];
 
       if (!this.schemaFilter) return mutationTypeObj.fields;
@@ -113,8 +108,7 @@ const app = createApp({
       return mutationTypeObj.fields.filter(
         (field) =>
           field.name.toLowerCase().includes(filterLower) ||
-          (field.description &&
-            field.description.toLowerCase().includes(filterLower))
+          (field.description && field.description.toLowerCase().includes(filterLower))
       );
     },
 
@@ -126,8 +120,7 @@ const app = createApp({
       return objectTypes.filter(
         (type) =>
           type.name.toLowerCase().includes(filterLower) ||
-          (type.description &&
-            type.description.toLowerCase().includes(filterLower))
+          (type.description && type.description.toLowerCase().includes(filterLower))
       );
     },
   },
@@ -150,6 +143,12 @@ const app = createApp({
   # Add your GraphQL query here
 }`;
     }
+  },
+
+  updated() {
+    this.$nextTick(() => {
+      this.applySyntaxHighlighting();
+    });
   },
 
   methods: {
@@ -246,10 +245,7 @@ const app = createApp({
           // Extract request ID header for log filtering
           if (execution.execution.requestIdHeader && !this.requestIdHeader) {
             this.requestIdHeader = execution.execution.requestIdHeader;
-            console.log(
-              "Set requestIdHeader for log filtering:",
-              this.requestIdHeader
-            );
+            console.log("Set requestIdHeader for log filtering:", this.requestIdHeader);
           }
 
           if (execution.execution.responseBody) {
@@ -278,9 +274,7 @@ const app = createApp({
         const data = JSON.parse(sampleQuery.requestData);
         this.query = data.query || "";
         this.operationName = data.operationName || "";
-        this.variables = data.variables
-          ? JSON.stringify(data.variables, null, 2)
-          : "{}";
+        this.variables = data.variables ? JSON.stringify(data.variables, null, 2) : "{}";
 
         if (sampleQuery.serverId) {
           this.selectedServerId = String(sampleQuery.serverId);
@@ -738,11 +732,7 @@ const app = createApp({
     isScalarType(type) {
       if (!type || !type.name) return false;
       const scalarTypes = ["ID", "String", "Int", "Float", "Boolean"];
-      return (
-        scalarTypes.includes(type.name) ||
-        type.kind === "SCALAR" ||
-        type.kind === "ENUM"
-      );
+      return scalarTypes.includes(type.name) || type.kind === "SCALAR" || type.kind === "ENUM";
     },
 
     getReturnTypeFields(type) {
@@ -778,23 +768,17 @@ const app = createApp({
 
     getInputTypes() {
       if (!this.schema) return [];
-      return this.schemaTypes.filter(
-        (t) => !t.name.startsWith("__") && t.kind === "INPUT_OBJECT"
-      );
+      return this.schemaTypes.filter((t) => !t.name.startsWith("__") && t.kind === "INPUT_OBJECT");
     },
 
     getEnumTypes() {
       if (!this.schema) return [];
-      return this.schemaTypes.filter(
-        (t) => !t.name.startsWith("__") && t.kind === "ENUM"
-      );
+      return this.schemaTypes.filter((t) => !t.name.startsWith("__") && t.kind === "ENUM");
     },
 
     getScalarTypes() {
       if (!this.schema) return [];
-      return this.schemaTypes.filter(
-        (t) => !t.name.startsWith("__") && t.kind === "SCALAR"
-      );
+      return this.schemaTypes.filter((t) => !t.name.startsWith("__") && t.kind === "SCALAR");
     },
 
     handleLogClick(log) {
@@ -812,6 +796,25 @@ const app = createApp({
       if (newSchema) {
         this.updateEditorSchema();
       }
+    },
+
+    applySyntaxHighlighting() {
+      // Only apply if hljs is available
+      if (typeof hljs === "undefined") return;
+
+      // Highlight JSON in response
+      document.querySelectorAll(".json-display:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent.trim();
+          if (text.startsWith("{") || text.startsWith("[")) {
+            const highlighted = hljs.highlight(text, { language: "json" });
+            block.innerHTML = highlighted.value;
+            block.classList.add("hljs");
+          }
+        } catch (e) {
+          // If highlighting fails, leave as is
+        }
+      });
     },
   },
 

@@ -1,6 +1,6 @@
 import { createAppHeader } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
-import { loadTemplate } from './shared/template-loader.js';
+import { loadTemplate } from "./shared/template-loader.js";
 
 const template = await loadTemplate("/templates/settings-main.html");
 

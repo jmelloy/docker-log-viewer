@@ -38,20 +38,7 @@ export function createLogStreamComponent() {
       },
       levelFilter: {
         type: Array,
-        default: () => [
-          "DBG",
-          "DEBUG",
-          "TRC",
-          "TRACE",
-          "INF",
-          "INFO",
-          "WRN",
-          "WARN",
-          "ERR",
-          "ERROR",
-          "FATAL",
-          "NONE",
-        ],
+        default: () => ["DBG", "DEBUG", "TRC", "TRACE", "INF", "INFO", "WRN", "WARN", "ERR", "ERROR", "FATAL", "NONE"],
       },
       maxLogs: {
         type: Number,
@@ -227,9 +214,7 @@ export function createLogStreamComponent() {
 
         const filter = {
           selectedContainers:
-            this.containerFilter.length > 0
-              ? this.containerFilter
-              : this.containers.map((c) => c.Name),
+            this.containerFilter.length > 0 ? this.containerFilter : this.containers.map((c) => c.Name),
           selectedLevels: this.levelFilter,
           searchQuery: "",
           traceFilters: traceFilters,
@@ -303,8 +288,7 @@ export function createLogStreamComponent() {
         if (typeof value !== "string") {
           return String(value);
         }
-        const shortValue =
-          value.length > 100 ? value.substring(0, 100) + "..." : value;
+        const shortValue = value.length > 100 ? value.substring(0, 100) + "..." : value;
         return shortValue;
       },
 

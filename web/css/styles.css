@@ -681,6 +681,9 @@ button:disabled {
   font-family: "Monaco", "Menlo", "Courier New", monospace;
   font-size: 0.85rem;
   line-height: 1.6;
+  display: block;
+  padding-left: 2rem;
+  text-indent: -1.5rem;
 }
 
 .log-line:hover {
@@ -2394,6 +2397,9 @@ button:disabled {
   border-bottom: 1px solid #21262d;
   cursor: pointer;
   transition: background-color 0.2s;
+  display: block;
+  padding-left: 2rem;
+  text-indent: -1.5rem;
 }
 
 .log-stream-component .log-line:hover {

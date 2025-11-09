@@ -5,16 +5,18 @@
     <aside class="sidebar">
       <div class="section">
         <h3>Sample Queries</h3>
-        <button @click="openNewSampleQueryModal" class="btn-primary">
-          + New Sample Query
-        </button>
+        <button @click="openNewSampleQueryModal" class="btn-primary">+ New Sample Query</button>
         <div class="requests-list">
-          <p v-if="sampleQueries.length === 0" style="padding: 1rem; color: #6c757d; text-align: center;">No sample queries yet</p>
-          <div v-for="sq in sampleQueries" 
-               :key="sq.id"
-               class="request-item"
-               :class="{ 'selected': isSampleQuerySelected(sq.id) }"
-               @click="openExecuteModalWithSampleQuery(sq)">
+          <p v-if="sampleQueries.length === 0" style="padding: 1rem; color: #6c757d; text-align: center">
+            No sample queries yet
+          </p>
+          <div
+            v-for="sq in sampleQueries"
+            :key="sq.id"
+            class="request-item"
+            :class="{ 'selected': isSampleQuerySelected(sq.id) }"
+            @click="openExecuteModalWithSampleQuery(sq)"
+          >
             <div class="request-item-name">{{ getSampleQueryDisplayName(sq) }}</div>
             <div class="request-item-meta">
               <span>{{ sq.server?.url || 'No server' }}</span>
@@ -29,33 +31,38 @@
         <div class="flex-between mb-1">
           <h2 class="m-0">All Requests</h2>
           <div class="flex-center">
-            <button @click="openExecuteNewModal" class="btn-primary">
-              ▶ Execute Request
-            </button>
-            <button
-              v-if="compareButtonVisible"
-              @click="compareSelectedRequests"
-              class="btn-primary">
+            <button @click="openExecuteNewModal" class="btn-primary">▶ Execute Request</button>
+            <button v-if="compareButtonVisible" @click="compareSelectedRequests" class="btn-primary">
               Compare Selected
             </button>
           </div>
         </div>
         <div class="flex-center mb-1">
-          <input 
-            type="text" 
-            v-model="searchQuery" 
+          <input
+            type="text"
+            v-model="searchQuery"
             @input="handleSearchChange"
-            placeholder="Search requests..." 
+            placeholder="Search requests..."
             class="search-input-full"
           />
         </div>
         <div class="executions-list">
-          <p v-if="allRequests.length === 0" class="text-muted">No requests executed yet. Click "Execute Request" to get started.</p>
-          <div v-for="req in allRequests" 
-               :key="req.id"
-               class="execution-item-compact"
-               @click="handleExecutionClick(req, $event)">
-            <input type="checkbox" class="exec-compare-checkbox" :data-id="req.id" :checked="selectedRequestIds.includes(req.id)" @change="updateCompareButton">
+          <p v-if="allRequests.length === 0" class="text-muted">
+            No requests executed yet. Click "Execute Request" to get started.
+          </p>
+          <div
+            v-for="req in allRequests"
+            :key="req.id"
+            class="execution-item-compact"
+            @click="handleExecutionClick(req, $event)"
+          >
+            <input
+              type="checkbox"
+              class="exec-compare-checkbox"
+              :data-id="req.id"
+              :checked="selectedRequestIds.includes(req.id)"
+              @change="updateCompareButton"
+            />
             <span class="exec-status" :class="getExecutionStatusClass(req)">{{ req.statusCode || 'ERR' }}</span>
             <span class="exec-name">{{ req.displayName }}</span>
             <span class="exec-time">{{ getExecutionTimeString(req) }}</span>
@@ -104,8 +111,12 @@
         </select>
       </div>
       <div class="form-group">
-        <label style="display: flex; align-items: center; gap: 0.5rem;">
-          <input type="checkbox" v-model="newQueryForm.createNewServer" @change="newQueryForm.createNewServer && (newQueryForm.serverId = '')">
+        <label style="display: flex; align-items: center; gap: 0.5rem">
+          <input
+            type="checkbox"
+            v-model="newQueryForm.createNewServer"
+            @change="newQueryForm.createNewServer && (newQueryForm.serverId = '')"
+          />
           <span>Create New Server</span>
         </label>
       </div>
@@ -130,12 +141,7 @@
         </div>
         <div class="form-group">
           <label for="newSampleQueryDevID">Dev ID (optional):</label>
-          <input
-            type="text"
-            id="newSampleQueryDevID"
-            v-model="newQueryForm.devId"
-            placeholder="dev-user-id"
-          />
+          <input type="text" id="newSampleQueryDevID" v-model="newQueryForm.devId" placeholder="dev-user-id" />
         </div>
       </div>
       <div class="form-group">
@@ -149,12 +155,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button @click="saveNewSampleQuery" class="btn-primary">
-        Save Sample Query
-      </button>
-      <button @click="showNewSampleQueryModal = false" class="btn-secondary">
-        Cancel
-      </button>
+      <button @click="saveNewSampleQuery" class="btn-primary">Save Sample Query</button>
+      <button @click="showNewSampleQueryModal = false" class="btn-secondary">Cancel</button>
     </div>
   </div>
 </div>
@@ -171,19 +173,17 @@
         <label for="executeNewQuery">Sample Query:</label>
         <select id="executeNewQuery" v-model="selectedSampleQuery" @change="selectSampleQueryForExecution">
           <option :value="null">-- Select Sample Query --</option>
-          <option v-for="sq in sampleQueries" :key="sq.id" :value="sq">
-            {{ getSampleQueryDisplayName(sq) }}
-          </option>
+          <option v-for="sq in sampleQueries" :key="sq.id" :value="sq">{{ getSampleQueryDisplayName(sq) }}</option>
         </select>
       </div>
       <div class="form-group">
         <label for="executeRequestData">Request Data:</label>
-        <textarea 
-          id="executeRequestData" 
-          v-model="executeForm.requestDataOverride" 
+        <textarea
+          id="executeRequestData"
+          v-model="executeForm.requestDataOverride"
           placeholder="Enter or edit request data (JSON)"
           rows="10"
-          style="font-family: monospace; font-size: 0.875rem;"
+          style="font-family: monospace; font-size: 0.875rem"
         ></textarea>
       </div>
       <div class="form-group">
@@ -201,40 +201,68 @@
       </div>
       <div class="form-group">
         <label for="executeDevID">Dev ID Override (optional):</label>
-        <input
-          type="text"
-          id="executeDevID"
-          v-model="executeForm.devIdOverride"
-          placeholder="Override dev ID"
-        />
+        <input type="text" id="executeDevID" v-model="executeForm.devIdOverride" placeholder="Override dev ID" />
       </div>
 
-      <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <label style="margin: 0;">GraphQL Variables:</label>
-          <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">+ Add Variable</button>
+      <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+          <label style="margin: 0">GraphQL Variables:</label>
+          <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem">
+            + Add Variable
+          </button>
         </div>
-        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem;">
-          <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem;">
-            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem;">
-              <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem;">{{ key }}:</label>
-              <button @click="removeGraphQLVariable(key)" style="background: #da3633; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem; margin-left: auto;">Remove</button>
+        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem">
+          <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem">
+            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem">
+              <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem"
+                >{{ key }}:</label
+              >
+              <button
+                @click="removeGraphQLVariable(key)"
+                style="
+                  background: #da3633;
+                  color: white;
+                  border: none;
+                  padding: 0.25rem 0.5rem;
+                  border-radius: 4px;
+                  cursor: pointer;
+                  font-size: 0.75rem;
+                  margin-left: auto;
+                "
+              >
+                Remove
+              </button>
             </div>
             <textarea
               :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
               @input="updateGraphQLVariable(key, $event.target.value)"
-              style="width: 100%; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; padding: 0.5rem; border-radius: 4px; font-family: monospace; font-size: 0.875rem; min-height: 60px; resize: vertical;"
+              style="
+                width: 100%;
+                background: #161b22;
+                border: 1px solid #30363d;
+                color: #c9d1d9;
+                padding: 0.5rem;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 0.875rem;
+                min-height: 60px;
+                resize: vertical;
+              "
               placeholder="Enter value (JSON if object/array)"
             ></textarea>
           </div>
         </div>
       </div>
-      <div v-else class="form-group" style="margin-top: 1.5rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-          <label style="margin: 0;">GraphQL Variables:</label>
-          <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">+ Add Variable</button>
+      <div v-else class="form-group" style="margin-top: 1.5rem">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+          <label style="margin: 0">GraphQL Variables:</label>
+          <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem">
+            + Add Variable
+          </button>
         </div>
-        <p style="color: #8b949e; font-size: 0.875rem; margin: 0;">No variables found in request body. Click "Add Variable" to add one.</p>
+        <p style="color: #8b949e; font-size: 0.875rem; margin: 0">
+          No variables found in request body. Click "Add Variable" to add one.
+        </p>
       </div>
     </div>
     <div class="modal-footer">
@@ -259,7 +287,9 @@
             <div><strong>Status:</strong> {{ comparisonData.detail1.execution.statusCode }}</div>
             <div><strong>Duration:</strong> {{ comparisonData.detail1.execution.durationMs }}ms</div>
             <div><strong>Request ID:</strong> {{ comparisonData.detail1.execution.requestIdHeader }}</div>
-            <div><strong>Executed:</strong> {{ new Date(comparisonData.detail1.execution.executedAt).toLocaleString() }}</div>
+            <div>
+              <strong>Executed:</strong> {{ new Date(comparisonData.detail1.execution.executedAt).toLocaleString() }}
+            </div>
           </div>
           <div class="comparison-section">
             <h4>Response</h4>
@@ -280,8 +310,8 @@
           <div class="comparison-diff">
             <div>Time Difference</div>
             <div :class="getComparisonTimeDiffClass()">
-              {{ getComparisonTimeDiff() > 0 ? '+' : '' }}{{ getComparisonTimeDiff() }}ms 
-              ({{ getComparisonTimeDiff() > 0 ? '+' : '' }}{{ getComparisonTimeDiffPercent() }}%)
+              {{ getComparisonTimeDiff() > 0 ? '+' : '' }}{{ getComparisonTimeDiff() }}ms ({{ getComparisonTimeDiff() >
+              0 ? '+' : '' }}{{ getComparisonTimeDiffPercent() }}%)
             </div>
           </div>
         </div>
@@ -292,7 +322,9 @@
             <div><strong>Status:</strong> {{ comparisonData.detail2.execution.statusCode }}</div>
             <div><strong>Duration:</strong> {{ comparisonData.detail2.execution.durationMs }}ms</div>
             <div><strong>Request ID:</strong> {{ comparisonData.detail2.execution.requestIdHeader }}</div>
-            <div><strong>Executed:</strong> {{ new Date(comparisonData.detail2.execution.executedAt).toLocaleString() }}</div>
+            <div>
+              <strong>Executed:</strong> {{ new Date(comparisonData.detail2.execution.executedAt).toLocaleString() }}
+            </div>
           </div>
           <div class="comparison-section">
             <h4>Response</h4>
