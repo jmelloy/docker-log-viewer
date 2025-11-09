@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"docker-log-parser/pkg/logs"
@@ -417,13 +419,33 @@ func (s *Store) ListExecutions(requestID int64) ([]ExecutedRequest, error) {
 }
 
 // ListAllExecutions retrieves all executions across all requests
-func (s *Store) ListAllExecutions() ([]ExecutedRequest, error) {
-	var executions []ExecutedRequest
-	result := s.db.Preload("Server").Order("executed_at DESC").Limit(100).Find(&executions)
-	if result.Error != nil {
-		return nil, fmt.Errorf("failed to list all executions: %w", result.Error)
+func (s *Store) ListAllExecutions(limit, offset int, search string, hideIntrospection bool) ([]ExecutedRequest, int64, error) {
+	query := s.db.Preload("Server").Model(&ExecutedRequest{})
+
+	// Count total before filtering
+	var totalCount int64
+	if err := s.db.Model(&ExecutedRequest{}).Count(&totalCount).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count executions: %w", err)
 	}
-	// Compute displayName for each execution
+
+	// Apply search filter
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			"request_id_header LIKE ? OR request_body LIKE ?",
+			searchPattern, searchPattern,
+		)
+	}
+
+	// Get all executions with filters (we'll filter introspection in Go)
+	var executions []ExecutedRequest
+	result := query.Order("executed_at DESC").Limit(limit).Offset(offset).Find(&executions)
+	if result.Error != nil {
+		return nil, 0, fmt.Errorf("failed to list all executions: %w", result.Error)
+	}
+
+	// Compute displayName and filter introspection for each execution
+	filtered := make([]ExecutedRequest, 0, len(executions))
 	for i := range executions {
 		displayName := "Unknown"
 		// If execution has a sample query, use its name
@@ -438,8 +460,30 @@ func (s *Store) ListAllExecutions() ([]ExecutedRequest, error) {
 			displayName = computeDisplayName("", executions[i].RequestBody)
 		}
 		executions[i].DisplayName = displayName
+
+		// Filter introspection if needed
+		if hideIntrospection && isIntrospectionQuery(displayName, executions[i].RequestBody) {
+			continue
+		}
+
+		filtered = append(filtered, executions[i])
 	}
-	return executions, nil
+
+	return filtered, totalCount, nil
+}
+
+// isIntrospectionQuery checks if a request is a GraphQL introspection query
+func isIntrospectionQuery(displayName, requestBody string) bool {
+	// Check display name
+	if regexp.MustCompile(`(?i)introspection`).MatchString(displayName) {
+		return true
+	}
+
+	// Check request body for introspection patterns
+	lowerBody := strings.ToLower(requestBody)
+	return strings.Contains(lowerBody, "introspectionquery") ||
+		strings.Contains(lowerBody, "__schema") ||
+		strings.Contains(lowerBody, "__type")
 }
 
 // SaveExecutionLogs saves log entries for an execution
@@ -741,13 +785,46 @@ func computeDisplayName(name string, requestData string) string {
 
 	// Try to extract operationName from requestData (JSON)
 	if requestData != "" {
+		// Try parsing as single request
 		var data map[string]interface{}
 		if err := json.Unmarshal([]byte(requestData), &data); err == nil {
 			if opName, ok := data["operationName"].(string); ok && opName != "" {
 				return opName
 			}
+
+			// If no operationName, try to extract from query body
+			if query, ok := data["query"].(string); ok && query != "" {
+				if extractedName := extractOperationFromQuery(query); extractedName != "" {
+					return extractedName
+				}
+			}
+		} else {
+			// Try parsing as array of requests
+			var dataArr []map[string]interface{}
+			if err := json.Unmarshal([]byte(requestData), &dataArr); err == nil && len(dataArr) > 0 {
+				// Use first operation
+				if opName, ok := dataArr[0]["operationName"].(string); ok && opName != "" {
+					return opName
+				}
+				if query, ok := dataArr[0]["query"].(string); ok && query != "" {
+					if extractedName := extractOperationFromQuery(query); extractedName != "" {
+						return extractedName
+					}
+				}
+			}
 		}
 	}
 
 	return "Unknown"
+}
+
+// extractOperationFromQuery extracts the operation name from a GraphQL query/mutation string
+func extractOperationFromQuery(query string) string {
+	// Match "query OperationName" or "mutation OperationName"
+	re := regexp.MustCompile(`(?i)^\s*(query|mutation)\s+(\w+)`)
+	matches := re.FindStringSubmatch(query)
+	if len(matches) >= 3 {
+		return matches[2]
+	}
+	return ""
 }

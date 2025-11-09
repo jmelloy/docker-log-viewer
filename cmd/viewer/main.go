@@ -1460,14 +1460,40 @@ func (wa *WebApp) handleAllExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	executions, err := wa.store.ListAllExecutions()
+	// Parse query parameters
+	query := r.URL.Query()
+	limit := 20
+	if limitStr := query.Get("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	offset := 0
+	if offsetStr := query.Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	search := query.Get("search")
+	hideIntrospection := query.Get("hideIntrospection") == "true"
+
+	executions, total, err := wa.store.ListAllExecutions(limit, offset, search, hideIntrospection)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	response := map[string]interface{}{
+		"executions": executions,
+		"total":      total,
+		"limit":      limit,
+		"offset":     offset,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(executions)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (wa *WebApp) handleExecutionDetail(w http.ResponseWriter, r *http.Request) {
