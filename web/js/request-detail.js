@@ -201,9 +201,62 @@ const app = createApp({
 
     await this.loadRequestDetail(requestId);
     await this.loadServers();
+    this.applySyntaxHighlighting();
+  },
+
+  updated() {
+    // Apply syntax highlighting after DOM updates
+    this.$nextTick(() => {
+      this.applySyntaxHighlighting();
+    });
   },
 
   methods: {
+    applySyntaxHighlighting() {
+      // Only apply if hljs is available
+      if (typeof hljs === 'undefined') return;
+
+      // Highlight JSON in request and response bodies
+      document.querySelectorAll('.json-display:not(.hljs)').forEach((block) => {
+        try {
+          const text = block.textContent.trim();
+          if (text.startsWith('{') || text.startsWith('[')) {
+            const highlighted = hljs.highlight(text, { language: 'json' });
+            block.innerHTML = highlighted.value;
+            block.classList.add('hljs');
+          }
+        } catch (e) {
+          // If highlighting fails, leave as is
+        }
+      });
+
+      // Highlight GraphQL queries
+      document.querySelectorAll('pre:not(.hljs):not(.json-display)').forEach((block) => {
+        const text = block.textContent.trim();
+        // Check if it looks like a GraphQL query
+        if (text.includes('query') || text.includes('mutation') || text.includes('fragment')) {
+          try {
+            const highlighted = hljs.highlight(text, { language: 'graphql' });
+            block.innerHTML = highlighted.value;
+            block.classList.add('hljs');
+          } catch (e) {
+            // If highlighting fails, try as plain text
+          }
+        }
+      });
+
+      // Highlight SQL queries
+      document.querySelectorAll('.sql-query-text:not(.hljs)').forEach((block) => {
+        try {
+          const text = block.textContent;
+          const highlighted = hljs.highlight(text, { language: 'sql' });
+          block.innerHTML = highlighted.value;
+          block.classList.add('hljs');
+        } catch (e) {
+          // If highlighting fails, leave as is
+        }
+      });
+    },
     async loadRequestDetail(requestId) {
       try {
         this.requestDetail = await API.get(`/api/executions/${requestId}`);

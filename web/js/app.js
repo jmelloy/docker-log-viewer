@@ -117,7 +117,28 @@ const app = createApp({
     this.init();
   },
 
+  updated() {
+    // Apply syntax highlighting after DOM updates
+    this.$nextTick(() => {
+      this.applySyntaxHighlighting();
+    });
+  },
+
   methods: {
+    applySyntaxHighlighting() {
+      // Only apply if hljs is available
+      if (typeof hljs === 'undefined') return;
+
+      // Highlight SQL queries in analyzer
+      document.querySelectorAll('.query-text-compact').forEach((block) => {
+        if (!block.classList.contains('hljs')) {
+          const text = block.textContent;
+          const highlighted = hljs.highlight(text, { language: 'sql' });
+          block.innerHTML = highlighted.value;
+          block.classList.add('hljs');
+        }
+      });
+    },
     parseURLParameters() {
       const params = new URLSearchParams(window.location.search);
 

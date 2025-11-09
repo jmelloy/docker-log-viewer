@@ -2100,4 +2100,50 @@ button:disabled {
     color: #f85149 !important;
 }
 
+/* Highlight.js integration */
+.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+.json-display.hljs,
+.sql-query-text.hljs,
+.query-text-compact.hljs {
+    display: block;
+}
+
+/* Override highlight.js colors to match GitHub dark theme */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+    color: #ff7b72;
+}
+
+.hljs-string {
+    color: #a5d6ff;
+}
+
+.hljs-number,
+.hljs-regexp,
+.hljs-addition,
+.hljs-built_in,
+.hljs-builtin-name {
+    color: #79c0ff;
+}
+
+.hljs-comment,
+.hljs-quote {
+    color: #8b949e;
+    font-style: italic;
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attribute,
+.hljs-tag,
+.hljs-name {
+    color: #ffa657;
+}
 
