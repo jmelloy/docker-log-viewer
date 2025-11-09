@@ -74,9 +74,7 @@ const app = createApp({
     },
 
     selectedSampleQueryCreated() {
-      return this.selectedSampleQuery
-        ? new Date(this.selectedSampleQuery.createdAt).toLocaleString()
-        : "";
+      return this.selectedSampleQuery ? new Date(this.selectedSampleQuery.createdAt).toLocaleString() : "";
     },
 
     selectedSampleQueryData() {
@@ -190,9 +188,7 @@ const app = createApp({
 
     async loadRequests(sampleQueryId) {
       try {
-        this.requests = await API.get(
-          `/api/executions?request_id=${sampleQueryId}`
-        );
+        this.requests = await API.get(`/api/executions?request_id=${sampleQueryId}`);
       } catch (error) {
         console.error("Failed to load requests for sample query:", error);
         this.requests = [];
@@ -200,15 +196,11 @@ const app = createApp({
     },
 
     getRequestStatusClass(req) {
-      return req.statusCode >= 200 && req.statusCode < 300
-        ? "success"
-        : "error";
+      return req.statusCode >= 200 && req.statusCode < 300 ? "success" : "error";
     },
 
     getExecutionStatusClass(req) {
-      return req.statusCode >= 200 && req.statusCode < 300
-        ? "success"
-        : "error";
+      return req.statusCode >= 200 && req.statusCode < 300 ? "success" : "error";
     },
 
     getExecutionTimeString(req) {
@@ -232,9 +224,7 @@ const app = createApp({
           this.selectedRequestIds.push(id);
         }
       } else {
-        this.selectedRequestIds = this.selectedRequestIds.filter(
-          (i) => i !== id
-        );
+        this.selectedRequestIds = this.selectedRequestIds.filter((i) => i !== id);
       }
     },
 
@@ -248,9 +238,7 @@ const app = createApp({
       const ids = this.selectedRequestIds;
 
       // Fetch details for both requests
-      const [detail1, detail2] = await Promise.all(
-        ids.map((id) => API.get(`/api/executions/${id}`))
-      );
+      const [detail1, detail2] = await Promise.all(ids.map((id) => API.get(`/api/executions/${id}`)));
 
       this.comparisonData = { detail1, detail2 };
       this.showComparisonModal = true;
@@ -372,8 +360,7 @@ const app = createApp({
     selectSampleQueryForExecution() {
       if (this.selectedSampleQuery) {
         // Pre-populate request data from selected sample query
-        this.executeForm.requestDataOverride =
-          this.selectedSampleQuery.requestData || "";
+        this.executeForm.requestDataOverride = this.selectedSampleQuery.requestData || "";
 
         // Pre-populate server if available
         if (this.selectedSampleQuery.serverId) {
@@ -391,9 +378,7 @@ const app = createApp({
 
     updateServerDefaults() {
       if (this.executeForm.serverId) {
-        const server = this.servers.find(
-          (s) => s.id === parseInt(this.executeForm.serverId)
-        );
+        const server = this.servers.find((s) => s.id === parseInt(this.executeForm.serverId));
         if (server) {
           // Always set defaults from server (user can still override)
           this.executeForm.tokenOverride = server.bearerToken || "";
@@ -419,10 +404,7 @@ const app = createApp({
         let serverId = null;
         if (this.executeForm.serverId) {
           serverId = parseInt(this.executeForm.serverId);
-        } else if (
-          this.selectedSampleQuery &&
-          this.selectedSampleQuery.serverId
-        ) {
+        } else if (this.selectedSampleQuery && this.selectedSampleQuery.serverId) {
           serverId = parseInt(this.selectedSampleQuery.serverId);
         }
 
@@ -435,10 +417,7 @@ const app = createApp({
             requestDataOverride: requestData,
           };
 
-          const result = await API.post(
-            `/api/requests/${this.selectedSampleQuery.id}/execute`,
-            payload
-          );
+          const result = await API.post(`/api/requests/${this.selectedSampleQuery.id}/execute`, payload);
 
           // Reload requests to show new execution
           await this.loadAllRequests();
@@ -485,9 +464,7 @@ const app = createApp({
 
     parseGraphQLVariables() {
       try {
-        const requestData =
-          this.executeForm.requestDataOverride ||
-          this.selectedSampleQuery?.requestData;
+        const requestData = this.executeForm.requestDataOverride || this.selectedSampleQuery?.requestData;
         if (!requestData) return;
 
         let parsed;
@@ -500,9 +477,7 @@ const app = createApp({
         // Look for variables in GraphQL format
         if (parsed.variables && typeof parsed.variables === "object") {
           // Deep clone to avoid reference issues
-          this.executeForm.graphqlVariables = JSON.parse(
-            JSON.stringify(parsed.variables)
-          );
+          this.executeForm.graphqlVariables = JSON.parse(JSON.stringify(parsed.variables));
         } else if (Array.isArray(parsed)) {
           // Handle array of requests - look for variables in each
           const allVariables = {};

@@ -16,21 +16,12 @@ export function formatSQL(sql) {
     "VALUES",
   ];
 
-  formatted = formatted.replaceAll(
-    new RegExp(`\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)\\b`, "gi"),
-    `\n$1`
-  );
+  formatted = formatted.replaceAll(new RegExp(`\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)\\b`, "gi"), `\n$1`);
 
-  formatted = formatted.replaceAll(
-    new RegExp(`\\b(DELETE FROM|FROM)\\b`, "gi"),
-    `\n$1`
-  );
+  formatted = formatted.replaceAll(new RegExp(`\\b(DELETE FROM|FROM)\\b`, "gi"), `\n$1`);
 
   keywords.forEach((kw) => {
-    formatted = formatted.replace(
-      new RegExp(`\\b${kw}\\b`, "gi"),
-      `\n${kw.toUpperCase()}`
-    );
+    formatted = formatted.replace(new RegExp(`\\b${kw}\\b`, "gi"), `\n${kw.toUpperCase()}`);
   });
 
   const lines = formatted
@@ -63,10 +54,7 @@ export function formatSQL(sql) {
           const remaining = line.substring(i);
           if (/^\s+(AND|OR)\b/i.test(remaining)) {
             const match = remaining.match(/^(\s+)(AND|OR)\b/i);
-            result +=
-              "\n" +
-              "  ".repeat(indentStack.length + 1) +
-              match[2].toUpperCase();
+            result += "\n" + "  ".repeat(indentStack.length + 1) + match[2].toUpperCase();
             i += match[0].length;
             continue;
           }

@@ -3,12 +3,7 @@
  * Manages CodeMirror 6 GraphQL editors for the GraphQL Explorer
  */
 
-import {
-  createGraphQLEditor,
-  updateEditorSchema,
-  getEditorValue,
-  setEditorValue,
-} from "../lib/codemirror-graphql.js";
+import { createGraphQLEditor, updateEditorSchema, getEditorValue, setEditorValue } from "../lib/codemirror-graphql.js";
 
 export class GraphQLEditorManager {
   constructor() {

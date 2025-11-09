@@ -3,39 +3,31 @@
 
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
-import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  indentWithTab,
-} from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
-import {
-  syntaxHighlighting,
-  HighlightStyle,
-} from "@codemirror/language";
+import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { graphql, updateSchema } from "cm6-graphql";
 import { buildSchema, buildClientSchema } from "graphql";
 
 // GitHub Dark theme highlighting (matching highlight.js)
 const githubDarkHighlight = HighlightStyle.define([
-  { tag: t.keyword, color: "#ff7b72" },                    // keywords: query, mutation, fragment
-  { tag: t.definitionKeyword, color: "#ff7b72" },          // type, interface, enum, etc.
-  { tag: t.propertyName, color: "#7ee787" },               // field names
-  { tag: t.variableName, color: "#ffa657" },               // $variables
-  { tag: t.string, color: "#a5d6ff" },                     // strings
+  { tag: t.keyword, color: "#ff7b72" }, // keywords: query, mutation, fragment
+  { tag: t.definitionKeyword, color: "#ff7b72" }, // type, interface, enum, etc.
+  { tag: t.propertyName, color: "#7ee787" }, // field names
+  { tag: t.variableName, color: "#ffa657" }, // $variables
+  { tag: t.string, color: "#a5d6ff" }, // strings
   { tag: [t.number, t.integer, t.float], color: "#79c0ff" }, // numbers
-  { tag: t.bool, color: "#79c0ff" },                       // booleans
-  { tag: t.null, color: "#79c0ff" },                       // null
-  { tag: t.typeName, color: "#d2a8ff" },                   // type names
-  { tag: t.special(t.variableName), color: "#d2a8ff" },    // enum values
-  { tag: t.meta, color: "#d2a8ff" },                       // directives
-  { tag: t.attributeName, color: "#79c0ff" },              // argument names
+  { tag: t.bool, color: "#79c0ff" }, // booleans
+  { tag: t.null, color: "#79c0ff" }, // null
+  { tag: t.typeName, color: "#d2a8ff" }, // type names
+  { tag: t.special(t.variableName), color: "#d2a8ff" }, // enum values
+  { tag: t.meta, color: "#d2a8ff" }, // directives
+  { tag: t.attributeName, color: "#79c0ff" }, // argument names
   { tag: [t.comment, t.lineComment, t.blockComment], color: "#8b949e", fontStyle: "italic" }, // comments
   { tag: [t.punctuation, t.paren, t.brace, t.bracket], color: "#c9d1d9" }, // punctuation
-  { tag: t.operator, color: "#ff7b72" },                   // operators
+  { tag: t.operator, color: "#ff7b72" }, // operators
 ]);
 
 /**
@@ -49,12 +41,7 @@ const githubDarkHighlight = HighlightStyle.define([
  * @returns {EditorView} The CodeMirror editor view
  */
 export function createGraphQLEditor(parent, options = {}) {
-  const {
-    value = "",
-    onChange = () => {},
-    placeholder: placeholderText = "",
-    schema = null,
-  } = options;
+  const { value = "", onChange = () => {}, placeholder: placeholderText = "", schema = null } = options;
 
   // Create extensions array
   const extensions = [
@@ -62,13 +49,7 @@ export function createGraphQLEditor(parent, options = {}) {
     syntaxHighlighting(githubDarkHighlight),
     history(),
     autocompletion(),
-    keymap.of([
-      ...defaultKeymap,
-      ...historyKeymap,
-      ...completionKeymap,
-      ...lintKeymap,
-      indentWithTab,
-    ]),
+    keymap.of([...defaultKeymap, ...historyKeymap, ...completionKeymap, ...lintKeymap, indentWithTab]),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         onChange(update.state.doc.toString());

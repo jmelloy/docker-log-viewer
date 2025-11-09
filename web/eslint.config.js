@@ -2,15 +2,7 @@ import js from "@eslint/js";
 
 export default [
   {
-    ignores: [
-      "lib/**",
-      "node_modules/**",
-      "dist/**",
-      "build/**",
-      "bin/**",
-      "*.min.js",
-      "coverage/**",
-    ],
+    ignores: ["lib/**", "node_modules/**", "dist/**", "build/**", "bin/**", "*.min.js", "coverage/**"],
   },
   js.configs.recommended,
   {
