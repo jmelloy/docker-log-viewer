@@ -17,6 +17,9 @@
  */
 
 import { API } from "./api.js";
+import { loadTemplate } from "./template-loader.js";
+
+const template = await loadTemplate("/templates/log-stream.html");
 
 export function createLogStreamComponent() {
   const { createApp } = Vue;
@@ -316,40 +319,6 @@ export function createLogStreamComponent() {
       },
     },
 
-    template: `
-      <div class="log-stream-component" :class="{ 'compact-mode': compact }">
-        <div v-if="!compact" class="log-stream-header" style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: #161b22; border-bottom: 1px solid #30363d;">
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="font-weight: 500;">Logs</span>
-            <span :style="{ color: statusColor, fontSize: '0.75rem' }">{{ statusText }}</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span style="color: #8b949e; font-size: 0.75rem;">{{ logCountText }}</span>
-            <button @click="clearLogs" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Clear</button>
-          </div>
-        </div>
-        <div ref="logsContainer" class="logs" :style="compact ? 'max-height: 300px;' : 'max-height: 500px;'">
-          <div v-if="filteredLogs.length === 0" style="padding: 2rem; text-align: center; color: #8b949e;">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📝</div>
-            <div>{{ wsConnected ? 'No logs yet' : 'Connecting to log stream...' }}</div>
-          </div>
-          <div v-for="(log, index) in filteredLogs" 
-               :key="index"
-               class="log-line"
-               @click="onLogClick(log)">
-            <span v-if="showContainer" class="log-container">{{ getContainerName(log.containerId) }}</span>
-            <span v-if="log.entry?.timestamp" class="log-timestamp">{{ log.entry.timestamp }}</span>
-            <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
-            <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
-            <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
-            <span v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})" 
-                  :key="idx"
-                  class="log-field">
-              <span class="log-field-key">{{ key }}</span>=<span class="log-field-value">{{ formatFieldValue(value) }}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-    `,
+    template,
   };
 }
