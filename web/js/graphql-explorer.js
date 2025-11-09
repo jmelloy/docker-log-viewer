@@ -619,6 +619,26 @@ const app = createApp({
       return scalarTypes.includes(type.name) || type.kind === 'SCALAR' || type.kind === 'ENUM';
     },
 
+    getReturnTypeFields(type) {
+      if (!type || !this.schema) return [];
+      
+      // Unwrap type to get the actual type name
+      let actualType = type;
+      while (actualType && actualType.ofType) {
+        actualType = actualType.ofType;
+      }
+      
+      const typeName = actualType?.name;
+      if (!typeName) return [];
+      
+      // Find the type in schema
+      const typeObj = this.schemaTypes.find(t => t.name === typeName);
+      if (!typeObj || !typeObj.fields) return [];
+      
+      // Return all fields (not just scalar ones, to show full structure)
+      return typeObj.fields;
+    },
+
     getObjectTypes() {
       if (!this.schema) return [];
       return this.schemaTypes.filter(t => 
@@ -729,12 +749,27 @@ const app = createApp({
                         </div>
                         <div v-if="isFieldExpanded('query-' + field.name)" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #30363d;">
                           <div v-if="field.description" style="color: #8b949e; font-size: 0.7rem; margin-bottom: 0.5rem; font-style: italic;">{{ field.description }}</div>
-                          <div v-if="field.args && field.args.length > 0" style="font-size: 0.7rem;">
+                          <div v-if="field.args && field.args.length > 0" style="font-size: 0.7rem; margin-bottom: 0.5rem;">
                             <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500;">Arguments:</div>
                             <div v-for="arg in field.args" :key="arg.name" style="margin-left: 0.5rem; margin-bottom: 0.25rem;">
                               <span style="color: #a5d6ff;">{{ arg.name }}</span>
                               <span style="color: #8b949e;">: {{ getTypeString(arg.type) }}</span>
                               <div v-if="arg.description" style="color: #6e7681; font-size: 0.65rem; margin-left: 0.5rem;">{{ arg.description }}</div>
+                            </div>
+                          </div>
+                          <div v-if="field.type" style="font-size: 0.7rem;">
+                            <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500;">Returns:</div>
+                            <div style="margin-left: 0.5rem;">
+                              <div style="margin-bottom: 0.25rem;">
+                                <span style="color: #79c0ff;">{{ getTypeString(field.type) }}</span>
+                              </div>
+                              <div v-if="getReturnTypeFields(field.type).length > 0" style="margin-top: 0.5rem; padding: 0.5rem; background: #161b22; border-radius: 3px;">
+                                <div style="color: #8b949e; font-size: 0.65rem; margin-bottom: 0.25rem;">Fields:</div>
+                                <div v-for="returnField in getReturnTypeFields(field.type)" :key="returnField.name" style="margin-left: 0.5rem; margin-bottom: 0.15rem; font-size: 0.65rem;">
+                                  <span style="color: #a5d6ff;">{{ returnField.name }}</span>
+                                  <span style="color: #8b949e;">: {{ getTypeString(returnField.type) }}</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -778,12 +813,27 @@ const app = createApp({
                         </div>
                         <div v-if="isFieldExpanded('mutation-' + field.name)" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #30363d;">
                           <div v-if="field.description" style="color: #8b949e; font-size: 0.7rem; margin-bottom: 0.5rem; font-style: italic;">{{ field.description }}</div>
-                          <div v-if="field.args && field.args.length > 0" style="font-size: 0.7rem;">
+                          <div v-if="field.args && field.args.length > 0" style="font-size: 0.7rem; margin-bottom: 0.5rem;">
                             <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500;">Arguments:</div>
                             <div v-for="arg in field.args" :key="arg.name" style="margin-left: 0.5rem; margin-bottom: 0.25rem;">
                               <span style="color: #a5d6ff;">{{ arg.name }}</span>
                               <span style="color: #8b949e;">: {{ getTypeString(arg.type) }}</span>
                               <div v-if="arg.description" style="color: #6e7681; font-size: 0.65rem; margin-left: 0.5rem;">{{ arg.description }}</div>
+                            </div>
+                          </div>
+                          <div v-if="field.type" style="font-size: 0.7rem;">
+                            <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500;">Returns:</div>
+                            <div style="margin-left: 0.5rem;">
+                              <div style="margin-bottom: 0.25rem;">
+                                <span style="color: #f0883e;">{{ getTypeString(field.type) }}</span>
+                              </div>
+                              <div v-if="getReturnTypeFields(field.type).length > 0" style="margin-top: 0.5rem; padding: 0.5rem; background: #161b22; border-radius: 3px;">
+                                <div style="color: #8b949e; font-size: 0.65rem; margin-bottom: 0.25rem;">Fields:</div>
+                                <div v-for="returnField in getReturnTypeFields(field.type)" :key="returnField.name" style="margin-left: 0.5rem; margin-bottom: 0.15rem; font-size: 0.65rem;">
+                                  <span style="color: #a5d6ff;">{{ returnField.name }}</span>
+                                  <span style="color: #8b949e;">: {{ getTypeString(returnField.type) }}</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
