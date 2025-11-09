@@ -1,4 +1,4 @@
-import { createNavigation } from "./shared/navigation.js";
+import { createAppHeader } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 import { formatSQL } from "./utils.js";
 
@@ -597,12 +597,7 @@ const app = createApp({
 
   template: `
     <div class="app-container">
-      <header class="app-header">
-        <div style="display: flex; align-items: center; gap: 1rem">
-          <h1 style="margin: 0">🔱 Logseidon</h1>
-          <app-nav></app-nav>
-        </div>
-      </header>
+      <app-header></app-header>
 
       <div class="main-layout">
         <aside class="sidebar">
@@ -918,7 +913,6 @@ const app = createApp({
   `,
 });
 
-// Register components
-app.component("app-nav", createNavigation("requests"));
+app.component("app-header", createAppHeader("requests"));
 
 app.mount("#app");

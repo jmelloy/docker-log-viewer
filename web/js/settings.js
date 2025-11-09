@@ -1,4 +1,4 @@
-import { createNavigation } from './shared/navigation.js';
+import { createAppHeader } from './shared/navigation.js';
 import { API } from './shared/api.js';
 
 const { createApp } = Vue;
@@ -235,22 +235,16 @@ const app = createApp({
 
   template: `
     <div class="app-container">
-      <header class="app-header">
-        <div style="display: flex; align-items: center; gap: 1rem">
-          <h1 style="margin: 0">🔱 Logseidon</h1>
-          <app-nav></app-nav>
-        </div>
-      </header>
+      <app-header></app-header>
 
-      <div class="container" style="max-width: 1200px; margin: 2rem auto; padding: 0 2rem">
-        <!-- Servers Section -->
-        <section style="margin-bottom: 3rem">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem">
+      <div class="settings-container">
+        <section class="settings-section">
+          <div class="section-header">
             <h2>Servers</h2>
             <button @click="openNewServerModal" class="btn btn-primary">+ New Server</button>
           </div>
           
-          <div v-if="servers.length === 0" style="padding: 2rem; text-align: center; color: #6c757d; border: 1px solid #dee2e6; border-radius: 4px">
+          <div v-if="servers.length === 0" class="empty-state-box">
             No servers configured. Click "New Server" to add one.
           </div>
 
@@ -277,14 +271,13 @@ const app = createApp({
           </table>
         </section>
 
-        <!-- Database URLs Section -->
-        <section>
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem">
+        <section class="settings-section">
+          <div class="section-header">
             <h2>Database URLs</h2>
             <button @click="openNewDatabaseModal" class="btn btn-primary">+ New Database URL</button>
           </div>
           
-          <div v-if="databaseURLs.length === 0" style="padding: 2rem; text-align: center; color: #6c757d; border: 1px solid #dee2e6; border-radius: 4px">
+          <div v-if="databaseURLs.length === 0" class="empty-state-box">
             No database URLs configured. Click "New Database URL" to add one.
           </div>
 
@@ -389,7 +382,6 @@ const app = createApp({
   `,
 });
 
-// Register components
-app.component('app-nav', createNavigation('settings'));
+app.component('app-header', createAppHeader('settings'));
 
 app.mount("#app");

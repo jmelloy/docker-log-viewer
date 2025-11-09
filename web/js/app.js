@@ -1,4 +1,4 @@
-import { createNavigation } from "./shared/navigation.js";
+import { createAppHeader } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 
 const { createApp } = Vue;
@@ -1096,26 +1096,22 @@ const app = createApp({
 
   template: `
     <div class="app-container">
-      <header class="app-header">
-        <div style="display: flex; align-items: center; gap: 1rem; width: 100%;">
-          <h1 style="margin: 0">🔱 Logseidon</h1>
-          <app-nav></app-nav>
-          <div class="header-controls">
-            <div class="search-box">
-              <input type="text" v-model="searchQuery" placeholder="Search logs...">
-              <button @click="searchQuery = ''; updateURL()" class="clear-btn" title="Clear search">✕</button>
-            </div>
-            <div class="trace-filter-display" v-if="hasTraceFilters">
-              <span v-for="([key, value], index) in Array.from(traceFilters.entries())" :key="key" class="trace-filter-badge">
-                <span class="filter-key">{{ key }}</span>=<span class="filter-value">{{ value }}</span>
-                <button @click="removeTraceFilter(key)" class="filter-remove" title="Remove filter">×</button>
-              </span>
-              <button @click="saveTrace" class="btn-star" title="Save trace to request manager">⭐</button>
-              <button @click="clearTraceFilters" class="clear-btn" title="Clear all filters">✕</button>
-            </div>
+      <app-header>
+        <div class="header-controls">
+          <div class="search-box">
+            <input type="text" v-model="searchQuery" placeholder="Search logs...">
+            <button @click="searchQuery = ''; updateURL()" class="clear-btn" title="Clear search">✕</button>
+          </div>
+          <div class="trace-filter-display" v-if="hasTraceFilters">
+            <span v-for="([key, value], index) in Array.from(traceFilters.entries())" :key="key" class="trace-filter-badge">
+              <span class="filter-key">{{ key }}</span>=<span class="filter-value">{{ value }}</span>
+              <button @click="removeTraceFilter(key)" class="filter-remove" title="Remove filter">×</button>
+            </span>
+            <button @click="saveTrace" class="btn-star" title="Save trace to request manager">⭐</button>
+            <button @click="clearTraceFilters" class="clear-btn" title="Clear all filters">✕</button>
           </div>
         </div>
-      </header>
+      </app-header>
       
       <div class="main-layout">
         <aside class="sidebar">
@@ -1432,9 +1428,7 @@ const app = createApp({
   `,
 });
 
-// Register components
-app.component("app-nav", createNavigation("viewer"));
+app.component("app-header", createAppHeader("viewer"));
 app.component("pev2", pev2.Plan);
 
-// Mount the app
 app.mount("#app");
