@@ -1498,9 +1498,8 @@ func (wa *WebApp) handleAllExecutions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	search := query.Get("search")
-	showAll := query.Get("showAll") == "true"
 
-	executions, total, err := wa.store.ListAllExecutions(limit, offset, search, showAll)
+	executions, total, err := wa.store.ListAllExecutions(limit, offset, search, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

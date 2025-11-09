@@ -901,6 +901,46 @@ button:disabled {
     max-height: 15em; /* ~10 lines at 1.5 line-height */
 }
 
+/* JSON Syntax Highlighting */
+.json-key {
+    color: #79c0ff;
+}
+
+.json-string {
+    color: #a5d6ff;
+}
+
+.json-number {
+    color: #ffa657;
+}
+
+.json-boolean {
+    color: #ff7b72;
+}
+
+.json-null {
+    color: #8b949e;
+}
+
+/* GraphQL Syntax Highlighting */
+.gql-keyword {
+    color: #ff7b72;
+    font-weight: bold;
+}
+
+.gql-field {
+    color: #79c0ff;
+}
+
+.gql-string {
+    color: #a5d6ff;
+}
+
+.gql-comment {
+    color: #8b949e;
+    font-style: italic;
+}
+
 .error-display {
     background: #1f1214;
     border: 1px solid #da3633;
