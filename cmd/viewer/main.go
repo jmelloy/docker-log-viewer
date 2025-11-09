@@ -1103,6 +1103,7 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 		BearerTokenOverride string `json:"bearerTokenOverride,omitempty"`
 		DevIDOverride       string `json:"devIdOverride,omitempty"`
 		RequestData         string `json:"requestData"`
+		Sync                bool   `json:"sync,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -1161,6 +1162,7 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 		RequestBody:     input.RequestData,
 		ExecutedAt:      time.Now(),
 		StatusCode:      0, // 0 indicates pending
+		IsSync:          input.Sync,
 	}
 
 	// Save execution immediately
@@ -1171,8 +1173,8 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute HTTP request in background
-	go func() {
+	// Define execution logic as a function
+	executeRequest := func() {
 		startTime := time.Now()
 		statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(input.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
 		execution.DurationMS = time.Since(startTime).Milliseconds()
@@ -1248,13 +1250,32 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	}()
+	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":      "started",
-		"executionId": execID,
-	})
+	// If sync is true, execute synchronously and return response
+	if input.Sync {
+		executeRequest()
+
+		// Return the execution result with response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":       "completed",
+			"executionId":  execID,
+			"responseBody": execution.ResponseBody,
+			"statusCode":   execution.StatusCode,
+			"durationMs":   execution.DurationMS,
+			"error":        execution.Error,
+		})
+	} else {
+		// Execute HTTP request in background
+		go executeRequest()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":      "started",
+			"executionId": execID,
+		})
+	}
 }
 
 // Request management handlers
@@ -1477,9 +1498,8 @@ func (wa *WebApp) handleAllExecutions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	search := query.Get("search")
-	hideIntrospection := query.Get("hideIntrospection") == "true"
 
-	executions, total, err := wa.store.ListAllExecutions(limit, offset, search, hideIntrospection)
+	executions, total, err := wa.store.ListAllExecutions(limit, offset, search, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

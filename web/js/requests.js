@@ -13,7 +13,6 @@ const app = createApp({
       requests: [],
       allRequests: [],
       // Filtering and pagination
-      hideGraphQL: false,
       searchQuery: "",
       currentPage: 1,
       pageSize: 20,
@@ -141,7 +140,6 @@ const app = createApp({
           limit: this.pageSize,
           offset: offset,
           search: this.searchQuery,
-          hideIntrospection: this.hideGraphQL,
         });
 
         const response = await API.get(`/api/all-executions?${params}`);
@@ -653,10 +651,6 @@ const app = createApp({
                 placeholder="Search requests..." 
                 style="flex: 1; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
               />
-              <label style="display: flex; align-items: center; gap: 0.5rem; color: #c9d1d9; cursor: pointer;">
-                <input type="checkbox" v-model="hideGraphQL" @change="handleFilterChange" />
-                <span>Hide Introspection</span>
-              </label>
             </div>
             <div class="executions-list">
               <p v-if="allRequests.length === 0" style="color: #6c757d;">No requests executed yet. Click "Execute Request" to get started.</p>

@@ -85,6 +85,7 @@ type ExecutedRequest struct {
 	ResponseBody    string         `gorm:"column:response_body" json:"responseBody,omitempty"`
 	ResponseHeaders string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
 	Error           string         `json:"error,omitempty"`
+	IsSync          bool           `gorm:"column:is_sync;index;default:false" json:"isSync"`
 	DisplayName     string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
 	ExecutedAt      time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
 	CreatedAt       time.Time      `json:"createdAt"`
@@ -418,7 +419,7 @@ func (s *Store) ListExecutions(requestID int64) ([]ExecutedRequest, error) {
 }
 
 // ListAllExecutions retrieves all executions across all requests
-func (s *Store) ListAllExecutions(limit, offset int, search string, hideIntrospection bool) ([]ExecutedRequest, int64, error) {
+func (s *Store) ListAllExecutions(limit, offset int, search string, showAll bool) ([]ExecutedRequest, int64, error) {
 	query := s.db.Preload("Server").Model(&ExecutedRequest{})
 	countQuery := s.db.Model(&ExecutedRequest{})
 
@@ -436,11 +437,10 @@ func (s *Store) ListAllExecutions(limit, offset int, search string, hideIntrospe
 		)
 	}
 
-	// Apply introspection filter at database level
-	if hideIntrospection {
-		introspectionCondition := "request_body NOT LIKE '%IntrospectionQuery%' AND request_body NOT LIKE '%__schema%'"
-		query = query.Where(introspectionCondition)
-		countQuery = countQuery.Where(introspectionCondition)
+	// If NOT showing all, filter to only async queries (introspection and background queries)
+	if !showAll {
+		query = query.Where("is_sync = ?", false)
+		countQuery = countQuery.Where("is_sync = ?", false)
 	}
 
 	// Count with filters applied
