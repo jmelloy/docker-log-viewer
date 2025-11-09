@@ -10,9 +10,9 @@ export function createNavigation(activePage) {
     `,
     data() {
       return {
-        activePage
+        activePage,
       };
-    }
+    },
   };
 }
 
@@ -28,7 +28,7 @@ export function createAppHeader(activePage) {
       </header>
     `,
     components: {
-      'app-nav': createNavigation(activePage)
-    }
+      "app-nav": createNavigation(activePage),
+    },
   };
 }

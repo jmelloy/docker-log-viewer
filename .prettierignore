@@ -1,0 +1,10 @@
+# Ignore generated files and dependencies
+node_modules/
+dist/
+build/
+bin/
+*.min.js
+web/lib/**
+coverage/
+.git/
+package-lock.json

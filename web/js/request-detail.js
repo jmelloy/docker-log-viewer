@@ -233,16 +233,16 @@ const app = createApp({
   methods: {
     applySyntaxHighlighting() {
       // Only apply if hljs is available
-      if (typeof hljs === 'undefined') return;
+      if (typeof hljs === "undefined") return;
 
       // Highlight JSON in request and response bodies
-      document.querySelectorAll('.json-display:not(.hljs)').forEach((block) => {
+      document.querySelectorAll(".json-display:not(.hljs)").forEach((block) => {
         try {
           const text = block.textContent.trim();
-          if (text.startsWith('{') || text.startsWith('[')) {
-            const highlighted = hljs.highlight(text, { language: 'json' });
+          if (text.startsWith("{") || text.startsWith("[")) {
+            const highlighted = hljs.highlight(text, { language: "json" });
             block.innerHTML = highlighted.value;
-            block.classList.add('hljs');
+            block.classList.add("hljs");
           }
         } catch (e) {
           // If highlighting fails, leave as is
@@ -250,31 +250,39 @@ const app = createApp({
       });
 
       // Highlight GraphQL queries
-      document.querySelectorAll('pre:not(.hljs):not(.json-display)').forEach((block) => {
-        const text = block.textContent.trim();
-        // Check if it looks like a GraphQL query
-        if (text.includes('query') || text.includes('mutation') || text.includes('fragment')) {
-          try {
-            const highlighted = hljs.highlight(text, { language: 'graphql' });
-            block.innerHTML = highlighted.value;
-            block.classList.add('hljs');
-          } catch (e) {
-            // If highlighting fails, try as plain text
+      document
+        .querySelectorAll("pre:not(.hljs):not(.json-display)")
+        .forEach((block) => {
+          const text = block.textContent.trim();
+          // Check if it looks like a GraphQL query
+          if (
+            text.includes("query") ||
+            text.includes("mutation") ||
+            text.includes("fragment")
+          ) {
+            try {
+              const highlighted = hljs.highlight(text, { language: "graphql" });
+              block.innerHTML = highlighted.value;
+              block.classList.add("hljs");
+            } catch (e) {
+              // If highlighting fails, try as plain text
+            }
           }
-        }
-      });
+        });
 
       // Highlight SQL queries
-      document.querySelectorAll('.sql-query-text:not(.hljs)').forEach((block) => {
-        try {
-          const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: 'sql' });
-          block.innerHTML = highlighted.value;
-          block.classList.add('hljs');
-        } catch (e) {
-          // If highlighting fails, leave as is
-        }
-      });
+      document
+        .querySelectorAll(".sql-query-text:not(.hljs)")
+        .forEach((block) => {
+          try {
+            const text = block.textContent;
+            const highlighted = hljs.highlight(text, { language: "sql" });
+            block.innerHTML = highlighted.value;
+            block.classList.add("hljs");
+          } catch (e) {
+            // If highlighting fails, leave as is
+          }
+        });
     },
     async loadRequestDetail(requestId) {
       try {
@@ -285,12 +293,16 @@ const app = createApp({
         const ageMinutes = this.requestAgeMinutes;
         if (ageMinutes < 3) {
           this.showLiveLogStream = true;
-          console.log(`Request is ${ageMinutes.toFixed(1)} minutes old - defaulting to live stream`);
+          console.log(
+            `Request is ${ageMinutes.toFixed(1)} minutes old - defaulting to live stream`
+          );
         }
 
         // Set up auto-refresh timer if request is less than 1 minute old
         if (ageMinutes < 1) {
-          console.log(`Request is ${ageMinutes.toFixed(1)} minutes old - setting up 30s refresh timer`);
+          console.log(
+            `Request is ${ageMinutes.toFixed(1)} minutes old - setting up 30s refresh timer`
+          );
           this.setupRefreshTimer(requestId);
         }
       } catch (error) {
@@ -308,20 +320,22 @@ const app = createApp({
 
       // Set up new timer to refresh in 30 seconds
       this.refreshTimer = setTimeout(async () => {
-        console.log('Auto-refreshing request details...');
+        console.log("Auto-refreshing request details...");
         try {
           this.requestDetail = await API.get(`/api/executions/${requestId}`);
-          
+
           // Check if we should continue refreshing
           const ageMinutes = this.requestAgeMinutes;
           if (ageMinutes < 1) {
             // Still less than 1 minute old, refresh again
             this.setupRefreshTimer(requestId);
           } else {
-            console.log('Request is now over 1 minute old - stopping auto-refresh');
+            console.log(
+              "Request is now over 1 minute old - stopping auto-refresh"
+            );
           }
         } catch (error) {
-          console.error('Failed to auto-refresh request details:', error);
+          console.error("Failed to auto-refresh request details:", error);
         }
       }, 30000); // 30 seconds
     },
