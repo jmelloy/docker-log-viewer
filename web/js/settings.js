@@ -1,5 +1,5 @@
-import { createAppHeader } from './shared/navigation.js';
-import { API } from './shared/api.js';
+import { createAppHeader } from "./shared/navigation.js";
+import { API } from "./shared/api.js";
 
 const { createApp } = Vue;
 
@@ -382,6 +382,6 @@ const app = createApp({
   `,
 });
 
-app.component('app-header', createAppHeader('settings'));
+app.component("app-header", createAppHeader("settings"));
 
 app.mount("#app");

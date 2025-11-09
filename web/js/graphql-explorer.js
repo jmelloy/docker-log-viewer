@@ -80,40 +80,50 @@ const app = createApp({
 
     filteredQueryFields() {
       if (!this.schema || !this.queryType) return [];
-      const queryTypeObj = this.schemaTypes.find(t => t.name === this.queryType.name);
+      const queryTypeObj = this.schemaTypes.find(
+        (t) => t.name === this.queryType.name
+      );
       if (!queryTypeObj || !queryTypeObj.fields) return [];
-      
+
       if (!this.schemaFilter) return queryTypeObj.fields;
-      
+
       const filterLower = this.schemaFilter.toLowerCase();
-      return queryTypeObj.fields.filter(field => 
-        field.name.toLowerCase().includes(filterLower) ||
-        (field.description && field.description.toLowerCase().includes(filterLower))
+      return queryTypeObj.fields.filter(
+        (field) =>
+          field.name.toLowerCase().includes(filterLower) ||
+          (field.description &&
+            field.description.toLowerCase().includes(filterLower))
       );
     },
 
     filteredMutationFields() {
       if (!this.schema || !this.mutationType) return [];
-      const mutationTypeObj = this.schemaTypes.find(t => t.name === this.mutationType.name);
+      const mutationTypeObj = this.schemaTypes.find(
+        (t) => t.name === this.mutationType.name
+      );
       if (!mutationTypeObj || !mutationTypeObj.fields) return [];
-      
+
       if (!this.schemaFilter) return mutationTypeObj.fields;
-      
+
       const filterLower = this.schemaFilter.toLowerCase();
-      return mutationTypeObj.fields.filter(field => 
-        field.name.toLowerCase().includes(filterLower) ||
-        (field.description && field.description.toLowerCase().includes(filterLower))
+      return mutationTypeObj.fields.filter(
+        (field) =>
+          field.name.toLowerCase().includes(filterLower) ||
+          (field.description &&
+            field.description.toLowerCase().includes(filterLower))
       );
     },
 
     filteredObjectTypes() {
       const objectTypes = this.getObjectTypes();
       if (!this.schemaFilter) return objectTypes;
-      
+
       const filterLower = this.schemaFilter.toLowerCase();
-      return objectTypes.filter(type =>
-        type.name.toLowerCase().includes(filterLower) ||
-        (type.description && type.description.toLowerCase().includes(filterLower))
+      return objectTypes.filter(
+        (type) =>
+          type.name.toLowerCase().includes(filterLower) ||
+          (type.description &&
+            type.description.toLowerCase().includes(filterLower))
       );
     },
   },
@@ -232,7 +242,10 @@ const app = createApp({
           // Extract request ID header for log filtering
           if (execution.execution.requestIdHeader && !this.requestIdHeader) {
             this.requestIdHeader = execution.execution.requestIdHeader;
-            console.log("Set requestIdHeader for log filtering:", this.requestIdHeader);
+            console.log(
+              "Set requestIdHeader for log filtering:",
+              this.requestIdHeader
+            );
           }
 
           if (execution.execution.responseBody) {
@@ -528,7 +541,7 @@ const app = createApp({
 
     getTypeString(type) {
       if (!type) return "Unknown";
-      
+
       let typeStr = "";
       let currentType = type;
       let nonNull = false;
@@ -562,40 +575,40 @@ const app = createApp({
       // Generate a complete query structure with operation name, variables, and return types
       const operationType = typeName.toLowerCase();
       const operationName = this.capitalize(fieldName);
-      
+
       // Build variables declaration
       let variablesDecl = "";
       let variablesObj = {};
       let fieldArgs = "";
-      
+
       if (args && args.length > 0) {
         const varDecls = [];
         const argPairs = [];
-        
-        args.forEach(arg => {
+
+        args.forEach((arg) => {
           const varName = arg.name;
           const varType = this.getTypeString(arg.type);
           varDecls.push(`$${varName}: ${varType}`);
           argPairs.push(`${arg.name}: $${varName}`);
-          
+
           // Generate example value for variables
           variablesObj[varName] = this.getExampleValue(arg.type);
         });
-        
+
         variablesDecl = `(${varDecls.join(", ")})`;
         fieldArgs = `(${argPairs.join(", ")})`;
       }
-      
+
       // Get fields for the return type
       const returnFields = this.getFieldsForType(returnType);
-      
+
       // Build the complete query
       let snippet = `${operationType} ${operationName}${variablesDecl} {\n`;
       snippet += `  ${fieldName}${fieldArgs} {\n`;
       snippet += returnFields;
       snippet += `  }\n`;
       snippet += `}`;
-      
+
       // Update variables if we have them
       if (Object.keys(variablesObj).length > 0) {
         this.variables = JSON.stringify(variablesObj, null, 2);
@@ -603,7 +616,7 @@ const app = createApp({
           this.editorManager.setVariablesValue(this.variables);
         }
       }
-      
+
       // Insert into the query editor
       if (this.editorManager && this.editorManager.queryEditor) {
         this.editorManager.setQueryValue(snippet);
@@ -622,30 +635,30 @@ const app = createApp({
       // Unwrap type to get the base type
       let baseType = type;
       let isList = false;
-      
+
       while (baseType && baseType.ofType) {
         if (baseType.kind === "LIST") {
           isList = true;
         }
         baseType = baseType.ofType;
       }
-      
+
       const typeName = baseType?.name || "String";
       const typeKind = baseType?.kind;
-      
+
       // Handle INPUT_OBJECT types by looking up their fields
       if (typeKind === "INPUT_OBJECT") {
-        const inputType = this.schemaTypes.find(t => t.name === typeName);
+        const inputType = this.schemaTypes.find((t) => t.name === typeName);
         if (inputType && inputType.inputFields) {
           const inputObj = {};
-          inputType.inputFields.forEach(field => {
+          inputType.inputFields.forEach((field) => {
             inputObj[field.name] = this.getExampleValue(field.type);
           });
           return isList ? [inputObj] : inputObj;
         }
         return isList ? [{}] : {};
       }
-      
+
       // Handle scalar types
       let scalarValue;
       switch (typeName) {
@@ -666,43 +679,48 @@ const app = createApp({
           scalarValue = "";
           break;
       }
-      
+
       return isList ? [scalarValue] : scalarValue;
     },
 
     getFieldsForType(type) {
       if (!type || !this.schema) return "    # Add fields here\n";
-      
+
       // Unwrap type to get the actual type name
       let actualType = type;
       while (actualType && actualType.ofType) {
         actualType = actualType.ofType;
       }
-      
+
       const typeName = actualType?.name;
       if (!typeName) return "    # Add fields here\n";
-      
+
       // Find the type in schema
-      const typeObj = this.schemaTypes.find(t => t.name === typeName);
+      const typeObj = this.schemaTypes.find((t) => t.name === typeName);
       if (!typeObj || !typeObj.fields) return "    # Add fields here\n";
-      
+
       // Get scalar fields (avoid nested objects to keep it simple)
-      const scalarFields = typeObj.fields.filter(f => {
+      const scalarFields = typeObj.fields.filter((f) => {
         const fieldType = this.getBaseType(f.type);
         return this.isScalarType(fieldType);
       });
-      
+
       if (scalarFields.length === 0) {
         // If no scalar fields, just add id if available, or a comment
-        const idField = typeObj.fields.find(f => f.name === 'id');
+        const idField = typeObj.fields.find((f) => f.name === "id");
         if (idField) {
           return "    id\n";
         }
         return "    # Add fields here\n";
       }
-      
+
       // Return up to 5 scalar fields
-      return scalarFields.slice(0, 5).map(f => `    ${f.name}`).join("\n") + "\n";
+      return (
+        scalarFields
+          .slice(0, 5)
+          .map((f) => `    ${f.name}`)
+          .join("\n") + "\n"
+      );
     },
 
     getBaseType(type) {
@@ -715,66 +733,68 @@ const app = createApp({
 
     isScalarType(type) {
       if (!type || !type.name) return false;
-      const scalarTypes = ['ID', 'String', 'Int', 'Float', 'Boolean'];
-      return scalarTypes.includes(type.name) || type.kind === 'SCALAR' || type.kind === 'ENUM';
+      const scalarTypes = ["ID", "String", "Int", "Float", "Boolean"];
+      return (
+        scalarTypes.includes(type.name) ||
+        type.kind === "SCALAR" ||
+        type.kind === "ENUM"
+      );
     },
 
     getReturnTypeFields(type) {
       if (!type || !this.schema) return [];
-      
+
       // Unwrap type to get the actual type name
       let actualType = type;
       while (actualType && actualType.ofType) {
         actualType = actualType.ofType;
       }
-      
+
       const typeName = actualType?.name;
       if (!typeName) return [];
-      
+
       // Find the type in schema
-      const typeObj = this.schemaTypes.find(t => t.name === typeName);
+      const typeObj = this.schemaTypes.find((t) => t.name === typeName);
       if (!typeObj || !typeObj.fields) return [];
-      
+
       // Return all fields (not just scalar ones, to show full structure)
       return typeObj.fields;
     },
 
     getObjectTypes() {
       if (!this.schema) return [];
-      return this.schemaTypes.filter(t => 
-        !t.name.startsWith('__') && 
-        t.kind === 'OBJECT' && 
-        t.name !== this.queryType?.name && 
-        t.name !== this.mutationType?.name
+      return this.schemaTypes.filter(
+        (t) =>
+          !t.name.startsWith("__") &&
+          t.kind === "OBJECT" &&
+          t.name !== this.queryType?.name &&
+          t.name !== this.mutationType?.name
       );
     },
 
     getInputTypes() {
       if (!this.schema) return [];
-      return this.schemaTypes.filter(t => 
-        !t.name.startsWith('__') && 
-        t.kind === 'INPUT_OBJECT'
+      return this.schemaTypes.filter(
+        (t) => !t.name.startsWith("__") && t.kind === "INPUT_OBJECT"
       );
     },
 
     getEnumTypes() {
       if (!this.schema) return [];
-      return this.schemaTypes.filter(t => 
-        !t.name.startsWith('__') && 
-        t.kind === 'ENUM'
+      return this.schemaTypes.filter(
+        (t) => !t.name.startsWith("__") && t.kind === "ENUM"
       );
     },
 
     getScalarTypes() {
       if (!this.schema) return [];
-      return this.schemaTypes.filter(t => 
-        !t.name.startsWith('__') && 
-        t.kind === 'SCALAR'
+      return this.schemaTypes.filter(
+        (t) => !t.name.startsWith("__") && t.kind === "SCALAR"
       );
     },
 
     handleLogClick(log) {
-      console.log('Log clicked:', log);
+      console.log("Log clicked:", log);
       // Could open a modal with log details if needed
     },
 

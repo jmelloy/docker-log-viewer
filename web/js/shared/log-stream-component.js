@@ -1,9 +1,9 @@
 /**
  * Shared Log Stream Component
- * 
+ *
  * A reusable Vue component for displaying streaming logs from Docker containers.
  * Can be used in both the main log viewer and GraphQL explorer.
- * 
+ *
  * Props:
  * - requestIdFilter: Filter logs by specific request_id (optional)
  * - containerFilter: Filter logs by container names (optional, array)
@@ -11,19 +11,19 @@
  * - maxLogs: Maximum number of logs to keep in memory (default: 1000)
  * - autoScroll: Auto-scroll to bottom when new logs arrive (default: true)
  * - compact: Use compact display mode (default: false)
- * 
+ *
  * Events:
  * - @log-clicked: Emitted when a log line is clicked with the log entry
  */
 
-import { API } from './api.js';
+import { API } from "./api.js";
 
 export function createLogStreamComponent() {
   const { createApp } = Vue;
 
   return {
-    name: 'LogStreamComponent',
-    
+    name: "LogStreamComponent",
+
     props: {
       requestIdFilter: {
         type: String,
@@ -35,7 +35,20 @@ export function createLogStreamComponent() {
       },
       levelFilter: {
         type: Array,
-        default: () => ['DBG', 'DEBUG', 'TRC', 'TRACE', 'INF', 'INFO', 'WRN', 'WARN', 'ERR', 'ERROR', 'FATAL', 'NONE'],
+        default: () => [
+          "DBG",
+          "DEBUG",
+          "TRC",
+          "TRACE",
+          "INF",
+          "INFO",
+          "WRN",
+          "WARN",
+          "ERR",
+          "ERROR",
+          "FATAL",
+          "NONE",
+        ],
       },
       maxLogs: {
         type: Number,
@@ -67,7 +80,7 @@ export function createLogStreamComponent() {
 
     computed: {
       filteredLogs() {
-        return this.logs.filter(log => {
+        return this.logs.filter((log) => {
           // Filter by request_id if specified
           if (this.requestIdFilter) {
             const logRequestId = log.entry?.fields?.request_id;
@@ -86,7 +99,7 @@ export function createLogStreamComponent() {
 
           // Filter by log level if specified
           if (this.levelFilter.length > 0) {
-            const level = log.entry?.level || 'NONE';
+            const level = log.entry?.level || "NONE";
             if (!this.levelFilter.includes(level)) {
               return false;
             }
@@ -97,11 +110,11 @@ export function createLogStreamComponent() {
       },
 
       statusColor() {
-        return this.wsConnected ? '#7ee787' : '#f85149';
+        return this.wsConnected ? "#7ee787" : "#f85149";
       },
 
       statusText() {
-        return this.wsConnected ? 'Connected' : 'Connecting...';
+        return this.wsConnected ? "Connected" : "Connecting...";
       },
 
       logCountText() {
@@ -143,8 +156,8 @@ export function createLogStreamComponent() {
     methods: {
       async loadContainers() {
         try {
-          const data = await API.get('/api/containers');
-          
+          const data = await API.get("/api/containers");
+
           if (Array.isArray(data)) {
             this.containers = data;
           } else {
@@ -153,16 +166,16 @@ export function createLogStreamComponent() {
 
           // Build container ID to name mapping
           this.containerIDNames = {};
-          this.containers.forEach(container => {
+          this.containers.forEach((container) => {
             this.containerIDNames[container.ID] = container.Name;
           });
         } catch (error) {
-          console.error('Failed to load containers:', error);
+          console.error("Failed to load containers:", error);
         }
       },
 
       connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${window.location.host}/api/ws`;
 
         this.ws = new WebSocket(wsUrl);
@@ -174,13 +187,13 @@ export function createLogStreamComponent() {
 
         this.ws.onmessage = (event) => {
           const message = JSON.parse(event.data);
-          if (message.type === 'log') {
+          if (message.type === "log") {
             this.handleNewLog(message.data);
-          } else if (message.type === 'logs') {
+          } else if (message.type === "logs") {
             this.handleNewLogs(message.data);
-          } else if (message.type === 'logs_initial') {
+          } else if (message.type === "logs_initial") {
             this.handleInitialLogs(message.data);
-          } else if (message.type === 'containers') {
+          } else if (message.type === "containers") {
             this.handleContainerUpdate(message.data);
           }
         };
@@ -191,34 +204,42 @@ export function createLogStreamComponent() {
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          console.error("WebSocket error:", error);
         };
       },
 
       sendFilterUpdate() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-          console.log('Cannot send filter update - WebSocket not connected');
+          console.log("Cannot send filter update - WebSocket not connected");
           return;
         }
 
         const traceFilters = [];
         if (this.requestIdFilter) {
-          traceFilters.push({ type: 'request_id', value: this.requestIdFilter });
+          traceFilters.push({
+            type: "request_id",
+            value: this.requestIdFilter,
+          });
         }
 
         const filter = {
-          selectedContainers: this.containerFilter.length > 0 ? this.containerFilter : this.containers.map(c => c.Name),
+          selectedContainers:
+            this.containerFilter.length > 0
+              ? this.containerFilter
+              : this.containers.map((c) => c.Name),
           selectedLevels: this.levelFilter,
-          searchQuery: '',
+          searchQuery: "",
           traceFilters: traceFilters,
         };
 
-        console.log('Sending filter update:', filter);
+        console.log("Sending filter update:", filter);
 
-        this.ws.send(JSON.stringify({
-          type: 'filter',
-          data: filter,
-        }));
+        this.ws.send(
+          JSON.stringify({
+            type: "filter",
+            data: filter,
+          })
+        );
       },
 
       handleNewLog(log) {
@@ -255,7 +276,7 @@ export function createLogStreamComponent() {
 
         // Update container ID to name mapping
         this.containerIDNames = {};
-        newContainers.forEach(container => {
+        newContainers.forEach((container) => {
           this.containerIDNames[container.ID] = container.Name;
         });
       },
@@ -272,21 +293,22 @@ export function createLogStreamComponent() {
       },
 
       onLogClick(log) {
-        this.$emit('log-clicked', log);
+        this.$emit("log-clicked", log);
       },
 
       formatFieldValue(value) {
-        if (typeof value !== 'string') {
+        if (typeof value !== "string") {
           return String(value);
         }
-        const shortValue = value.length > 100 ? value.substring(0, 100) + '...' : value;
+        const shortValue =
+          value.length > 100 ? value.substring(0, 100) + "..." : value;
         return shortValue;
       },
 
       isJsonField(value) {
-        if (typeof value !== 'string') return false;
+        if (typeof value !== "string") return false;
         const trimmed = value.trim();
-        return trimmed.startsWith('{') || trimmed.startsWith('[');
+        return trimmed.startsWith("{") || trimmed.startsWith("[");
       },
 
       clearLogs() {
