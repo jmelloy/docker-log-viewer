@@ -4,7 +4,9 @@
   "description": "Web frontend for Docker Log Viewer with GraphQL Explorer",
   "private": true,
   "scripts": {
-    "build": "esbuild js/codemirror-graphql-bundle.js --bundle --format=esm --outfile=lib/codemirror-graphql.js"
+    "build": "npm run build:codemirror && npm run build:highlight",
+    "build:codemirror": "esbuild js/codemirror-graphql-bundle.js --bundle --format=esm --outfile=lib/codemirror-graphql.js",
+    "build:highlight": "esbuild js/highlight-bundle.js --bundle --format=iife --global-name=hljsBundle --outfile=lib/highlight.js"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.12.0",
