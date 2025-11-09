@@ -11,7 +11,11 @@ import {
 } from "@codemirror/commands";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
-import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import {
+  syntaxHighlighting,
+  defaultHighlightStyle,
+} from "@codemirror/language";
+import { oneDark } from "@codemirror/theme-one-dark";
 import { graphql, updateSchema } from "cm6-graphql";
 import { buildSchema, buildClientSchema } from "graphql";
 
@@ -36,7 +40,7 @@ export function createGraphQLEditor(parent, options = {}) {
   // Create extensions array
   const extensions = [
     graphql(),
-    syntaxHighlighting(defaultHighlightStyle),
+    oneDark,
     history(),
     autocompletion(),
     keymap.of([

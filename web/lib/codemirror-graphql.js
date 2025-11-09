@@ -1517,8 +1517,8 @@ var EditorSelection = class _EditorSelection {
     return new _EditorSelection(ranges, mainIndex);
   }
 };
-function checkSelection(selection, docLength) {
-  for (let range of selection.ranges)
+function checkSelection(selection2, docLength) {
+  for (let range of selection2.ranges)
     if (range.to > docLength)
       throw new RangeError("Selection points outside of document");
 }
@@ -2076,25 +2076,25 @@ var StateEffect = class _StateEffect {
 StateEffect.reconfigure = /* @__PURE__ */ StateEffect.define();
 StateEffect.appendConfig = /* @__PURE__ */ StateEffect.define();
 var Transaction = class _Transaction {
-  constructor(startState, changes, selection, effects, annotations2, scrollIntoView3) {
+  constructor(startState, changes, selection2, effects, annotations2, scrollIntoView3) {
     this.startState = startState;
     this.changes = changes;
-    this.selection = selection;
+    this.selection = selection2;
     this.effects = effects;
     this.annotations = annotations2;
     this.scrollIntoView = scrollIntoView3;
     this._doc = null;
     this._state = null;
-    if (selection)
-      checkSelection(selection, changes.newLength);
+    if (selection2)
+      checkSelection(selection2, changes.newLength);
     if (!annotations2.some((a) => a.type == _Transaction.time))
       this.annotations = annotations2.concat(_Transaction.time.of(Date.now()));
   }
   /**
   @internal
   */
-  static create(startState, changes, selection, effects, annotations2, scrollIntoView3) {
-    return new _Transaction(startState, changes, selection, effects, annotations2, scrollIntoView3);
+  static create(startState, changes, selection2, effects, annotations2, scrollIntoView3) {
+    return new _Transaction(startState, changes, selection2, effects, annotations2, scrollIntoView3);
   }
   /**
   The new document produced by the transaction. Contrary to
@@ -2314,10 +2314,10 @@ function makeCategorizer(wordChars) {
   };
 }
 var EditorState = class _EditorState {
-  constructor(config, doc2, selection, values, computeSlot, tr) {
+  constructor(config, doc2, selection2, values, computeSlot, tr) {
     this.config = config;
     this.doc = doc2;
-    this.selection = selection;
+    this.selection = selection2;
     this.values = values;
     this.status = config.statusTemplate.slice();
     this.computeSlot = computeSlot;
@@ -2384,8 +2384,8 @@ var EditorState = class _EditorState {
     } else {
       startValues = tr.startState.values.slice();
     }
-    let selection = tr.startState.facet(allowMultipleSelections) ? tr.newSelection : tr.newSelection.asSingle();
-    new _EditorState(conf, tr.newDoc, selection, startValues, (state, slot) => slot.update(state, tr), tr);
+    let selection2 = tr.startState.facet(allowMultipleSelections) ? tr.newSelection : tr.newSelection.asSingle();
+    new _EditorState(conf, tr.newDoc, selection2, startValues, (state, slot) => slot.update(state, tr), tr);
   }
   /**
   Create a [transaction spec](https://codemirror.net/6/docs/ref/#state.TransactionSpec) that
@@ -2515,11 +2515,11 @@ var EditorState = class _EditorState {
   static create(config = {}) {
     let configuration = Configuration.resolve(config.extensions || [], /* @__PURE__ */ new Map());
     let doc2 = config.doc instanceof Text ? config.doc : Text.of((config.doc || "").split(configuration.staticFacet(_EditorState.lineSeparator) || DefaultSplit));
-    let selection = !config.selection ? EditorSelection.single(0) : config.selection instanceof EditorSelection ? config.selection : EditorSelection.single(config.selection.anchor, config.selection.head);
-    checkSelection(selection, doc2.length);
+    let selection2 = !config.selection ? EditorSelection.single(0) : config.selection instanceof EditorSelection ? config.selection : EditorSelection.single(config.selection.anchor, config.selection.head);
+    checkSelection(selection2, doc2.length);
     if (!configuration.staticFacet(allowMultipleSelections))
-      selection = selection.asSingle();
-    return new _EditorState(configuration, doc2, selection, configuration.dynamicSlots.map(() => null), (state, slot) => slot.create(state), null);
+      selection2 = selection2.asSingle();
+    return new _EditorState(configuration, doc2, selection2, configuration.dynamicSlots.map(() => null), (state, slot) => slot.create(state), null);
   }
   /**
   The size (in columns) of a tab in the document, determined by
@@ -2951,23 +2951,23 @@ var RangeSet = class _RangeSet {
   of the iteration.
   */
   static spans(sets, from, to, iterator, minPointSize = -1) {
-    let cursor = new SpanCursor(sets, null, minPointSize).goto(from), pos = from;
-    let openRanges = cursor.openStart;
+    let cursor2 = new SpanCursor(sets, null, minPointSize).goto(from), pos = from;
+    let openRanges = cursor2.openStart;
     for (; ; ) {
-      let curTo = Math.min(cursor.to, to);
-      if (cursor.point) {
-        let active = cursor.activeForPoint(cursor.to);
-        let openCount = cursor.pointFrom < from ? active.length + 1 : cursor.point.startSide < 0 ? active.length : Math.min(active.length, openRanges);
-        iterator.point(pos, curTo, cursor.point, active, openCount, cursor.pointRank);
-        openRanges = Math.min(cursor.openEnd(curTo), active.length);
+      let curTo = Math.min(cursor2.to, to);
+      if (cursor2.point) {
+        let active = cursor2.activeForPoint(cursor2.to);
+        let openCount = cursor2.pointFrom < from ? active.length + 1 : cursor2.point.startSide < 0 ? active.length : Math.min(active.length, openRanges);
+        iterator.point(pos, curTo, cursor2.point, active, openCount, cursor2.pointRank);
+        openRanges = Math.min(cursor2.openEnd(curTo), active.length);
       } else if (curTo > pos) {
-        iterator.span(pos, curTo, cursor.active, openRanges);
-        openRanges = cursor.openEnd(curTo);
+        iterator.span(pos, curTo, cursor2.active, openRanges);
+        openRanges = cursor2.openEnd(curTo);
       }
-      if (cursor.to > to)
-        return openRanges + (cursor.point && cursor.to > to ? 1 : 0);
-      pos = cursor.to;
-      cursor.next();
+      if (cursor2.to > to)
+        return openRanges + (cursor2.point && cursor2.to > to ? 1 : 0);
+      pos = cursor2.to;
+      cursor2.next();
     }
   }
   /**
@@ -3766,11 +3766,11 @@ function getSelection(root) {
 function contains(dom, node) {
   return node ? dom == node || dom.contains(node.nodeType != 1 ? node.parentNode : node) : false;
 }
-function hasSelection(dom, selection) {
-  if (!selection.anchorNode)
+function hasSelection(dom, selection2) {
+  if (!selection2.anchorNode)
     return false;
   try {
-    return contains(dom, selection.anchorNode);
+    return contains(dom, selection2.anchorNode);
   } catch (_) {
     return false;
   }
@@ -4050,9 +4050,9 @@ function clearAttributes(node) {
   while (node.attributes.length)
     node.removeAttributeNode(node.attributes[0]);
 }
-function atElementStart(doc2, selection) {
-  let node = selection.focusNode, offset = selection.focusOffset;
-  if (!node || selection.anchorNode != node || selection.anchorOffset != offset)
+function atElementStart(doc2, selection2) {
+  let node = selection2.focusNode, offset = selection2.focusOffset;
+  if (!node || selection2.anchorNode != node || selection2.anchorOffset != offset)
     return false;
   offset = Math.min(offset, maxOffset(node));
   for (; ; ) {
@@ -6352,7 +6352,7 @@ var DocView = class extends ContentView {
   }
   updateChildren(changes, oldLength, composition) {
     let ranges = composition ? composition.range.addToSet(changes.slice()) : changes;
-    let cursor = this.childCursor(oldLength);
+    let cursor2 = this.childCursor(oldLength);
     for (let i = ranges.length - 1; ; i--) {
       let next = i >= 0 ? ranges[i] : null;
       if (!next)
@@ -6378,8 +6378,8 @@ var DocView = class extends ContentView {
       } else {
         ({ content: content2, breakAtStart, openStart, openEnd } = ContentBuilder.build(this.view.state.doc, fromB, toB, this.decorations, this.dynamicDecorationMap));
       }
-      let { i: toI, off: toOff } = cursor.findPos(toA, 1);
-      let { i: fromI, off: fromOff } = cursor.findPos(fromA, -1);
+      let { i: toI, off: toOff } = cursor2.findPos(toA, 1);
+      let { i: fromI, off: fromOff } = cursor2.findPos(fromA, -1);
       replaceRange(this, fromI, fromOff, toI, toOff, content2, breakAtStart, openStart, openEnd);
     }
     if (composition)
@@ -6492,32 +6492,32 @@ var DocView = class extends ContentView {
   // If a zero-length widget is inserted next to the cursor during
   // composition, avoid moving it across it and disrupting the
   // composition.
-  suppressWidgetCursorChange(sel, cursor) {
-    return this.hasComposition && cursor.empty && isEquivalentPosition(sel.focusNode, sel.focusOffset, sel.anchorNode, sel.anchorOffset) && this.posFromDOM(sel.focusNode, sel.focusOffset) == cursor.head;
+  suppressWidgetCursorChange(sel, cursor2) {
+    return this.hasComposition && cursor2.empty && isEquivalentPosition(sel.focusNode, sel.focusOffset, sel.anchorNode, sel.anchorOffset) && this.posFromDOM(sel.focusNode, sel.focusOffset) == cursor2.head;
   }
   enforceCursorAssoc() {
     if (this.hasComposition)
       return;
-    let { view } = this, cursor = view.state.selection.main;
+    let { view } = this, cursor2 = view.state.selection.main;
     let sel = getSelection(view.root);
     let { anchorNode, anchorOffset } = view.observer.selectionRange;
-    if (!sel || !cursor.empty || !cursor.assoc || !sel.modify)
+    if (!sel || !cursor2.empty || !cursor2.assoc || !sel.modify)
       return;
-    let line = LineView.find(this, cursor.head);
+    let line = LineView.find(this, cursor2.head);
     if (!line)
       return;
     let lineStart = line.posAtStart;
-    if (cursor.head == lineStart || cursor.head == lineStart + line.length)
+    if (cursor2.head == lineStart || cursor2.head == lineStart + line.length)
       return;
-    let before = this.coordsAt(cursor.head, -1), after = this.coordsAt(cursor.head, 1);
+    let before = this.coordsAt(cursor2.head, -1), after = this.coordsAt(cursor2.head, 1);
     if (!before || !after || before.bottom > after.top)
       return;
-    let dom = this.domAtPos(cursor.head + cursor.assoc);
+    let dom = this.domAtPos(cursor2.head + cursor2.assoc);
     sel.collapse(dom.node, dom.offset);
-    sel.modify("move", cursor.assoc < 0 ? "forward" : "backward", "lineboundary");
+    sel.modify("move", cursor2.assoc < 0 ? "forward" : "backward", "lineboundary");
     view.observer.readSelectionRange();
     let newRange = view.observer.selectionRange;
-    if (view.docView.posFromDOM(newRange.anchorNode, newRange.anchorOffset) != cursor.from)
+    if (view.docView.posFromDOM(newRange.anchorNode, newRange.anchorOffset) != cursor2.from)
       sel.collapse(anchorNode, anchorOffset);
   }
   // If a position is in/near a block widget, move it to a nearby text
@@ -7849,10 +7849,10 @@ var MouseSelection = class {
       this.select(this.lastEvent);
   }
   select(event) {
-    let { view } = this, selection = skipAtomsForSelection(this.atoms, this.style.get(event, this.extend, this.multiple));
-    if (this.mustSelect || !selection.eq(view.state.selection, this.dragging === false))
+    let { view } = this, selection2 = skipAtomsForSelection(this.atoms, this.style.get(event, this.extend, this.multiple));
+    if (this.mustSelect || !selection2.eq(view.state.selection, this.dragging === false))
       this.view.dispatch({
-        selection,
+        selection: selection2,
         userEvent: "select.pointer"
       });
     this.mustSelect = false;
@@ -10082,10 +10082,10 @@ var DOMObserver = class {
   }
   readSelectionRange() {
     let { view } = this;
-    let selection = getSelection(view.root);
-    if (!selection)
+    let selection2 = getSelection(view.root);
+    if (!selection2)
       return false;
-    let range = browser.safari && view.root.nodeType == 11 && view.root.activeElement == this.dom && safariSelectionRangeHack(this.view, selection) || selection;
+    let range = browser.safari && view.root.nodeType == 11 && view.root.activeElement == this.dom && safariSelectionRangeHack(this.view, selection2) || selection2;
     if (!range || this.selectionRange.eq(range))
       return false;
     let local = hasSelection(this.dom, range);
@@ -10371,9 +10371,9 @@ function buildSelectionRangeFromRange(view, range) {
     [anchorNode, anchorOffset, focusNode, focusOffset] = [focusNode, focusOffset, anchorNode, anchorOffset];
   return { anchorNode, anchorOffset, focusNode, focusOffset };
 }
-function safariSelectionRangeHack(view, selection) {
-  if (selection.getComposedRanges) {
-    let range = selection.getComposedRanges(view.root)[0];
+function safariSelectionRangeHack(view, selection2) {
+  if (selection2.getComposedRanges) {
+    let range = selection2.getComposedRanges(view.root)[0];
     if (range)
       return buildSelectionRangeFromRange(view, range);
   }
@@ -12886,10 +12886,10 @@ var Tree = class _Tree {
   */
   cursorAt(pos, side = 0, mode = 0) {
     let scope = CachedNode.get(this) || this.topNode;
-    let cursor = new TreeCursor(scope);
-    cursor.moveTo(pos, side);
-    CachedNode.set(this, cursor._tree);
-    return cursor;
+    let cursor2 = new TreeCursor(scope);
+    cursor2.moveTo(pos, side);
+    CachedNode.set(this, cursor2._tree);
+    return cursor2;
   }
   /**
   Get a [syntax node](#common.SyntaxNode) object for the top of the
@@ -13860,14 +13860,14 @@ function hasChild(tree) {
 function buildTree(data) {
   var _a2;
   let { buffer, nodeSet, maxBufferLength = DefaultBufferLength, reused = [], minRepeatType = nodeSet.types.length } = data;
-  let cursor = Array.isArray(buffer) ? new FlatBufferCursor(buffer, buffer.length) : buffer;
+  let cursor2 = Array.isArray(buffer) ? new FlatBufferCursor(buffer, buffer.length) : buffer;
   let types2 = nodeSet.types;
   let contextHash = 0, lookAhead = 0;
   function takeNode(parentStart, minPos, children2, positions2, inRepeat, depth) {
-    let { id, start, end, size } = cursor;
+    let { id, start, end, size } = cursor2;
     let lookAheadAtStart = lookAhead, contextAtStart = contextHash;
     if (size < 0) {
-      cursor.next();
+      cursor2.next();
       if (size == -1) {
         let node2 = reused[id];
         children2.push(node2);
@@ -13885,27 +13885,27 @@ function buildTree(data) {
     }
     let type2 = types2[id], node, buffer2;
     let startPos = start - parentStart;
-    if (end - start <= maxBufferLength && (buffer2 = findBufferSize(cursor.pos - minPos, inRepeat))) {
+    if (end - start <= maxBufferLength && (buffer2 = findBufferSize(cursor2.pos - minPos, inRepeat))) {
       let data2 = new Uint16Array(buffer2.size - buffer2.skip);
-      let endPos = cursor.pos - buffer2.size, index = data2.length;
-      while (cursor.pos > endPos)
+      let endPos = cursor2.pos - buffer2.size, index = data2.length;
+      while (cursor2.pos > endPos)
         index = copyToBuffer(buffer2.start, data2, index);
       node = new TreeBuffer(data2, end - buffer2.start, nodeSet);
       startPos = buffer2.start - parentStart;
     } else {
-      let endPos = cursor.pos - size;
-      cursor.next();
+      let endPos = cursor2.pos - size;
+      cursor2.next();
       let localChildren = [], localPositions = [];
       let localInRepeat = id >= minRepeatType ? id : -1;
       let lastGroup = 0, lastEnd = end;
-      while (cursor.pos > endPos) {
-        if (localInRepeat >= 0 && cursor.id == localInRepeat && cursor.size >= 0) {
-          if (cursor.end <= lastEnd - maxBufferLength) {
-            makeRepeatLeaf(localChildren, localPositions, start, lastGroup, cursor.end, lastEnd, localInRepeat, lookAheadAtStart, contextAtStart);
+      while (cursor2.pos > endPos) {
+        if (localInRepeat >= 0 && cursor2.id == localInRepeat && cursor2.size >= 0) {
+          if (cursor2.end <= lastEnd - maxBufferLength) {
+            makeRepeatLeaf(localChildren, localPositions, start, lastGroup, cursor2.end, lastEnd, localInRepeat, lookAheadAtStart, contextAtStart);
             lastGroup = localChildren.length;
-            lastEnd = cursor.end;
+            lastEnd = cursor2.end;
           }
-          cursor.next();
+          cursor2.next();
         } else if (depth > 2500) {
           takeFlatNode(start, endPos, localChildren, localPositions);
         } else {
@@ -13929,10 +13929,10 @@ function buildTree(data) {
   function takeFlatNode(parentStart, minPos, children2, positions2) {
     let nodes = [];
     let nodeCount = 0, stopAt = -1;
-    while (cursor.pos > minPos) {
-      let { id, start, end, size } = cursor;
+    while (cursor2.pos > minPos) {
+      let { id, start, end, size } = cursor2;
       if (size > 4) {
-        cursor.next();
+        cursor2.next();
       } else if (stopAt > -1 && start < stopAt) {
         break;
       } else {
@@ -13940,7 +13940,7 @@ function buildTree(data) {
           stopAt = end - maxBufferLength;
         nodes.push(id, start, end);
         nodeCount++;
-        cursor.next();
+        cursor2.next();
       }
     }
     if (nodeCount) {
@@ -13989,7 +13989,7 @@ function buildTree(data) {
     return new Tree(type2, children2, positions2, length2, props);
   }
   function findBufferSize(maxSize, inRepeat) {
-    let fork = cursor.fork();
+    let fork = cursor2.fork();
     let size = 0, start = 0, skip = 0, minStart = fork.end - maxBufferLength;
     let result = { size: 0, start: 0, skip: 0 };
     scan: for (let minPos = fork.pos - maxSize; fork.pos > minPos; ) {
@@ -14032,13 +14032,13 @@ function buildTree(data) {
     return result.size > 4 ? result : void 0;
   }
   function copyToBuffer(bufferStart, buffer2, index) {
-    let { id, start, end, size } = cursor;
-    cursor.next();
+    let { id, start, end, size } = cursor2;
+    cursor2.next();
     if (size >= 0 && id < minRepeatType) {
       let startIndex = index;
       if (size > 4) {
-        let endPos = cursor.pos - (size - 4);
-        while (cursor.pos > endPos)
+        let endPos = cursor2.pos - (size - 4);
+        while (cursor2.pos > endPos)
           index = copyToBuffer(bufferStart, buffer2, index);
       }
       buffer2[--index] = startIndex;
@@ -14053,7 +14053,7 @@ function buildTree(data) {
     return index;
   }
   let children = [], positions = [];
-  while (cursor.pos > 0)
+  while (cursor2.pos > 0)
     takeNode(data.start || 0, data.bufferStart || 0, children, positions, -1, 0);
   let length = (_a2 = data.length) !== null && _a2 !== void 0 ? _a2 : children.length ? positions[0] + children[0].length : 0;
   return new Tree(types2[data.topID], children.reverse(), positions.reverse(), length);
@@ -14477,14 +14477,14 @@ var HighlightBuilder = class {
     if (to > this.at && this.class)
       this.span(this.at, to, this.class);
   }
-  highlightRange(cursor, from, to, inheritedClass, highlighters) {
-    let { type: type2, from: start, to: end } = cursor;
+  highlightRange(cursor2, from, to, inheritedClass, highlighters) {
+    let { type: type2, from: start, to: end } = cursor2;
     if (start >= to || end <= from)
       return;
     if (type2.isTop)
       highlighters = this.highlighters.filter((h) => !h.scope || h.scope(type2));
     let cls = inheritedClass;
-    let rule = getStyleTags(cursor) || Rule.empty;
+    let rule = getStyleTags(cursor2) || Rule.empty;
     let tagCls = highlightTags(highlighters, rule.tags);
     if (tagCls) {
       if (cls)
@@ -14496,20 +14496,20 @@ var HighlightBuilder = class {
     this.startSpan(Math.max(from, start), cls);
     if (rule.opaque)
       return;
-    let mounted = cursor.tree && cursor.tree.prop(NodeProp.mounted);
+    let mounted = cursor2.tree && cursor2.tree.prop(NodeProp.mounted);
     if (mounted && mounted.overlay) {
-      let inner = cursor.node.enter(mounted.overlay[0].from + start, 1);
+      let inner = cursor2.node.enter(mounted.overlay[0].from + start, 1);
       let innerHighlighters = this.highlighters.filter((h) => !h.scope || h.scope(mounted.tree.type));
-      let hasChild2 = cursor.firstChild();
+      let hasChild2 = cursor2.firstChild();
       for (let i = 0, pos = start; ; i++) {
         let next = i < mounted.overlay.length ? mounted.overlay[i] : null;
         let nextPos = next ? next.from + start : end;
         let rangeFrom2 = Math.max(from, pos), rangeTo2 = Math.min(to, nextPos);
         if (rangeFrom2 < rangeTo2 && hasChild2) {
-          while (cursor.from < rangeTo2) {
-            this.highlightRange(cursor, rangeFrom2, rangeTo2, inheritedClass, highlighters);
-            this.startSpan(Math.min(rangeTo2, cursor.to), cls);
-            if (cursor.to >= nextPos || !cursor.nextSibling())
+          while (cursor2.from < rangeTo2) {
+            this.highlightRange(cursor2, rangeFrom2, rangeTo2, inheritedClass, highlighters);
+            this.startSpan(Math.min(rangeTo2, cursor2.to), cls);
+            if (cursor2.to >= nextPos || !cursor2.nextSibling())
               break;
           }
         }
@@ -14522,19 +14522,19 @@ var HighlightBuilder = class {
         }
       }
       if (hasChild2)
-        cursor.parent();
-    } else if (cursor.firstChild()) {
+        cursor2.parent();
+    } else if (cursor2.firstChild()) {
       if (mounted)
         inheritedClass = "";
       do {
-        if (cursor.to <= from)
+        if (cursor2.to <= from)
           continue;
-        if (cursor.from >= to)
+        if (cursor2.from >= to)
           break;
-        this.highlightRange(cursor, from, to, inheritedClass, highlighters);
-        this.startSpan(Math.min(to, cursor.to), cls);
-      } while (cursor.nextSibling());
-      cursor.parent();
+        this.highlightRange(cursor2, from, to, inheritedClass, highlighters);
+        this.startSpan(Math.min(to, cursor2.to), cls);
+      } while (cursor2.nextSibling());
+      cursor2.parent();
     }
   }
 };
@@ -15971,18 +15971,18 @@ function matchBrackets(state, pos, dir, config = {}) {
 }
 function matchMarkedBrackets(_state, _pos, dir, token, handle, matching, brackets) {
   let parent = token.parent, firstToken = { from: handle.from, to: handle.to };
-  let depth = 0, cursor = parent === null || parent === void 0 ? void 0 : parent.cursor();
-  if (cursor && (dir < 0 ? cursor.childBefore(token.from) : cursor.childAfter(token.to)))
+  let depth = 0, cursor2 = parent === null || parent === void 0 ? void 0 : parent.cursor();
+  if (cursor2 && (dir < 0 ? cursor2.childBefore(token.from) : cursor2.childAfter(token.to)))
     do {
-      if (dir < 0 ? cursor.to <= token.from : cursor.from >= token.to) {
-        if (depth == 0 && matching.indexOf(cursor.type.name) > -1 && cursor.from < cursor.to) {
-          let endHandle = findHandle(cursor);
+      if (dir < 0 ? cursor2.to <= token.from : cursor2.from >= token.to) {
+        if (depth == 0 && matching.indexOf(cursor2.type.name) > -1 && cursor2.from < cursor2.to) {
+          let endHandle = findHandle(cursor2);
           return { start: firstToken, end: endHandle ? { from: endHandle.from, to: endHandle.to } : void 0, matched: true };
-        } else if (matchingNodes(cursor.type, dir, brackets)) {
+        } else if (matchingNodes(cursor2.type, dir, brackets)) {
           depth++;
-        } else if (matchingNodes(cursor.type, -dir, brackets)) {
+        } else if (matchingNodes(cursor2.type, -dir, brackets)) {
           if (depth == 0) {
-            let endHandle = findHandle(cursor);
+            let endHandle = findHandle(cursor2);
             return {
               start: firstToken,
               end: endHandle && endHandle.from < endHandle.to ? { from: endHandle.from, to: endHandle.to } : void 0,
@@ -15992,7 +15992,7 @@ function matchMarkedBrackets(_state, _pos, dir, token, handle, matching, bracket
           depth--;
         }
       }
-    } while (dir < 0 ? cursor.prevSibling() : cursor.nextSibling());
+    } while (dir < 0 ? cursor2.prevSibling() : cursor2.nextSibling());
   return { start: firstToken, matched: false };
 }
 function matchPlainBrackets(state, pos, dir, tree, tokenType, maxScanDistance, brackets) {
@@ -16318,14 +16318,14 @@ function history(config = {}) {
     })
   ];
 }
-function cmd(side, selection) {
+function cmd(side, selection2) {
   return function({ state, dispatch }) {
-    if (!selection && state.readOnly)
+    if (!selection2 && state.readOnly)
       return false;
     let historyState = state.field(historyField_, false);
     if (!historyState)
       return false;
-    let tr = historyState.pop(side, state, selection);
+    let tr = historyState.pop(side, state, selection2);
     if (!tr)
       return false;
     dispatch(tr);
@@ -16362,7 +16362,7 @@ var HistEvent = class _HistEvent {
   // This does not check `addToHistory` and such, it assumes the
   // transaction needs to be converted to an item. Returns null when
   // there are no changes or effects in the transaction.
-  static fromTransaction(tr, selection) {
+  static fromTransaction(tr, selection2) {
     let effects = none2;
     for (let invert of tr.startState.facet(invertedEffects)) {
       let result = invert(tr);
@@ -16371,7 +16371,7 @@ var HistEvent = class _HistEvent {
     }
     if (!effects.length && tr.changes.empty)
       return null;
-    return new _HistEvent(tr.changes.invert(tr.startState.doc), effects, void 0, selection || tr.startState.selection, none2);
+    return new _HistEvent(tr.changes.invert(tr.startState.doc), effects, void 0, selection2 || tr.startState.selection, none2);
   }
   static selection(selections) {
     return new _HistEvent(void 0, none2, void 0, void 0, selections);
@@ -16403,15 +16403,15 @@ function conc(a, b) {
 }
 var none2 = [];
 var MaxSelectionsPerEvent = 200;
-function addSelection(branch, selection) {
+function addSelection(branch, selection2) {
   if (!branch.length) {
-    return [HistEvent.selection([selection])];
+    return [HistEvent.selection([selection2])];
   } else {
     let lastEvent = branch[branch.length - 1];
     let sels = lastEvent.selectionsAfter.slice(Math.max(0, lastEvent.selectionsAfter.length - MaxSelectionsPerEvent));
-    if (sels.length && sels[sels.length - 1].eq(selection))
+    if (sels.length && sels[sels.length - 1].eq(selection2))
       return branch;
-    sels.push(selection);
+    sels.push(selection2);
     return updateBranch(branch, branch.length - 1, 1e9, lastEvent.setSelAfter(sels));
   }
 }
@@ -16468,11 +16468,11 @@ var HistoryState = class _HistoryState {
     }
     return new _HistoryState(done, none2, time, userEvent);
   }
-  addSelection(selection, time, userEvent, newGroupDelay) {
+  addSelection(selection2, time, userEvent, newGroupDelay) {
     let last = this.done.length ? this.done[this.done.length - 1].selectionsAfter : none2;
-    if (last.length > 0 && time - this.prevTime < newGroupDelay && userEvent == this.prevUserEvent && userEvent && /^select($|\.)/.test(userEvent) && eqSelectionShape(last[last.length - 1], selection))
+    if (last.length > 0 && time - this.prevTime < newGroupDelay && userEvent == this.prevUserEvent && userEvent && /^select($|\.)/.test(userEvent) && eqSelectionShape(last[last.length - 1], selection2))
       return this;
-    return new _HistoryState(addSelection(this.done, selection), this.undone, time, userEvent);
+    return new _HistoryState(addSelection(this.done, selection2), this.undone, time, userEvent);
   }
   addMapping(mapping) {
     return new _HistoryState(addMappingToBranch(this.done, mapping), addMappingToBranch(this.undone, mapping), this.prevTime, this.prevUserEvent);
@@ -16481,11 +16481,11 @@ var HistoryState = class _HistoryState {
     let branch = side == 0 ? this.done : this.undone;
     if (branch.length == 0)
       return null;
-    let event = branch[branch.length - 1], selection = event.selectionsAfter[0] || state.selection;
+    let event = branch[branch.length - 1], selection2 = event.selectionsAfter[0] || state.selection;
     if (onlySelection && event.selectionsAfter.length) {
       return state.update({
         selection: event.selectionsAfter[event.selectionsAfter.length - 1],
-        annotations: fromHistory.of({ side, rest: popSelection(branch), selection }),
+        annotations: fromHistory.of({ side, rest: popSelection(branch), selection: selection2 }),
         userEvent: side == 0 ? "select.undo" : "select.redo",
         scrollIntoView: true
       });
@@ -16499,7 +16499,7 @@ var HistoryState = class _HistoryState {
         changes: event.changes,
         selection: event.startSelection,
         effects: event.effects,
-        annotations: fromHistory.of({ side, rest, selection }),
+        annotations: fromHistory.of({ side, rest, selection: selection2 }),
         filter: false,
         userEvent: side == 0 ? "undo" : "redo",
         scrollIntoView: true
@@ -16518,14 +16518,14 @@ var historyKeymap = [
 function updateSel(sel, by) {
   return EditorSelection.create(sel.ranges.map(by), sel.mainIndex);
 }
-function setSel(state, selection) {
-  return state.update({ selection, scrollIntoView: true, userEvent: "select" });
+function setSel(state, selection2) {
+  return state.update({ selection: selection2, scrollIntoView: true, userEvent: "select" });
 }
 function moveSel({ state, dispatch }, how) {
-  let selection = updateSel(state.selection, how);
-  if (selection.eq(state.selection, true))
+  let selection2 = updateSel(state.selection, how);
+  if (selection2.eq(state.selection, true))
     return false;
-  dispatch(setSel(state, selection));
+  dispatch(setSel(state, selection2));
   return true;
 }
 function rangeEnd(range, forward) {
@@ -16606,10 +16606,10 @@ function pageInfo(view) {
 }
 function cursorByPage(view, forward) {
   let page = pageInfo(view);
-  let { state } = view, selection = updateSel(state.selection, (range) => {
+  let { state } = view, selection2 = updateSel(state.selection, (range) => {
     return range.empty ? view.moveVertically(range, forward, page.height) : rangeEnd(range, forward);
   });
-  if (selection.eq(state.selection))
+  if (selection2.eq(state.selection))
     return false;
   let effect;
   if (page.selfScroll) {
@@ -16617,9 +16617,9 @@ function cursorByPage(view, forward) {
     let scrollRect = view.scrollDOM.getBoundingClientRect();
     let scrollTop = scrollRect.top + page.marginTop, scrollBottom = scrollRect.bottom - page.marginBottom;
     if (startPos && startPos.top > scrollTop && startPos.bottom < scrollBottom)
-      effect = EditorView.scrollIntoView(selection.main.head, { y: "start", yMargin: startPos.top - scrollTop });
+      effect = EditorView.scrollIntoView(selection2.main.head, { y: "start", yMargin: startPos.top - scrollTop });
   }
-  view.dispatch(setSel(state, selection), { effects: effect });
+  view.dispatch(setSel(state, selection2), { effects: effect });
   return true;
 }
 var cursorPageUp = (view) => cursorByPage(view, false);
@@ -16642,7 +16642,7 @@ var cursorLineBoundaryRight = (view) => moveSel(view, (range) => moveByLineBound
 var cursorLineStart = (view) => moveSel(view, (range) => EditorSelection.cursor(view.lineBlockAt(range.head).from, 1));
 var cursorLineEnd = (view) => moveSel(view, (range) => EditorSelection.cursor(view.lineBlockAt(range.head).to, -1));
 function toMatchingBracket(state, dispatch, extend) {
-  let found = false, selection = updateSel(state.selection, (range) => {
+  let found = false, selection2 = updateSel(state.selection, (range) => {
     let matching = matchBrackets(state, range.head, -1) || matchBrackets(state, range.head, 1) || range.head > 0 && matchBrackets(state, range.head - 1, 1) || range.head < state.doc.length && matchBrackets(state, range.head + 1, -1);
     if (!matching || !matching.end)
       return range;
@@ -16652,18 +16652,18 @@ function toMatchingBracket(state, dispatch, extend) {
   });
   if (!found)
     return false;
-  dispatch(setSel(state, selection));
+  dispatch(setSel(state, selection2));
   return true;
 }
 var cursorMatchingBracket = ({ state, dispatch }) => toMatchingBracket(state, dispatch, false);
 function extendSel(target, how) {
-  let selection = updateSel(target.state.selection, (range) => {
+  let selection2 = updateSel(target.state.selection, (range) => {
     let head = how(range);
     return EditorSelection.range(range.anchor, head.head, head.goalColumn, head.bidiLevel || void 0);
   });
-  if (selection.eq(target.state.selection))
+  if (selection2.eq(target.state.selection))
     return false;
-  target.dispatch(setSel(target.state, selection));
+  target.dispatch(setSel(target.state, selection2));
   return true;
 }
 function selectByChar(view, forward) {
@@ -16720,7 +16720,7 @@ var selectLine = ({ state, dispatch }) => {
   return true;
 };
 var selectParentSyntax = ({ state, dispatch }) => {
-  let selection = updateSel(state.selection, (range) => {
+  let selection2 = updateSel(state.selection, (range) => {
     let tree = syntaxTree(state), stack = tree.resolveStack(range.from, 1);
     if (range.empty) {
       let stackBefore = tree.resolveStack(range.from, -1);
@@ -16734,9 +16734,9 @@ var selectParentSyntax = ({ state, dispatch }) => {
     }
     return range;
   });
-  if (selection.eq(state.selection))
+  if (selection2.eq(state.selection))
     return false;
-  dispatch(setSel(state, selection));
+  dispatch(setSel(state, selection2));
   return true;
 };
 function addCursorVertically(view, forward) {
@@ -16765,14 +16765,14 @@ function addCursorVertically(view, forward) {
 var addCursorAbove = (view) => addCursorVertically(view, false);
 var addCursorBelow = (view) => addCursorVertically(view, true);
 var simplifySelection = ({ state, dispatch }) => {
-  let cur2 = state.selection, selection = null;
+  let cur2 = state.selection, selection2 = null;
   if (cur2.ranges.length > 1)
-    selection = EditorSelection.create([cur2.main]);
+    selection2 = EditorSelection.create([cur2.main]);
   else if (!cur2.main.empty)
-    selection = EditorSelection.create([EditorSelection.cursor(cur2.main.head)]);
-  if (!selection)
+    selection2 = EditorSelection.create([EditorSelection.cursor(cur2.main.head)]);
+  if (!selection2)
     return false;
-  dispatch(setSel(state, selection));
+  dispatch(setSel(state, selection2));
   return true;
 };
 function deleteBy(target, by) {
@@ -16974,7 +16974,7 @@ var deleteLine = (view) => {
       to++;
     return { from, to };
   }));
-  let selection = updateSel(state.selection, (range) => {
+  let selection2 = updateSel(state.selection, (range) => {
     let dist2 = void 0;
     if (view.lineWrapping) {
       let block2 = view.lineBlockAt(range.head), pos = view.coordsAtPos(range.head, range.assoc || 1);
@@ -16983,7 +16983,7 @@ var deleteLine = (view) => {
     }
     return view.moveVertically(range, true, dist2);
   }).map(changes);
-  view.dispatch({ changes, selection, scrollIntoView: true, userEvent: "delete.line" });
+  view.dispatch({ changes, selection: selection2, scrollIntoView: true, userEvent: "delete.line" });
   return true;
 };
 function isBetweenBrackets(state, pos) {
@@ -19052,13 +19052,13 @@ var LintPanel = class _LintPanel {
     if (this.selectedIndex < 0)
       return;
     let field = this.view.state.field(lintState);
-    let selection = findDiagnostic(field.diagnostics, this.items[selectedIndex].diagnostic);
-    if (!selection)
+    let selection2 = findDiagnostic(field.diagnostics, this.items[selectedIndex].diagnostic);
+    if (!selection2)
       return;
     this.view.dispatch({
-      selection: { anchor: selection.from, head: selection.to },
+      selection: { anchor: selection2.from, head: selection2.to },
       scrollIntoView: true,
-      effects: movePanelSelection.of(selection)
+      effects: movePanelSelection.of(selection2)
     });
   }
   static open(view) {
@@ -19187,6 +19187,150 @@ var lintExtensions = [
   /* @__PURE__ */ hoverTooltip(lintTooltip, { hideOn: hideTooltip }),
   baseTheme3
 ];
+
+// node_modules/@codemirror/theme-one-dark/dist/index.js
+var chalky = "#e5c07b";
+var coral = "#e06c75";
+var cyan = "#56b6c2";
+var invalid = "#ffffff";
+var ivory = "#abb2bf";
+var stone = "#7d8799";
+var malibu = "#61afef";
+var sage = "#98c379";
+var whiskey = "#d19a66";
+var violet = "#c678dd";
+var darkBackground = "#21252b";
+var highlightBackground = "#2c313a";
+var background = "#282c34";
+var tooltipBackground = "#353a42";
+var selection = "#3E4451";
+var cursor = "#528bff";
+var oneDarkTheme = /* @__PURE__ */ EditorView.theme({
+  "&": {
+    color: ivory,
+    backgroundColor: background
+  },
+  ".cm-content": {
+    caretColor: cursor
+  },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: cursor },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": { backgroundColor: selection },
+  ".cm-panels": { backgroundColor: darkBackground, color: ivory },
+  ".cm-panels.cm-panels-top": { borderBottom: "2px solid black" },
+  ".cm-panels.cm-panels-bottom": { borderTop: "2px solid black" },
+  ".cm-searchMatch": {
+    backgroundColor: "#72a1ff59",
+    outline: "1px solid #457dff"
+  },
+  ".cm-searchMatch.cm-searchMatch-selected": {
+    backgroundColor: "#6199ff2f"
+  },
+  ".cm-activeLine": { backgroundColor: "#6699ff0b" },
+  ".cm-selectionMatch": { backgroundColor: "#aafe661a" },
+  "&.cm-focused .cm-matchingBracket, &.cm-focused .cm-nonmatchingBracket": {
+    backgroundColor: "#bad0f847"
+  },
+  ".cm-gutters": {
+    backgroundColor: background,
+    color: stone,
+    border: "none"
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: highlightBackground
+  },
+  ".cm-foldPlaceholder": {
+    backgroundColor: "transparent",
+    border: "none",
+    color: "#ddd"
+  },
+  ".cm-tooltip": {
+    border: "none",
+    backgroundColor: tooltipBackground
+  },
+  ".cm-tooltip .cm-tooltip-arrow:before": {
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent"
+  },
+  ".cm-tooltip .cm-tooltip-arrow:after": {
+    borderTopColor: tooltipBackground,
+    borderBottomColor: tooltipBackground
+  },
+  ".cm-tooltip-autocomplete": {
+    "& > ul > li[aria-selected]": {
+      backgroundColor: highlightBackground,
+      color: ivory
+    }
+  }
+}, { dark: true });
+var oneDarkHighlightStyle = /* @__PURE__ */ HighlightStyle.define([
+  {
+    tag: tags.keyword,
+    color: violet
+  },
+  {
+    tag: [tags.name, tags.deleted, tags.character, tags.propertyName, tags.macroName],
+    color: coral
+  },
+  {
+    tag: [/* @__PURE__ */ tags.function(tags.variableName), tags.labelName],
+    color: malibu
+  },
+  {
+    tag: [tags.color, /* @__PURE__ */ tags.constant(tags.name), /* @__PURE__ */ tags.standard(tags.name)],
+    color: whiskey
+  },
+  {
+    tag: [/* @__PURE__ */ tags.definition(tags.name), tags.separator],
+    color: ivory
+  },
+  {
+    tag: [tags.typeName, tags.className, tags.number, tags.changed, tags.annotation, tags.modifier, tags.self, tags.namespace],
+    color: chalky
+  },
+  {
+    tag: [tags.operator, tags.operatorKeyword, tags.url, tags.escape, tags.regexp, tags.link, /* @__PURE__ */ tags.special(tags.string)],
+    color: cyan
+  },
+  {
+    tag: [tags.meta, tags.comment],
+    color: stone
+  },
+  {
+    tag: tags.strong,
+    fontWeight: "bold"
+  },
+  {
+    tag: tags.emphasis,
+    fontStyle: "italic"
+  },
+  {
+    tag: tags.strikethrough,
+    textDecoration: "line-through"
+  },
+  {
+    tag: tags.link,
+    color: stone,
+    textDecoration: "underline"
+  },
+  {
+    tag: tags.heading,
+    fontWeight: "bold",
+    color: coral
+  },
+  {
+    tag: [tags.atom, tags.bool, /* @__PURE__ */ tags.special(tags.variableName)],
+    color: whiskey
+  },
+  {
+    tag: [tags.processingInstruction, tags.string, tags.inserted],
+    color: sage
+  },
+  {
+    tag: tags.invalid,
+    color: invalid
+  }
+]);
+var oneDark = [oneDarkTheme, /* @__PURE__ */ syntaxHighlighting(oneDarkHighlightStyle)];
 
 // node_modules/graphql/jsutils/devAssert.mjs
 function devAssert(condition, message) {
@@ -26336,31 +26480,31 @@ function getReferencedFieldsAndFragmentNames(context, cachedFieldsAndFragmentNam
   );
 }
 function _collectFieldsAndFragmentNames(context, parentType, selectionSet, nodeAndDefs, fragmentNames) {
-  for (const selection of selectionSet.selections) {
-    switch (selection.kind) {
+  for (const selection2 of selectionSet.selections) {
+    switch (selection2.kind) {
       case Kind.FIELD: {
-        const fieldName = selection.name.value;
+        const fieldName = selection2.name.value;
         let fieldDef;
         if (isObjectType(parentType) || isInterfaceType(parentType)) {
           fieldDef = parentType.getFields()[fieldName];
         }
-        const responseName = selection.alias ? selection.alias.value : fieldName;
+        const responseName = selection2.alias ? selection2.alias.value : fieldName;
         if (!nodeAndDefs[responseName]) {
           nodeAndDefs[responseName] = [];
         }
-        nodeAndDefs[responseName].push([parentType, selection, fieldDef]);
+        nodeAndDefs[responseName].push([parentType, selection2, fieldDef]);
         break;
       }
       case Kind.FRAGMENT_SPREAD:
-        fragmentNames[selection.name.value] = true;
+        fragmentNames[selection2.name.value] = true;
         break;
       case Kind.INLINE_FRAGMENT: {
-        const typeCondition = selection.typeCondition;
+        const typeCondition = selection2.typeCondition;
         const inlineFragmentType = typeCondition ? typeFromAST(context.getSchema(), typeCondition) : parentType;
         _collectFieldsAndFragmentNames(
           context,
           inlineFragmentType,
-          selection.selectionSet,
+          selection2.selectionSet,
           nodeAndDefs,
           fragmentNames
         );
@@ -26896,23 +27040,23 @@ function collectFields(schema, fragments, variableValues, runtimeType, selection
   return fields;
 }
 function collectFieldsImpl(schema, fragments, variableValues, runtimeType, selectionSet, fields, visitedFragmentNames) {
-  for (const selection of selectionSet.selections) {
-    switch (selection.kind) {
+  for (const selection2 of selectionSet.selections) {
+    switch (selection2.kind) {
       case Kind.FIELD: {
-        if (!shouldIncludeNode(variableValues, selection)) {
+        if (!shouldIncludeNode(variableValues, selection2)) {
           continue;
         }
-        const name3 = getFieldEntryKey(selection);
+        const name3 = getFieldEntryKey(selection2);
         const fieldList = fields.get(name3);
         if (fieldList !== void 0) {
-          fieldList.push(selection);
+          fieldList.push(selection2);
         } else {
-          fields.set(name3, [selection]);
+          fields.set(name3, [selection2]);
         }
         break;
       }
       case Kind.INLINE_FRAGMENT: {
-        if (!shouldIncludeNode(variableValues, selection) || !doesFragmentConditionMatch(schema, selection, runtimeType)) {
+        if (!shouldIncludeNode(variableValues, selection2) || !doesFragmentConditionMatch(schema, selection2, runtimeType)) {
           continue;
         }
         collectFieldsImpl(
@@ -26920,15 +27064,15 @@ function collectFieldsImpl(schema, fragments, variableValues, runtimeType, selec
           fragments,
           variableValues,
           runtimeType,
-          selection.selectionSet,
+          selection2.selectionSet,
           fields,
           visitedFragmentNames
         );
         break;
       }
       case Kind.FRAGMENT_SPREAD: {
-        const fragName = selection.name.value;
-        if (visitedFragmentNames.has(fragName) || !shouldIncludeNode(variableValues, selection)) {
+        const fragName = selection2.name.value;
+        if (visitedFragmentNames.has(fragName) || !shouldIncludeNode(variableValues, selection2)) {
           continue;
         }
         visitedFragmentNames.add(fragName);
@@ -27848,11 +27992,11 @@ var ASTValidationContext = class {
       const setsToVisit = [node];
       let set;
       while (set = setsToVisit.pop()) {
-        for (const selection of set.selections) {
-          if (selection.kind === Kind.FRAGMENT_SPREAD) {
-            spreads.push(selection);
-          } else if (selection.selectionSet) {
-            setsToVisit.push(selection.selectionSet);
+        for (const selection2 of set.selections) {
+          if (selection2.kind === Kind.FRAGMENT_SPREAD) {
+            spreads.push(selection2);
+          } else if (selection2.selectionSet) {
+            setsToVisit.push(selection2.selectionSet);
           }
         }
       }
@@ -30834,12 +30978,12 @@ function getDocumentMode(documentText, uri) {
   }
   return getParsedMode(documentText);
 }
-function getTokenAtPosition(queryText, cursor, offset = 0) {
+function getTokenAtPosition(queryText, cursor2, offset = 0) {
   let styleAtCursor = null;
   let stateAtCursor = null;
   let stringAtCursor = null;
   const token = runOnlineParser(queryText, (stream, state, style, index) => {
-    if (index !== cursor.line || stream.getCurrentPosition() + offset < cursor.character + 1) {
+    if (index !== cursor2.line || stream.getCurrentPosition() + offset < cursor2.character + 1) {
       return;
     }
     styleAtCursor = style;
@@ -30855,8 +30999,8 @@ function getTokenAtPosition(queryText, cursor, offset = 0) {
     style: styleAtCursor || token.style
   };
 }
-function getContextAtPosition(queryText, cursor, schema, contextToken, options) {
-  const token = contextToken || getTokenAtPosition(queryText, cursor, 1);
+function getContextAtPosition(queryText, cursor2, schema, contextToken, options) {
+  const token = contextToken || getTokenAtPosition(queryText, cursor2, 1);
   if (!token) {
     return null;
   }
@@ -31154,10 +31298,10 @@ var collectFragmentDefs = (op) => {
   }
   return externalFragments;
 };
-function getAutocompleteSuggestions(schema, queryText, cursor, contextToken, fragmentDefs, options) {
+function getAutocompleteSuggestions(schema, queryText, cursor2, contextToken, fragmentDefs, options) {
   var _a2;
   const opts = Object.assign(Object.assign({}, options), { schema });
-  const context = getContextAtPosition(queryText, cursor, schema, contextToken, options);
+  const context = getContextAtPosition(queryText, cursor2, schema, contextToken, options);
   if (!context) {
     return [];
   }
@@ -32778,24 +32922,24 @@ function overrides(token, prev, tableData, tableOffset) {
 var verbose = typeof process != "undefined" && process.env && /\bparse\b/.test(process.env.LOG);
 var stackIDs = null;
 function cutAt(tree, pos, side) {
-  let cursor = tree.cursor(IterMode.IncludeAnonymous);
-  cursor.moveTo(pos);
+  let cursor2 = tree.cursor(IterMode.IncludeAnonymous);
+  cursor2.moveTo(pos);
   for (; ; ) {
-    if (!(side < 0 ? cursor.childBefore(pos) : cursor.childAfter(pos)))
+    if (!(side < 0 ? cursor2.childBefore(pos) : cursor2.childAfter(pos)))
       for (; ; ) {
-        if ((side < 0 ? cursor.to < pos : cursor.from > pos) && !cursor.type.isError)
+        if ((side < 0 ? cursor2.to < pos : cursor2.from > pos) && !cursor2.type.isError)
           return side < 0 ? Math.max(0, Math.min(
-            cursor.to - 1,
+            cursor2.to - 1,
             pos - 25
             /* Lookahead.Margin */
           )) : Math.min(tree.length, Math.max(
-            cursor.from + 1,
+            cursor2.from + 1,
             pos + 25
             /* Lookahead.Margin */
           ));
-        if (side < 0 ? cursor.prevSibling() : cursor.nextSibling())
+        if (side < 0 ? cursor2.prevSibling() : cursor2.nextSibling())
           break;
-        if (!cursor.parent())
+        if (!cursor2.parent())
           return side < 0 ? 0 : tree.length;
       }
   }
@@ -33882,7 +34026,7 @@ function createGraphQLEditor(parent, options = {}) {
   } = options;
   const extensions = [
     graphql(),
-    syntaxHighlighting(defaultHighlightStyle),
+    oneDark,
     history(),
     autocompletion(),
     keymap.of([
