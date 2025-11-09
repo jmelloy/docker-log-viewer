@@ -130,15 +130,15 @@ const app = createApp({
   methods: {
     applySyntaxHighlighting() {
       // Only apply if hljs is available
-      if (typeof hljs === 'undefined') return;
+      if (typeof hljs === "undefined") return;
 
       // Highlight SQL queries in analyzer
-      document.querySelectorAll('.query-text-compact').forEach((block) => {
-        if (!block.classList.contains('hljs')) {
+      document.querySelectorAll(".query-text-compact").forEach((block) => {
+        if (!block.classList.contains("hljs")) {
           const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: 'sql' });
+          const highlighted = hljs.highlight(text, { language: "sql" });
           block.innerHTML = highlighted.value;
-          block.classList.add('hljs');
+          block.classList.add("hljs");
         }
       });
     },

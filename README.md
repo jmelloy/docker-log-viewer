@@ -104,6 +104,47 @@ See [cmd/analyze/README.md](cmd/analyze/README.md) for full documentation.
 - Docker daemon running
 - PostgreSQL (optional, for EXPLAIN feature)
 
+## Development
+
+### Code Formatting and Linting
+
+This project uses `gofmt` for Go code, and `prettier` and `eslint` for JavaScript/HTML/CSS.
+
+```bash
+# Format all code (Go, JS, HTML, CSS, JSON)
+make format
+
+# Check formatting without modifying files
+make format-check
+
+# Lint JavaScript code
+make lint
+
+# Lint and auto-fix JavaScript code
+make lint-fix
+
+# Build the project
+make build
+
+# Run tests
+make test
+```
+
+**Manual commands:**
+
+```bash
+# Go formatting
+gofmt -w .
+gofmt -l .  # check only
+
+# JavaScript/HTML/CSS formatting (in web directory)
+cd web
+npm run format       # format all files
+npm run format:check # check only
+npm run lint         # lint JavaScript
+npm run lint:fix     # lint and auto-fix
+```
+
 ## Documentation
 
 - [AGENTS.md](AGENTS.md) - Developer guide

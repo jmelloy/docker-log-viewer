@@ -1,0 +1,4 @@
+# Ignore generated files and dependencies
+node_modules/
+lib/
+*.min.js
