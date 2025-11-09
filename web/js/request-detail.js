@@ -1,6 +1,7 @@
 import { createNavigation } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 import { formatSQL } from "./utils.js";
+import { createLogStreamComponent } from "./shared/log-stream-component.js";
 
 const { createApp } = Vue;
 
@@ -23,6 +24,8 @@ const app = createApp({
         graphqlVariables: {},
       },
       servers: [],
+      showLiveLogStream: false, // Toggle between saved logs and live stream
+      refreshTimer: null, // Timer for auto-refreshing recent requests
     };
   },
 
@@ -105,6 +108,14 @@ const app = createApp({
       } catch (e) {
         return this.requestDetail.execution.responseBody;
       }
+    },
+
+    // Calculate the age of the request in minutes
+    requestAgeMinutes() {
+      if (!this.requestDetail?.execution.executedAt) return Infinity;
+      const executedAt = new Date(this.requestDetail.execution.executedAt);
+      const now = new Date();
+      return (now - executedAt) / 1000 / 60; // Convert milliseconds to minutes
     },
 
     sqlAnalysisData() {
@@ -211,6 +222,14 @@ const app = createApp({
     });
   },
 
+  beforeUnmount() {
+    // Clean up refresh timer when component is destroyed
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  },
+
   methods: {
     applySyntaxHighlighting() {
       // Only apply if hljs is available
@@ -261,11 +280,50 @@ const app = createApp({
       try {
         this.requestDetail = await API.get(`/api/executions/${requestId}`);
         this.loading = false;
+
+        // Default to live stream if request is less than 3 minutes old
+        const ageMinutes = this.requestAgeMinutes;
+        if (ageMinutes < 3) {
+          this.showLiveLogStream = true;
+          console.log(`Request is ${ageMinutes.toFixed(1)} minutes old - defaulting to live stream`);
+        }
+
+        // Set up auto-refresh timer if request is less than 1 minute old
+        if (ageMinutes < 1) {
+          console.log(`Request is ${ageMinutes.toFixed(1)} minutes old - setting up 30s refresh timer`);
+          this.setupRefreshTimer(requestId);
+        }
       } catch (error) {
         console.error("Failed to load request detail:", error);
         this.error = error.message;
         this.loading = false;
       }
+    },
+
+    setupRefreshTimer(requestId) {
+      // Clear any existing timer
+      if (this.refreshTimer) {
+        clearTimeout(this.refreshTimer);
+      }
+
+      // Set up new timer to refresh in 30 seconds
+      this.refreshTimer = setTimeout(async () => {
+        console.log('Auto-refreshing request details...');
+        try {
+          this.requestDetail = await API.get(`/api/executions/${requestId}`);
+          
+          // Check if we should continue refreshing
+          const ageMinutes = this.requestAgeMinutes;
+          if (ageMinutes < 1) {
+            // Still less than 1 minute old, refresh again
+            this.setupRefreshTimer(requestId);
+          } else {
+            console.log('Request is now over 1 minute old - stopping auto-refresh');
+          }
+        } catch (error) {
+          console.error('Failed to auto-refresh request details:', error);
+        }
+      }, 30000); // 30 seconds
     },
 
     goBack() {
@@ -694,6 +752,10 @@ const app = createApp({
         alert(`Failed to execute request: ${error.message}`);
       }
     },
+
+    toggleLogStream() {
+      this.showLiveLogStream = !this.showLiveLogStream;
+    },
   },
 
   template: `
@@ -959,10 +1021,21 @@ const app = createApp({
 
             <div class="modal-section">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <h4 style="margin: 0;">Logs (<span>{{ filteredRequestLogs.length }}</span>) <span v-if="requestDetail.logs.length > filteredRequestLogs.length" style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span></h4>
-                <a v-if="requestViewerLink" :href="requestViewerLink" target="_blank" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none;">View in Log Viewer →</a>
+                <h4 style="margin: 0;">
+                  Logs 
+                  <span v-if="!showLiveLogStream">(<span>{{ filteredRequestLogs.length }}</span>) <span v-if="requestDetail.logs.length > filteredRequestLogs.length" style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span></span>
+                  <span v-else style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">(Live Stream)</span>
+                </h4>
+                <div style="display: flex; gap: 0.5rem;">
+                  <button @click="toggleLogStream" class="btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">
+                    {{ showLiveLogStream ? '📋 Show Saved' : '📡 Show Live' }}
+                  </button>
+                  <a v-if="requestViewerLink" :href="requestViewerLink" target="_blank" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none;">View in Log Viewer →</a>
+                </div>
               </div>
-              <div class="logs-list">
+              
+              <!-- Saved Logs View -->
+              <div v-if="!showLiveLogStream" class="logs-list">
                 <p v-if="filteredRequestLogs.length === 0" style="color: #6c757d;">No logs captured (or all logs are TRACE level)</p>
                 <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-entry">
                   <div class="log-entry-header">
@@ -972,6 +1045,17 @@ const app = createApp({
                   <div class="log-message">{{ log.message || log.rawLog }}</div>
                 </div>
               </div>
+
+              <!-- Live Log Stream -->
+              <log-stream 
+                v-else
+                :request-id-filter="requestDetail.execution.requestIdHeader"
+                :max-logs="1000"
+                :auto-scroll="true"
+                :compact="false"
+                :show-container="true"
+              />
+            </div>
             </div>
           </div>
         </main>
@@ -1133,5 +1217,6 @@ const app = createApp({
 // Register components
 app.component("app-nav", createNavigation("request-detail"));
 app.component("pev2", pev2.Plan);
+app.component("log-stream", createLogStreamComponent());
 
 app.mount("#app");
