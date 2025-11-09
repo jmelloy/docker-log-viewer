@@ -600,7 +600,6 @@ const app = createApp({
 
   template,
 });
-});
 
 app.component("app-header", createAppHeader("requests"));
 

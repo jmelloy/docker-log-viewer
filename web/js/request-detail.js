@@ -390,8 +390,7 @@ const app = createApp({
               planQuery: query,
             };
           },
-          template:
-            '<pev2 :plan-source="planSource" :plan-query="planQuery"></pev2>',
+          template: pev2Template,
         });
 
         this.pev2App.component("pev2", pev2.Plan);
@@ -762,3 +761,12 @@ const app = createApp({
     },
   },
 
+
+  template: mainTemplate,
+});
+
+app.component("app-header", createAppHeader("request-detail"));
+app.component("pev2", pev2.Plan);
+app.component("log-stream", createLogStreamComponent());
+
+app.mount("#app");
