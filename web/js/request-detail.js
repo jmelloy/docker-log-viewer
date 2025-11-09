@@ -1,6 +1,7 @@
 import { createNavigation } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 import { formatSQL } from "./utils.js";
+import { createLogStreamComponent } from "./shared/log-stream-component.js";
 
 const { createApp } = Vue;
 
@@ -23,6 +24,7 @@ const app = createApp({
         graphqlVariables: {},
       },
       servers: [],
+      showLiveLogStream: false, // Toggle between saved logs and live stream
     };
   },
 
@@ -694,6 +696,10 @@ const app = createApp({
         alert(`Failed to execute request: ${error.message}`);
       }
     },
+
+    toggleLogStream() {
+      this.showLiveLogStream = !this.showLiveLogStream;
+    },
   },
 
   template: `
@@ -959,10 +965,21 @@ const app = createApp({
 
             <div class="modal-section">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <h4 style="margin: 0;">Logs (<span>{{ filteredRequestLogs.length }}</span>) <span v-if="requestDetail.logs.length > filteredRequestLogs.length" style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span></h4>
-                <a v-if="requestViewerLink" :href="requestViewerLink" target="_blank" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none;">View in Log Viewer →</a>
+                <h4 style="margin: 0;">
+                  Logs 
+                  <span v-if="!showLiveLogStream">(<span>{{ filteredRequestLogs.length }}</span>) <span v-if="requestDetail.logs.length > filteredRequestLogs.length" style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span></span>
+                  <span v-else style="color: #8b949e; font-size: 0.85rem; font-weight: normal;">(Live Stream)</span>
+                </h4>
+                <div style="display: flex; gap: 0.5rem;">
+                  <button @click="toggleLogStream" class="btn-secondary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">
+                    {{ showLiveLogStream ? '📋 Show Saved' : '📡 Show Live' }}
+                  </button>
+                  <a v-if="requestViewerLink" :href="requestViewerLink" target="_blank" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none;">View in Log Viewer →</a>
+                </div>
               </div>
-              <div class="logs-list">
+              
+              <!-- Saved Logs View -->
+              <div v-if="!showLiveLogStream" class="logs-list">
                 <p v-if="filteredRequestLogs.length === 0" style="color: #6c757d;">No logs captured (or all logs are TRACE level)</p>
                 <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-entry">
                   <div class="log-entry-header">
@@ -972,6 +989,17 @@ const app = createApp({
                   <div class="log-message">{{ log.message || log.rawLog }}</div>
                 </div>
               </div>
+
+              <!-- Live Log Stream -->
+              <log-stream 
+                v-else
+                :request-id-filter="requestDetail.execution.requestIdHeader"
+                :max-logs="1000"
+                :auto-scroll="true"
+                :compact="false"
+                :show-container="true"
+              />
+            </div>
             </div>
           </div>
         </main>
@@ -1133,5 +1161,6 @@ const app = createApp({
 // Register components
 app.component("app-nav", createNavigation("request-detail"));
 app.component("pev2", pev2.Plan);
+app.component("log-stream", createLogStreamComponent());
 
 app.mount("#app");
