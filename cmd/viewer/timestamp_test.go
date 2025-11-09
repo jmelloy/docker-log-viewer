@@ -45,7 +45,7 @@ func TestTimestampInterpolation(t *testing.T) {
 	}
 
 	if logTimestamp1.Hour() != 19 || logTimestamp1.Minute() != 57 || logTimestamp1.Second() != 52 {
-		t.Errorf("Expected timestamp 19:57:52, got %02d:%02d:%02d", 
+		t.Errorf("Expected timestamp 19:57:52, got %02d:%02d:%02d",
 			logTimestamp1.Hour(), logTimestamp1.Minute(), logTimestamp1.Second())
 	}
 

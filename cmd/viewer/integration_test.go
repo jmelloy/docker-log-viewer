@@ -12,12 +12,12 @@ import (
 func TestTimestampUsageIntegration(t *testing.T) {
 	// Simulate a sequence of log messages with timestamps
 	testLogs := []struct {
-		raw           string
-		timestamp     string
-		expectParsed  bool
-		expectedHour  int
-		expectedMin   int
-		expectedSec   int
+		raw          string
+		timestamp    string
+		expectParsed bool
+		expectedHour int
+		expectedMin  int
+		expectedSec  int
 	}{
 		{
 			raw:          "Oct  3 19:57:52.076536 INFO Starting service",
@@ -69,14 +69,14 @@ func TestTimestampUsageIntegration(t *testing.T) {
 
 		// Simulate what processLogs does
 		var logTimestamp time.Time
-		
+
 		if entry.Timestamp != "" {
 			if parsedTime, ok := logs.ParseTimestamp(entry.Timestamp); ok {
 				logTimestamp = parsedTime
 				wa.lastTimestamps[containerID] = parsedTime
 			}
 		}
-		
+
 		if logTimestamp.IsZero() {
 			lastTS, hasLastTS := wa.lastTimestamps[containerID]
 			if hasLastTS {
