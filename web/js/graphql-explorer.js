@@ -499,10 +499,7 @@ const app = createApp({
       
       // Insert into the query editor
       if (this.editorManager && this.editorManager.queryEditor) {
-        const doc = this.editorManager.queryEditor.getDoc();
-        const cursor = doc.getCursor();
-        doc.replaceRange(snippet, cursor);
-        this.editorManager.queryEditor.focus();
+        this.editorManager.insertTextAtCursor(snippet);
       } else {
         // Fallback: append to query
         this.query += `\n${snippet}`;
