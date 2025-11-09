@@ -1,4 +1,4 @@
-import { createNavigation } from "./shared/navigation.js";
+import { createAppHeader } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 import { GraphQLEditorManager } from "./graphql-editor-manager.js";
 import { createLogStreamComponent } from "./shared/log-stream-component.js";
@@ -799,32 +799,26 @@ const app = createApp({
 
   template: `
     <div class="app-container">
-      <header class="app-header">
-        <div style="display: flex; align-items: center; gap: 1rem">
-          <h1 style="margin: 0">🔱 Logseidon</h1>
-          <app-nav></app-nav>
-        </div>
-      </header>
+      <app-header></app-header>
 
       <div class="main-layout">
         <!-- Schema Sidebar -->
-        <aside v-if="showSchemaSidebar" class="sidebar" style="max-width: 350px; overflow-y: auto;">
+        <aside v-if="showSchemaSidebar" class="sidebar sidebar-schema">
           <div class="section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h3 style="margin: 0;">GraphQL Schema</h3>
-              <button @click="showSchemaSidebar = false" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✕</button>
+            <div class="flex-between mb-1">
+              <h3 class="m-0">GraphQL Schema</h3>
+              <button @click="showSchemaSidebar = false" class="btn-secondary btn-sm">✕</button>
             </div>
 
-            <div v-if="loadingSchema" style="color: #8b949e; padding: 1rem; text-align: center;">
+            <div v-if="loadingSchema" class="text-muted text-center p-1">
               Loading schema...
             </div>
 
-            <div v-if="schemaError" class="alert alert-danger" style="display: block; margin-bottom: 1rem; font-size: 0.875rem;">
+            <div v-if="schemaError" class="alert alert-danger mb-1">
               {{ schemaError }}
             </div>
 
-            <!-- Filter Input -->
-            <div v-if="schema && !loadingSchema" style="margin-bottom: 1rem;">
+            <div v-if="schema && !loadingSchema" class="mb-1">
               <input 
                 v-model="schemaFilter" 
                 type="text" 
@@ -895,8 +889,6 @@ const app = createApp({
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
               </div>
 
               <!-- Mutation Type -->
@@ -1159,8 +1151,7 @@ const app = createApp({
   `,
 });
 
-// Register components
-app.component("app-nav", createNavigation("graphql-explorer"));
+app.component("app-header", createAppHeader("graphql-explorer"));
 app.component("log-stream", createLogStreamComponent());
 
 app.mount("#app");
