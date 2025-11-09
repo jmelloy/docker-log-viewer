@@ -140,10 +140,11 @@ const app = createApp({
           }
         }
 
-        // Execute via API
+        // Execute via API with sync flag
         const payload = {
           serverId: parseInt(this.selectedServerId),
           requestData: JSON.stringify(requestData),
+          sync: true,
         };
 
         const response = await API.post("/api/execute", payload);
@@ -151,15 +152,11 @@ const app = createApp({
         if (response.executionId) {
           this.executionId = response.executionId;
 
-          // Fetch execution details
-          const detail = await API.get(
-            `/api/executions/${response.executionId}`
-          );
-
-          if (detail.execution.error) {
-            this.error = detail.execution.error;
+          // Response is returned synchronously
+          if (response.error) {
+            this.error = response.error;
           } else {
-            this.result = detail.execution.responseBody;
+            this.result = response.responseBody;
           }
         } else {
           this.error = "No execution ID returned";
@@ -322,26 +319,21 @@ const app = createApp({
           `,
         };
 
-        // Execute via API using the same logic as regular query execution
+        // Execute via API with sync flag
         const payload = {
           serverId: parseInt(this.selectedServerId),
           requestData: JSON.stringify(introspectionQuery),
+          sync: true,
         };
 
         const response = await API.post("/api/execute", payload);
 
         if (response.executionId) {
-          let detail = null;
-          do {
-            detail = await API.get(`/api/executions/${response.executionId}`);
-
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-          } while (!detail.execution.statusCode && !detail.execution.error);
-
-          if (detail.execution.error) {
-            this.schemaError = detail.execution.error;
+          // Response is returned synchronously
+          if (response.error) {
+            this.schemaError = response.error;
           } else {
-            const result = JSON.parse(detail.execution.responseBody);
+            const result = JSON.parse(response.responseBody);
             if (result.data && result.data.__schema) {
               this.schema = result.data.__schema;
               this.showSchemaSidebar = true;
@@ -395,7 +387,7 @@ const app = createApp({
           },
           this.query
         );
-        
+
         // Focus the query editor
         if (this.editorManager.queryEditor) {
           this.editorManager.queryEditor.focus();
@@ -564,55 +556,72 @@ const app = createApp({
             </div>
           </div>
 
-          <!-- Query Editor -->
-          <div class="modal-section" style="margin-bottom: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="margin: 0;">GraphQL Query</h4>
-              <button @click="copyToClipboard(query)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
-            </div>
-            <div class="form-group" style="margin-bottom: 0.5rem;">
-              <label for="operationName">Operation Name (optional):</label>
-              <input 
-                type="text" 
-                id="operationName" 
-                v-model="operationName" 
-                placeholder="e.g., FetchUsers"
-                style="width: 100%; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace;" />
-            </div>
-            <div class="graphql-editor-container" ref="queryEditorContainer"></div>
-          </div>
+          <!-- Two-column layout for request and response -->
+          <div style="display: grid; grid-template-columns: 50% 50%; gap: 1rem; margin-bottom: 1rem;">
+            <!-- Left Column: Request -->
+            <div style="min-width: 0; overflow: hidden;">
+              <!-- Query Editor -->
+              <div class="modal-section" style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <h4 style="margin: 0;">GraphQL Query</h4>
+                  <button @click="copyToClipboard(query)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
+                </div>
+                <div class="form-group" style="margin-bottom: 0.5rem;">
+                  <label for="operationName">Operation Name (optional):</label>
+                  <input 
+                    type="text" 
+                    id="operationName" 
+                    v-model="operationName" 
+                    placeholder="e.g., FetchUsers"
+                    style="width: 100%; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-family: monospace;" />
+                </div>
+                <div class="graphql-editor-container" ref="queryEditorContainer"></div>
+              </div>
 
-          <!-- Variables Editor -->
-          <div class="modal-section" style="margin-bottom: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="margin: 0;">Variables (JSON)</h4>
-              <button @click="copyToClipboard(variables)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
-            </div>
-            <div class="variables-editor-container" ref="variablesEditorContainer"></div>
-          </div>
-
-          <!-- Response Section - Always visible after execution -->
-          <div v-if="error || result || executionId" class="modal-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <h4 style="margin: 0;">Response</h4>
-              <div style="display: flex; gap: 0.5rem;">
-                <button v-if="executionId" @click="viewExecutionDetail" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.875rem;">
-                  View Full Details →
-                </button>
-                <button v-if="result" @click="copyToClipboard(formattedResult)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
+              <!-- Variables Editor -->
+              <div class="modal-section" style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <h4 style="margin: 0;">Variables (JSON)</h4>
+                  <button @click="copyToClipboard(variables)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
+                </div>
+                <div class="variables-editor-container" ref="variablesEditorContainer"></div>
               </div>
             </div>
-            
-            <div v-if="error" class="alert alert-danger" style="display: block; margin-bottom: 1rem;">
-              {{ error }}
-            </div>
-            
-            <div v-if="result">
-              <pre class="json-display" style="max-height: 500px; overflow: auto;">{{ formattedResult }}</pre>
-            </div>
 
-            <div v-if="!result && !error && executionId" style="color: #8b949e; padding: 1rem; text-align: center;">
-              Execution started. Click "View Full Details" to see logs and SQL queries.
+            <!-- Right Column: Response (Always visible) -->
+            <div class="modal-section" style="min-width: 0; overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <h4 style="margin: 0;">Response</h4>
+                <div style="display: flex; gap: 0.5rem;">
+                  <button v-if="executionId" @click="viewExecutionDetail" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.875rem;">
+                    View Full Details →
+                  </button>
+                  <button v-if="result" @click="copyToClipboard(formattedResult)" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">📋 Copy</button>
+                </div>
+              </div>
+              
+              <!-- Executing State -->
+              <div v-if="executing" style="padding: 2rem; text-align: center; color: #8b949e; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;">
+                <div style="margin-bottom: 0.5rem; font-size: 1.5rem;">⚡</div>
+                <div style="font-weight: 500;">Executing query...</div>
+                <div style="font-size: 0.875rem; margin-top: 0.5rem;">Request sent, waiting for response</div>
+              </div>
+              
+              <!-- Error State -->
+              <div v-else-if="error" class="alert alert-danger" style="display: block;">
+                {{ error }}
+              </div>
+              
+              <!-- Result State -->
+              <div v-else-if="result">
+                <pre class="json-display" style="max-height: 500px; overflow: auto;">{{ formattedResult }}</pre>
+              </div>
+
+              <!-- Empty State -->
+              <div v-else style="padding: 2rem; text-align: center; color: #6c757d; background: #0d1117; border: 1px solid #30363d; border-radius: 4px;">
+                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📝</div>
+                <div>Response will appear here after execution</div>
+              </div>
             </div>
           </div>
         </main>
