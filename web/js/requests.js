@@ -624,9 +624,9 @@ const app = createApp({
 
         <main class="content">
           <div class="empty-state">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h2 style="margin: 0">All Requests</h2>
-              <div style="display: flex; gap: 0.5rem;">
+            <div class="flex-between mb-1">
+              <h2 class="m-0">All Requests</h2>
+              <div class="flex-center">
                 <button @click="openExecuteNewModal" class="btn-primary">
                   ▶ Execute Request
                 </button>
@@ -638,17 +638,17 @@ const app = createApp({
                 </button>
               </div>
             </div>
-            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center;">
+            <div class="flex-center mb-1">
               <input 
                 type="text" 
                 v-model="searchQuery" 
                 @input="handleSearchChange"
                 placeholder="Search requests..." 
-                style="flex: 1; padding: 0.5rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
+                class="search-input-full"
               />
             </div>
             <div class="executions-list">
-              <p v-if="allRequests.length === 0" style="color: #6c757d;">No requests executed yet. Click "Execute Request" to get started.</p>
+              <p v-if="allRequests.length === 0" class="text-muted">No requests executed yet. Click "Execute Request" to get started.</p>
               <div v-for="req in allRequests" 
                    :key="req.id"
                    class="execution-item-compact"
@@ -662,12 +662,12 @@ const app = createApp({
                 <span class="exec-id">{{ req.requestIdHeader }}</span>
               </div>
             </div>
-            <div v-if="totalPages > 1" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1rem; padding: 1rem;">
-              <button @click="changePage(1)" :disabled="!hasPrevPage" class="btn-secondary" style="padding: 0.5rem 1rem;">« First</button>
-              <button @click="changePage(currentPage - 1)" :disabled="!hasPrevPage" class="btn-secondary" style="padding: 0.5rem 1rem;">‹ Prev</button>
-              <span style="color: #c9d1d9;">Page {{ currentPage }} of {{ totalPages }}</span>
-              <button @click="changePage(currentPage + 1)" :disabled="!hasNextPage" class="btn-secondary" style="padding: 0.5rem 1rem;">Next ›</button>
-              <button @click="changePage(totalPages)" :disabled="!hasNextPage" class="btn-secondary" style="padding: 0.5rem 1rem;">Last »</button>
+            <div v-if="totalPages > 1" class="pagination">
+              <button @click="changePage(1)" :disabled="!hasPrevPage" class="btn-secondary">« First</button>
+              <button @click="changePage(currentPage - 1)" :disabled="!hasPrevPage" class="btn-secondary">‹ Prev</button>
+              <span>Page {{ currentPage }} of {{ totalPages }}</span>
+              <button @click="changePage(currentPage + 1)" :disabled="!hasNextPage" class="btn-secondary">Next ›</button>
+              <button @click="changePage(totalPages)" :disabled="!hasNextPage" class="btn-secondary">Last »</button>
             </div>
           </div>
         </main>

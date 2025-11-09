@@ -805,21 +805,20 @@ const app = createApp({
         <!-- Schema Sidebar -->
         <aside v-if="showSchemaSidebar" class="sidebar sidebar-schema">
           <div class="section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-              <h3 style="margin: 0;">GraphQL Schema</h3>
-              <button @click="showSchemaSidebar = false" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✕</button>
+            <div class="flex-between mb-1">
+              <h3 class="m-0">GraphQL Schema</h3>
+              <button @click="showSchemaSidebar = false" class="btn-secondary btn-sm">✕</button>
             </div>
 
-            <div v-if="loadingSchema" style="color: #8b949e; padding: 1rem; text-align: center;">
+            <div v-if="loadingSchema" class="text-muted text-center p-1">
               Loading schema...
             </div>
 
-            <div v-if="schemaError" class="alert alert-danger" style="display: block; margin-bottom: 1rem; font-size: 0.875rem;">
+            <div v-if="schemaError" class="alert alert-danger mb-1">
               {{ schemaError }}
             </div>
 
-            <!-- Filter Input -->
-            <div v-if="schema && !loadingSchema" style="margin-bottom: 1rem;">
+            <div v-if="schema && !loadingSchema" class="mb-1">
               <input 
                 v-model="schemaFilter" 
                 type="text" 
