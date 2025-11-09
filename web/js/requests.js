@@ -5,7 +5,7 @@ import { loadTemplate } from "./shared/template-loader.js";
 
 const template = await loadTemplate("/templates/requests-main.html");
 
-const { createApp} = Vue;
+const { createApp } = Vue;
 
 const app = createApp({
   data() {
