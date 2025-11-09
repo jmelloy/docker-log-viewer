@@ -1,6 +1,7 @@
 import { createNavigation } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 import { GraphQLEditorManager } from "./graphql-editor-manager.js";
+import { createLogStreamComponent } from "./shared/log-stream-component.js";
 
 const { createApp } = Vue;
 
@@ -16,6 +17,7 @@ const app = createApp({
       result: null,
       error: null,
       executionId: null,
+      requestIdHeader: null, // Request ID for log filtering
       showSampleQueries: false,
       sampleQueries: [],
       schema: null,
@@ -31,6 +33,7 @@ const app = createApp({
       expandedFields: {}, // Maps field key to expanded state
       expandedTypes: {}, // Maps type name to expanded state
       schemaFilter: "", // Filter text for schema sidebar
+      showLogs: false, // Show/hide log panel during execution
     };
   },
 
@@ -165,6 +168,13 @@ const app = createApp({
       this.error = null;
       this.result = null;
       this.executionId = null;
+      this.requestIdHeader = null;
+      this.showLogs = true; // Show log panel when execution starts
+
+      // Clear logs in the log stream component
+      if (this.$refs.logStream) {
+        this.$refs.logStream.clearLogs();
+      }
 
       try {
         // Build request body
@@ -218,6 +228,12 @@ const app = createApp({
           const execution = await API.get(`/api/executions/${executionId}`);
 
           console.log("execution", execution);
+
+          // Extract request ID header for log filtering
+          if (execution.execution.requestIdHeader && !this.requestIdHeader) {
+            this.requestIdHeader = execution.execution.requestIdHeader;
+            console.log("Set requestIdHeader for log filtering:", this.requestIdHeader);
+          }
 
           if (execution.execution.responseBody) {
             this.result = execution.execution.responseBody;
@@ -756,6 +772,15 @@ const app = createApp({
         t.kind === 'SCALAR'
       );
     },
+
+    handleLogClick(log) {
+      console.log('Log clicked:', log);
+      // Could open a modal with log details if needed
+    },
+
+    toggleLogs() {
+      this.showLogs = !this.showLogs;
+    },
   },
 
   watch: {
@@ -1102,6 +1127,32 @@ const app = createApp({
               </div>
             </div>
           </div>
+
+          <!-- Log Stream Panel (shown during/after execution) -->
+          <div v-if="showLogs || executing || requestIdHeader" class="modal-section" style="margin-top: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <h4 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <span>Request Logs</span>
+                <span v-if="requestIdHeader" style="font-size: 0.75rem; color: #8b949e; font-weight: normal;">
+                  ({{ requestIdHeader.substring(0, 12) }}...)
+                </span>
+              </h4>
+              <button @click="toggleLogs" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                {{ showLogs ? 'Hide' : 'Show' }}
+              </button>
+            </div>
+            <div v-if="showLogs">
+              <log-stream 
+                ref="logStream"
+                :request-id-filter="requestIdHeader"
+                :max-logs="500"
+                :auto-scroll="true"
+                :compact="true"
+                :show-container="true"
+                @log-clicked="handleLogClick"
+              />
+            </div>
+          </div>
         </main>
       </div>
     </div>
@@ -1110,5 +1161,6 @@ const app = createApp({
 
 // Register components
 app.component("app-nav", createNavigation("graphql-explorer"));
+app.component("log-stream", createLogStreamComponent());
 
 app.mount("#app");
