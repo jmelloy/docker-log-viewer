@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 
 	"docker-log-parser/pkg/logs"
@@ -421,31 +420,43 @@ func (s *Store) ListExecutions(requestID int64) ([]ExecutedRequest, error) {
 // ListAllExecutions retrieves all executions across all requests
 func (s *Store) ListAllExecutions(limit, offset int, search string, hideIntrospection bool) ([]ExecutedRequest, int64, error) {
 	query := s.db.Preload("Server").Model(&ExecutedRequest{})
+	countQuery := s.db.Model(&ExecutedRequest{})
 
-	// Count total before filtering
-	var totalCount int64
-	if err := s.db.Model(&ExecutedRequest{}).Count(&totalCount).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to count executions: %w", err)
-	}
-
-	// Apply search filter
+	// Apply search filter to both query and count
 	if search != "" {
 		searchPattern := "%" + search + "%"
-		query = query.Where(
+		searchCondition := s.db.Where(
+			"request_id_header LIKE ? OR request_body LIKE ?",
+			searchPattern, searchPattern,
+		)
+		query = query.Where(searchCondition)
+		countQuery = countQuery.Where(
 			"request_id_header LIKE ? OR request_body LIKE ?",
 			searchPattern, searchPattern,
 		)
 	}
 
-	// Get all executions with filters (we'll filter introspection in Go)
+	// Apply introspection filter at database level
+	if hideIntrospection {
+		introspectionCondition := "request_body NOT LIKE '%IntrospectionQuery%' AND request_body NOT LIKE '%__schema%'"
+		query = query.Where(introspectionCondition)
+		countQuery = countQuery.Where(introspectionCondition)
+	}
+
+	// Count with filters applied
+	var totalCount int64
+	if err := countQuery.Count(&totalCount).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count executions: %w", err)
+	}
+
+	// Get executions with filters
 	var executions []ExecutedRequest
 	result := query.Order("executed_at DESC").Limit(limit).Offset(offset).Find(&executions)
 	if result.Error != nil {
 		return nil, 0, fmt.Errorf("failed to list all executions: %w", result.Error)
 	}
 
-	// Compute displayName and filter introspection for each execution
-	filtered := make([]ExecutedRequest, 0, len(executions))
+	// Compute displayName for each execution
 	for i := range executions {
 		displayName := "Unknown"
 		// If execution has a sample query, use its name
@@ -460,30 +471,9 @@ func (s *Store) ListAllExecutions(limit, offset int, search string, hideIntrospe
 			displayName = computeDisplayName("", executions[i].RequestBody)
 		}
 		executions[i].DisplayName = displayName
-
-		// Filter introspection if needed
-		if hideIntrospection && isIntrospectionQuery(displayName, executions[i].RequestBody) {
-			continue
-		}
-
-		filtered = append(filtered, executions[i])
 	}
 
-	return filtered, totalCount, nil
-}
-
-// isIntrospectionQuery checks if a request is a GraphQL introspection query
-func isIntrospectionQuery(displayName, requestBody string) bool {
-	// Check display name
-	if regexp.MustCompile(`(?i)introspection`).MatchString(displayName) {
-		return true
-	}
-
-	// Check request body for introspection patterns
-	lowerBody := strings.ToLower(requestBody)
-	return strings.Contains(lowerBody, "introspectionquery") ||
-		strings.Contains(lowerBody, "__schema") ||
-		strings.Contains(lowerBody, "__type")
+	return executions, totalCount, nil
 }
 
 // SaveExecutionLogs saves log entries for an execution
