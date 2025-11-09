@@ -38,73 +38,96 @@
   border-left-color: #58a6ff;
 }
 
-/* GraphQL Syntax Highlighting - Using CodeMirror tag system */
+/* GraphQL Syntax Highlighting - GitHub Dark theme (matching highlight.js) */
+
 /* Keywords: query, mutation, subscription, fragment, on, etc. */
+/* Matches .hljs-keyword */
 .cm-keyword {
-  color: #ff7b72;
-  font-weight: 500;
+  color: #ff7b72; /* prettylights-syntax-keyword */
 }
 
 /* Definition keywords: type, interface, union, enum, input, scalar */
+/* Matches .hljs-keyword */
 .cm-definitionKeyword {
-  color: #ff7b72;
-  font-weight: 500;
+  color: #ff7b72; /* prettylights-syntax-keyword */
 }
 
 /* Field names and property names */
+/* Matches .hljs-selector-tag */
 .cm-propertyName {
-  color: #7ee787;
+  color: #7ee787; /* prettylights-syntax-entity-tag */
 }
 
 /* Variable names: $variableName */
+/* Matches .hljs-built_in */
 .cm-variableName {
-  color: #ffa657;
+  color: #ffa657; /* prettylights-syntax-variable */
 }
 
 /* String values */
+/* Matches .hljs-string */
 .cm-string {
-  color: #a5d6ff;
+  color: #a5d6ff; /* prettylights-syntax-string */
 }
 
 /* Numbers (int and float) */
+/* Matches .hljs-number */
 .cm-integer,
-.cm-float {
-  color: #79c0ff;
+.cm-float,
+.cm-number {
+  color: #79c0ff; /* prettylights-syntax-constant */
 }
 
 /* Boolean values */
+/* Matches .hljs-literal */
 .cm-bool {
-  color: #79c0ff;
+  color: #79c0ff; /* prettylights-syntax-constant */
 }
 
 /* Null value */
+/* Matches .hljs-literal */
 .cm-null {
-  color: #79c0ff;
+  color: #79c0ff; /* prettylights-syntax-constant */
 }
 
 /* Enum values */
-.cm-special {
-  color: #d2a8ff;
+/* Matches .hljs-title.function_ */
+.cm-special,
+.cm-enum {
+  color: #d2a8ff; /* prettylights-syntax-entity */
 }
 
 /* Directive names: @directive */
-.cm-modifier {
-  color: #d2a8ff;
+/* Matches .hljs-title.function_ */
+.cm-modifier,
+.cm-meta {
+  color: #d2a8ff; /* prettylights-syntax-entity */
 }
 
 /* Attribute names in arguments */
+/* Matches .hljs-attr */
 .cm-attributeName {
-  color: #79c0ff;
+  color: #79c0ff; /* prettylights-syntax-constant */
+}
+
+/* Type names */
+/* Matches .hljs-title.class_ */
+.cm-typeName {
+  color: #d2a8ff; /* prettylights-syntax-entity */
 }
 
 /* General names and atoms */
-.cm-atom {
-  color: #c9d1d9;
+.cm-atom,
+.cm-name {
+  color: #c9d1d9; /* base text color */
 }
 
 /* Comments */
-.cm-lineComment {
-  color: #8b949e;
+/* Matches .hljs-comment */
+.cm-lineComment,
+.cm-blockComment,
+.cm-comment {
+  color: #8b949e; /* prettylights-syntax-comment */
   font-style: italic;
 }
 

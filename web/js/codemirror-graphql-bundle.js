@@ -13,11 +13,30 @@ import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import {
   syntaxHighlighting,
-  defaultHighlightStyle,
+  HighlightStyle,
 } from "@codemirror/language";
-import { oneDark } from "@codemirror/theme-one-dark";
+import { tags as t } from "@lezer/highlight";
 import { graphql, updateSchema } from "cm6-graphql";
 import { buildSchema, buildClientSchema } from "graphql";
+
+// GitHub Dark theme highlighting (matching highlight.js)
+const githubDarkHighlight = HighlightStyle.define([
+  { tag: t.keyword, color: "#ff7b72" },                    // keywords: query, mutation, fragment
+  { tag: t.definitionKeyword, color: "#ff7b72" },          // type, interface, enum, etc.
+  { tag: t.propertyName, color: "#7ee787" },               // field names
+  { tag: t.variableName, color: "#ffa657" },               // $variables
+  { tag: t.string, color: "#a5d6ff" },                     // strings
+  { tag: [t.number, t.integer, t.float], color: "#79c0ff" }, // numbers
+  { tag: t.bool, color: "#79c0ff" },                       // booleans
+  { tag: t.null, color: "#79c0ff" },                       // null
+  { tag: t.typeName, color: "#d2a8ff" },                   // type names
+  { tag: t.special(t.variableName), color: "#d2a8ff" },    // enum values
+  { tag: t.meta, color: "#d2a8ff" },                       // directives
+  { tag: t.attributeName, color: "#79c0ff" },              // argument names
+  { tag: [t.comment, t.lineComment, t.blockComment], color: "#8b949e", fontStyle: "italic" }, // comments
+  { tag: [t.punctuation, t.paren, t.brace, t.bracket], color: "#c9d1d9" }, // punctuation
+  { tag: t.operator, color: "#ff7b72" },                   // operators
+]);
 
 /**
  * Create a CodeMirror 6 editor with GraphQL support
@@ -40,7 +59,7 @@ export function createGraphQLEditor(parent, options = {}) {
   // Create extensions array
   const extensions = [
     graphql(),
-    oneDark,
+    syntaxHighlighting(githubDarkHighlight),
     history(),
     autocompletion(),
     keymap.of([
