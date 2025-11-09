@@ -140,11 +140,11 @@ const app = createApp({
           }
         }
 
-        // Execute via API with sync flag
+        // Execute via API with async flag
         const payload = {
           serverId: parseInt(this.selectedServerId),
           requestData: JSON.stringify(requestData),
-          sync: true,
+          sync: false,
         };
 
         const response = await API.post("/api/execute", payload);
@@ -152,12 +152,8 @@ const app = createApp({
         if (response.executionId) {
           this.executionId = response.executionId;
 
-          // Response is returned synchronously
-          if (response.error) {
-            this.error = response.error;
-          } else {
-            this.result = response.responseBody;
-          }
+          // Poll for result
+          await this.pollForResult(response.executionId);
         } else {
           this.error = "No execution ID returned";
         }
@@ -167,6 +163,34 @@ const app = createApp({
       } finally {
         this.executing = false;
       }
+    },
+
+    async pollForResult(executionId, maxAttempts = 30, intervalMs = 1000) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const execution = await API.get(`/api/executions/${executionId}`);
+
+          console.log("execution", execution);
+
+          if (execution.execution.responseBody) {
+            this.result = execution.execution.responseBody;
+            return;
+          }
+
+          if (execution.execution.error) {
+            this.error = execution.execution.error;
+            return;
+          }
+
+          // Wait before next attempt
+          await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        } catch (error) {
+          console.error("Polling error:", error);
+          // Continue polling on error
+        }
+      }
+
+      this.error = "Timeout waiting for execution result";
     },
 
     async loadSampleQuery(sampleQuery) {

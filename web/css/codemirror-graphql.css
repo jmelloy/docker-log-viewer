@@ -189,8 +189,8 @@
   border: 1px solid #30363d;
   border-radius: 4px;
   background: #0d1117;
-  min-height: 400px;
-  max-height: 600px;
+  /* min-height: 400px; */
+  max-height: 20em; 
   overflow: hidden;
 }
 
@@ -199,25 +199,25 @@
 }
 
 .graphql-editor-container .cm-scroller {
-  min-height: 400px;
-  max-height: 600px;
-}
+  /* min-height: 400px;  */
+  max-height: 20em; 
+} 
 
 /* Variables Editor */
 .variables-editor-container {
   border: 1px solid #30363d;
   border-radius: 4px;
   background: #0d1117;
-  min-height: 200px;
-  max-height: 300px;
+  /* min-height: 200px; */
+  /* max-height: 7em; */
   overflow: hidden;
 }
 
-.variables-editor-container .cm-editor {
+ .variables-editor-container .cm-editor {
   height: 100%;
 }
 
 .variables-editor-container .cm-scroller {
-  min-height: 200px;
-  max-height: 300px;
-}
+  /* min-height: 200px; */
+  max-height: 7em;
+} 
