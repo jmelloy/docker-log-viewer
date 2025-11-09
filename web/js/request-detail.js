@@ -280,6 +280,18 @@ const app = createApp({
             // If highlighting fails, leave as is
           }
         });
+      document
+        .querySelectorAll(".sql-query-text:not(.hljs)")
+        .forEach((block) => {
+          try {
+            const text = block.textContent;
+            const highlighted = hljs.highlight(text, { language: "sql" });
+            block.innerHTML = highlighted.value;
+            block.classList.add("hljs");
+          } catch (e) {
+            // If highlighting fails, leave as is
+          }
+        });
     },
     async loadRequestDetail(requestId) {
       try {
@@ -291,18 +303,14 @@ const app = createApp({
         if (ageMinutes < 3) {
           this.showLiveLogStream = true;
           console.log(
-            `Request is ${ageMinutes.toFixed(
-              1
-            )} minutes old - defaulting to live stream`
+            `Request is ${ageMinutes.toFixed(1)} minutes old - defaulting to live stream`
           );
         }
 
         // Set up auto-refresh timer if request is less than 1 minute old
         if (ageMinutes < 1) {
           console.log(
-            `Request is ${ageMinutes.toFixed(
-              1
-            )} minutes old - setting up 30s refresh timer`
+            `Request is ${ageMinutes.toFixed(1)} minutes old - setting up 30s refresh timer`
           );
           this.setupRefreshTimer(requestId);
         }

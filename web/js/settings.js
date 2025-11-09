@@ -1,5 +1,5 @@
-import { createAppHeader } from './shared/navigation.js';
-import { API } from './shared/api.js';
+import { createAppHeader } from "./shared/navigation.js";
+import { API } from "./shared/api.js";
 import { loadTemplate } from './shared/template-loader.js';
 
 const template = await loadTemplate("/templates/settings-main.html");
@@ -239,6 +239,6 @@ const app = createApp({
   template,
 });
 
-app.component('app-header', createAppHeader('settings'));
+app.component("app-header", createAppHeader("settings"));
 
 app.mount("#app");

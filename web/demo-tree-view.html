@@ -1,229 +1,314 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GraphQL Schema Tree View - Demo</title>
     <link rel="stylesheet" href="css/styles.css" />
     <style>
-        .demo-wrapper {
-            display: flex;
-            height: 100vh;
-            background: #0d1117;
-        }
-        .sidebar-demo {
-            width: 400px;
-            background: #161b22;
-            border-right: 1px solid #30363d;
-            padding: 1rem;
-            overflow-y: auto;
-        }
-        .content-demo {
-            flex: 1;
-            padding: 2rem;
-            color: #c9d1d9;
-            overflow-y: auto;
-        }
+      .demo-wrapper {
+        display: flex;
+        height: 100vh;
+        background: #0d1117;
+      }
+      .sidebar-demo {
+        width: 400px;
+        background: #161b22;
+        border-right: 1px solid #30363d;
+        padding: 1rem;
+        overflow-y: auto;
+      }
+      .content-demo {
+        flex: 1;
+        padding: 2rem;
+        color: #c9d1d9;
+        overflow-y: auto;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div id="app"></div>
     <script src="lib/vue.global.prod.js"></script>
     <script>
-        const { createApp } = Vue;
-        
-        const app = createApp({
-            data() {
-                return {
-                    schema: {
-                        queryType: { name: "Query" },
-                        mutationType: { name: "Mutation" },
-                        types: [
-                            {
-                                kind: "OBJECT",
-                                name: "Query",
-                                description: "The root query type",
-                                fields: [
-                                    {
-                                        name: "user",
-                                        description: "Get a user by ID",
-                                        args: [{
-                                            name: "id",
-                                            description: "The user ID",
-                                            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } }
-                                        }],
-                                        type: { kind: "OBJECT", name: "User" }
-                                    },
-                                    {
-                                        name: "users",
-                                        description: "Get all users",
-                                        args: [{
-                                            name: "limit",
-                                            description: "Maximum number of users to return",
-                                            type: { kind: "SCALAR", name: "Int" }
-                                        }],
-                                        type: { kind: "LIST", ofType: { kind: "OBJECT", name: "User" } }
-                                    },
-                                    {
-                                        name: "posts",
-                                        description: "Get all posts",
-                                        args: [],
-                                        type: { kind: "LIST", ofType: { kind: "OBJECT", name: "Post" } }
-                                    }
-                                ]
-                            },
-                            {
-                                kind: "OBJECT",
-                                name: "Mutation",
-                                description: "The root mutation type",
-                                fields: [
-                                    {
-                                        name: "createUser",
-                                        description: "Create a new user",
-                                        args: [{
-                                            name: "input",
-                                            description: "User input data",
-                                            type: { kind: "NON_NULL", ofType: { kind: "INPUT_OBJECT", name: "CreateUserInput" } }
-                                        }],
-                                        type: { kind: "OBJECT", name: "User" }
-                                    },
-                                    {
-                                        name: "updateUser",
-                                        description: "Update an existing user",
-                                        args: [
-                                            {
-                                                name: "id",
-                                                description: "User ID",
-                                                type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } }
-                                            },
-                                            {
-                                                name: "input",
-                                                description: "User update data",
-                                                type: { kind: "NON_NULL", ofType: { kind: "INPUT_OBJECT", name: "UpdateUserInput" } }
-                                            }
-                                        ],
-                                        type: { kind: "OBJECT", name: "User" }
-                                    },
-                                    {
-                                        name: "deleteUser",
-                                        description: "Delete a user",
-                                        args: [{
-                                            name: "id",
-                                            description: "User ID to delete",
-                                            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } }
-                                        }],
-                                        type: { kind: "SCALAR", name: "Boolean" }
-                                    }
-                                ]
-                            },
-                            {
-                                kind: "OBJECT",
-                                name: "User",
-                                description: "A user in the system",
-                                fields: [
-                                    { name: "id", description: "User ID", args: [], type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } } },
-                                    { name: "name", description: "User's full name", args: [], type: { kind: "SCALAR", name: "String" } },
-                                    { name: "email", description: "User's email address", args: [], type: { kind: "SCALAR", name: "String" } },
-                                    { name: "posts", description: "Posts created by this user", args: [], type: { kind: "LIST", ofType: { kind: "OBJECT", name: "Post" } } }
-                                ]
-                            },
-                            {
-                                kind: "OBJECT",
-                                name: "Post",
-                                description: "A blog post",
-                                fields: [
-                                    { name: "id", description: "Post ID", args: [], type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } } },
-                                    { name: "title", description: "Post title", args: [], type: { kind: "SCALAR", name: "String" } },
-                                    { name: "content", description: "Post content", args: [], type: { kind: "SCALAR", name: "String" } },
-                                    { name: "author", description: "Post author", args: [], type: { kind: "OBJECT", name: "User" } }
-                                ]
-                            }
-                        ]
+      const { createApp } = Vue;
+
+      const app = createApp({
+        data() {
+          return {
+            schema: {
+              queryType: { name: "Query" },
+              mutationType: { name: "Mutation" },
+              types: [
+                {
+                  kind: "OBJECT",
+                  name: "Query",
+                  description: "The root query type",
+                  fields: [
+                    {
+                      name: "user",
+                      description: "Get a user by ID",
+                      args: [
+                        {
+                          name: "id",
+                          description: "The user ID",
+                          type: {
+                            kind: "NON_NULL",
+                            ofType: { kind: "SCALAR", name: "ID" },
+                          },
+                        },
+                      ],
+                      type: { kind: "OBJECT", name: "User" },
                     },
-                    expandedSections: {
-                        queries: true,
-                        mutations: true,
-                        types: false,
+                    {
+                      name: "users",
+                      description: "Get all users",
+                      args: [
+                        {
+                          name: "limit",
+                          description: "Maximum number of users to return",
+                          type: { kind: "SCALAR", name: "Int" },
+                        },
+                      ],
+                      type: {
+                        kind: "LIST",
+                        ofType: { kind: "OBJECT", name: "User" },
+                      },
                     },
-                    expandedFields: {},
-                    expandedTypes: {}
-                };
+                    {
+                      name: "posts",
+                      description: "Get all posts",
+                      args: [],
+                      type: {
+                        kind: "LIST",
+                        ofType: { kind: "OBJECT", name: "Post" },
+                      },
+                    },
+                  ],
+                },
+                {
+                  kind: "OBJECT",
+                  name: "Mutation",
+                  description: "The root mutation type",
+                  fields: [
+                    {
+                      name: "createUser",
+                      description: "Create a new user",
+                      args: [
+                        {
+                          name: "input",
+                          description: "User input data",
+                          type: {
+                            kind: "NON_NULL",
+                            ofType: {
+                              kind: "INPUT_OBJECT",
+                              name: "CreateUserInput",
+                            },
+                          },
+                        },
+                      ],
+                      type: { kind: "OBJECT", name: "User" },
+                    },
+                    {
+                      name: "updateUser",
+                      description: "Update an existing user",
+                      args: [
+                        {
+                          name: "id",
+                          description: "User ID",
+                          type: {
+                            kind: "NON_NULL",
+                            ofType: { kind: "SCALAR", name: "ID" },
+                          },
+                        },
+                        {
+                          name: "input",
+                          description: "User update data",
+                          type: {
+                            kind: "NON_NULL",
+                            ofType: {
+                              kind: "INPUT_OBJECT",
+                              name: "UpdateUserInput",
+                            },
+                          },
+                        },
+                      ],
+                      type: { kind: "OBJECT", name: "User" },
+                    },
+                    {
+                      name: "deleteUser",
+                      description: "Delete a user",
+                      args: [
+                        {
+                          name: "id",
+                          description: "User ID to delete",
+                          type: {
+                            kind: "NON_NULL",
+                            ofType: { kind: "SCALAR", name: "ID" },
+                          },
+                        },
+                      ],
+                      type: { kind: "SCALAR", name: "Boolean" },
+                    },
+                  ],
+                },
+                {
+                  kind: "OBJECT",
+                  name: "User",
+                  description: "A user in the system",
+                  fields: [
+                    {
+                      name: "id",
+                      description: "User ID",
+                      args: [],
+                      type: {
+                        kind: "NON_NULL",
+                        ofType: { kind: "SCALAR", name: "ID" },
+                      },
+                    },
+                    {
+                      name: "name",
+                      description: "User's full name",
+                      args: [],
+                      type: { kind: "SCALAR", name: "String" },
+                    },
+                    {
+                      name: "email",
+                      description: "User's email address",
+                      args: [],
+                      type: { kind: "SCALAR", name: "String" },
+                    },
+                    {
+                      name: "posts",
+                      description: "Posts created by this user",
+                      args: [],
+                      type: {
+                        kind: "LIST",
+                        ofType: { kind: "OBJECT", name: "Post" },
+                      },
+                    },
+                  ],
+                },
+                {
+                  kind: "OBJECT",
+                  name: "Post",
+                  description: "A blog post",
+                  fields: [
+                    {
+                      name: "id",
+                      description: "Post ID",
+                      args: [],
+                      type: {
+                        kind: "NON_NULL",
+                        ofType: { kind: "SCALAR", name: "ID" },
+                      },
+                    },
+                    {
+                      name: "title",
+                      description: "Post title",
+                      args: [],
+                      type: { kind: "SCALAR", name: "String" },
+                    },
+                    {
+                      name: "content",
+                      description: "Post content",
+                      args: [],
+                      type: { kind: "SCALAR", name: "String" },
+                    },
+                    {
+                      name: "author",
+                      description: "Post author",
+                      args: [],
+                      type: { kind: "OBJECT", name: "User" },
+                    },
+                  ],
+                },
+              ],
             },
-            computed: {
-                schemaTypes() {
-                    return this.schema?.types || [];
-                },
-                queryType() {
-                    return this.schema?.queryType;
-                },
-                mutationType() {
-                    return this.schema?.mutationType;
-                }
+            expandedSections: {
+              queries: true,
+              mutations: true,
+              types: false,
             },
-            methods: {
-                toggleSection(section) {
-                    this.expandedSections[section] = !this.expandedSections[section];
-                },
-                toggleField(key) {
-                    if (this.expandedFields[key]) {
-                        delete this.expandedFields[key];
-                    } else {
-                        this.expandedFields[key] = true;
-                    }
-                },
-                toggleType(typeName) {
-                    if (this.expandedTypes[typeName]) {
-                        delete this.expandedTypes[typeName];
-                    } else {
-                        this.expandedTypes[typeName] = true;
-                    }
-                },
-                isFieldExpanded(key) {
-                    return !!this.expandedFields[key];
-                },
-                isTypeExpanded(typeName) {
-                    return !!this.expandedTypes[typeName];
-                },
-                getTypeString(type) {
-                    if (!type) return "Unknown";
-                    
-                    let typeStr = "";
-                    let currentType = type;
-                    let nonNull = false;
-                    let isList = false;
+            expandedFields: {},
+            expandedTypes: {},
+          };
+        },
+        computed: {
+          schemaTypes() {
+            return this.schema?.types || [];
+          },
+          queryType() {
+            return this.schema?.queryType;
+          },
+          mutationType() {
+            return this.schema?.mutationType;
+          },
+        },
+        methods: {
+          toggleSection(section) {
+            this.expandedSections[section] = !this.expandedSections[section];
+          },
+          toggleField(key) {
+            if (this.expandedFields[key]) {
+              delete this.expandedFields[key];
+            } else {
+              this.expandedFields[key] = true;
+            }
+          },
+          toggleType(typeName) {
+            if (this.expandedTypes[typeName]) {
+              delete this.expandedTypes[typeName];
+            } else {
+              this.expandedTypes[typeName] = true;
+            }
+          },
+          isFieldExpanded(key) {
+            return !!this.expandedFields[key];
+          },
+          isTypeExpanded(typeName) {
+            return !!this.expandedTypes[typeName];
+          },
+          getTypeString(type) {
+            if (!type) return "Unknown";
 
-                    while (currentType) {
-                        if (currentType.kind === "NON_NULL") {
-                            nonNull = true;
-                            currentType = currentType.ofType;
-                        } else if (currentType.kind === "LIST") {
-                            isList = true;
-                            currentType = currentType.ofType;
-                        } else {
-                            typeStr = currentType.name || "Unknown";
-                            break;
-                        }
-                    }
+            let typeStr = "";
+            let currentType = type;
+            let nonNull = false;
+            let isList = false;
 
-                    if (isList) {
-                        typeStr = "[" + typeStr + "]";
-                    }
-                    if (nonNull) {
-                        typeStr += "!";
-                    }
+            while (currentType) {
+              if (currentType.kind === "NON_NULL") {
+                nonNull = true;
+                currentType = currentType.ofType;
+              } else if (currentType.kind === "LIST") {
+                isList = true;
+                currentType = currentType.ofType;
+              } else {
+                typeStr = currentType.name || "Unknown";
+                break;
+              }
+            }
 
-                    return typeStr;
-                },
-                getObjectTypes() {
-                    return this.schemaTypes.filter(t => 
-                        !t.name.startsWith('__') && 
-                        t.kind === 'OBJECT' && 
-                        t.name !== this.queryType?.name && 
-                        t.name !== this.mutationType?.name
-                    );
-                }
-            },
-            template: `
+            if (isList) {
+              typeStr = "[" + typeStr + "]";
+            }
+            if (nonNull) {
+              typeStr += "!";
+            }
+
+            return typeStr;
+          },
+          getObjectTypes() {
+            return this.schemaTypes.filter(
+              (t) =>
+                !t.name.startsWith("__") &&
+                t.kind === "OBJECT" &&
+                t.name !== this.queryType?.name &&
+                t.name !== this.mutationType?.name
+            );
+          },
+        },
+        template: `
                 <div class="demo-wrapper">
                     <aside class="sidebar-demo">
                         <h3 style="margin: 0 0 1rem 0; color: #58a6ff;">GraphQL Schema</h3>
@@ -386,10 +471,10 @@
                         </div>
                     </main>
                 </div>
-            `
-        });
+            `,
+      });
 
-        app.mount('#app');
+      app.mount("#app");
     </script>
-</body>
+  </body>
 </html>

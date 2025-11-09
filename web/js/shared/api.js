@@ -15,9 +15,9 @@ export const API = {
   async post(url, data) {
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(data),
       });
@@ -34,9 +34,9 @@ export const API = {
   async put(url, data) {
     try {
       const response = await fetch(url, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(data),
       });
@@ -53,7 +53,7 @@ export const API = {
   async delete(url) {
     try {
       const response = await fetch(url, {
-        method: 'DELETE',
+        method: "DELETE",
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -64,19 +64,19 @@ export const API = {
       console.error(`DELETE ${url} failed:`, error);
       throw error;
     }
-  }
+  },
 };
 
 export const Format = {
   date(date) {
-    if (!date) return '';
-    const d = typeof date === 'string' ? new Date(date) : date;
+    if (!date) return "";
+    const d = typeof date === "string" ? new Date(date) : date;
     return d.toLocaleString();
   },
 
   json(data, indent = 2) {
     try {
-      const obj = typeof data === 'string' ? JSON.parse(data) : data;
+      const obj = typeof data === "string" ? JSON.parse(data) : data;
       return JSON.stringify(obj, null, indent);
     } catch (e) {
       return String(data);
@@ -88,7 +88,7 @@ export const Format = {
       return `${ms.toFixed(2)}ms`;
     }
     return `${(ms / 1000).toFixed(2)}s`;
-  }
+  },
 };
 
 export const Storage = {
@@ -116,5 +116,5 @@ export const Storage = {
     } catch (e) {
       console.warn(`Failed to remove ${key} from localStorage:`, e);
     }
-  }
+  },
 };
