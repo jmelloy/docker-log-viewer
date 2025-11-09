@@ -1,5 +1,3 @@
-// Shared utility functions
-
 export function formatSQL(sql) {
   if (!sql?.trim()) return sql;
 

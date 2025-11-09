@@ -1,4 +1,4 @@
-import { createNavigation } from "./shared/navigation.js";
+import { createAppHeader } from "./shared/navigation.js";
 import { API } from "./shared/api.js";
 import { formatSQL } from "./utils.js";
 import { createLogStreamComponent } from "./shared/log-stream-component.js";
@@ -760,33 +760,25 @@ const app = createApp({
 
   template: `
     <div class="app-container">
-      <header class="app-header">
-        <div style="display: flex; align-items: center; gap: 1rem">
-          <h1 style="margin: 0">🔱 Logseidon</h1>
-          <app-nav></app-nav>
-        </div>
-      </header>
+      <app-header></app-header>
 
       <div class="main-layout">
-        <main class="content" style="margin: 0; padding: 2rem;">
-          <!-- Loading State -->
-          <div v-if="loading" style="text-align: center; padding: 3rem;">
+        <main class="content content-padded">
+          <div v-if="loading" class="text-center p-3">
             <p>Loading request details...</p>
           </div>
 
-          <!-- Error State -->
-          <div v-if="error" style="text-align: center; padding: 3rem;">
+          <div v-if="error" class="text-center p-3">
             <div class="alert alert-danger">{{ error }}</div>
             <button @click="goBack" class="btn-secondary">Go Back</button>
           </div>
 
-          <!-- Request Detail Content -->
           <div v-if="!loading && !error && requestDetail">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <div class="flex-between mb-1_5">
               <div>
-                <button @click="goBack" class="btn-secondary" style="margin-bottom: 0.5rem;">← Back to Requests</button>
-                <h2 style="margin: 0;">{{ requestDetail.displayName || '(unnamed)' }}</h2>
-                <p style="color: #8b949e; margin: 0.25rem 0 0 0;">{{ requestDetail.server?.name || requestDetail.execution.server?.name || 'N/A' }}</p>
+                <button @click="goBack" class="btn-secondary mb-0_5">← Back to Requests</button>
+                <h2 class="m-0">{{ requestDetail.displayName || '(unnamed)' }}</h2>
+                <p class="text-muted mt-0_25">{{ requestDetail.server?.name || requestDetail.execution.server?.name || 'N/A' }}</p>
               </div>
               <div style="display: flex; gap: 0.5rem;">
                 <button @click="executeAgain" class="btn-primary">▶ Execute Again</button>
@@ -1214,8 +1206,7 @@ const app = createApp({
   `,
 });
 
-// Register components
-app.component("app-nav", createNavigation("request-detail"));
+app.component("app-header", createAppHeader("request-detail"));
 app.component("pev2", pev2.Plan);
 app.component("log-stream", createLogStreamComponent());
 
