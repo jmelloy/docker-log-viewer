@@ -66,7 +66,11 @@ Supports multiple formats:
 - **Timestamps**: `Oct 3 19:57:52.076536`
 - **Log levels**: DBG, TRC, INF, WRN, ERR, FATAL
 - **File locations**: `pkg/handlers/stripe.go:85`
-- **ANSI stripping**: Removes color escape sequences
+- **ANSI-aware delineation**: Uses ANSI escape codes to identify log entry boundaries
+  - Detects when lines start with ANSI codes (common for new log entries)
+  - Identifies continuation lines (no ANSI, leading whitespace)
+  - Improves multi-line log handling beyond just SQL entries
+- **ANSI stripping**: Removes color escape sequences after boundary detection
 
 ### 3. Filtering
 - Container selection (grouped by Docker Compose project)
@@ -110,6 +114,16 @@ Auto-activates when filtering by trace/request/span:
 - Custom key=value parser with quoted strings, nested braces, escapes
 - First `key=` occurrence determines message boundary
 - Dotted keys supported: `db.error`, `db.table`
+- **ANSI Escape Code Delineation**:
+  - ANSI codes analyzed before stripping to identify log boundaries
+  - `startsWithANSI()`: Detects lines beginning with `\x1b[`
+  - `IsLikelyNewLogEntry()`: Multi-heuristic boundary detection
+    - Checks for ANSI codes at start
+    - Checks for timestamps near beginning
+    - Checks for log levels at start
+    - Rejects lines with leading whitespace (continuation lines)
+  - Improves multi-line log handling for SQL queries, stack traces, etc.
+  - Backward compatible with existing log formats
 
 ## Common Tasks
 
