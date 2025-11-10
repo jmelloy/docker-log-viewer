@@ -247,6 +247,7 @@
           <span class="log-container">{{ getShortContainerName(log.containerId) }}</span>
           <span v-if="log.entry?.timestamp" class="log-timestamp">{{ formatTimestamp(log.entry.timestamp) }}</span>
           <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
+          <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
           <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
           <span v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})" :key="idx" class="log-field">
             <template v-if="shouldShowField(key, value)">
@@ -257,7 +258,6 @@
               >
             </template>
           </span>
-          <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
         </div>
       </div>
     </main>
@@ -274,7 +274,10 @@
     <div v-if="selectedLog" class="modal-body">
       <div class="modal-section">
         <h4>Raw Log</h4>
-        <pre v-html="convertAnsiToHtml(selectedLog.entry?.raw || 'No raw log available')"></pre>
+        <pre
+          style="white-space: pre-wrap"
+          v-html="convertAnsiToHtml(selectedLog.entry?.raw || 'No raw log available')"
+        ></pre>
       </div>
       <div class="modal-section">
         <h4>Parsed Fields</h4>
