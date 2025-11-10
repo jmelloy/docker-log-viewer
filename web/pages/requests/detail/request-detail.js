@@ -393,7 +393,7 @@ const app = createApp({
       }
     },
 
-    setupRefreshTimer(requestId) {
+    setupRefreshTimer(requestId, interval = 500) {
       // Clear any existing timer
       if (this.refreshTimer) {
         clearTimeout(this.refreshTimer);
@@ -409,14 +409,14 @@ const app = createApp({
           const ageMinutes = this.requestAgeMinutes;
           if (ageMinutes < 1) {
             // Still less than 1 minute old, refresh again
-            this.setupRefreshTimer(requestId);
+            this.setupRefreshTimer(requestId, Math.min(interval * 2, 10000));
           } else {
             console.log("Request is now over 1 minute old - stopping auto-refresh");
           }
         } catch (error) {
           console.error("Failed to auto-refresh request details:", error);
         }
-      }, 10000); // 10 seconds
+      }, interval); // 10 seconds
     },
 
     goBack() {
