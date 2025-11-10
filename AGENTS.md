@@ -124,6 +124,12 @@ Auto-activates when filtering by trace/request/span:
     - Rejects lines with leading whitespace (continuation lines)
   - Improves multi-line log handling for SQL queries, stack traces, etc.
   - Backward compatible with existing log formats
+- **ANSI-Aware Field Boundary Parsing**:
+  - `parseKeyValuePairsWithANSI()`: Uses ANSI codes as field boundary hints
+  - ANSI codes around field names help identify where fields start
+  - ANSI codes in field values are stripped automatically
+  - Particularly useful for colored log output where spacing is ambiguous
+  - Falls back to regular parsing when no ANSI codes present
 
 ## Common Tasks
 
