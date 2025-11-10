@@ -280,3 +280,211 @@ Oct  6 18:09:29.226800 TRC pkg/repository/app/repository.go:269 > [sql]: SELECT 
 		t.Errorf("Expected %d SQL statements, got %d", expected, sqlCount)
 	}
 }
+
+func TestStartsWithANSI(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "Line with ANSI color code at start",
+			input:    "\x1b[32mGreen text",
+			expected: true,
+		},
+		{
+			name:     "Line with ANSI bold at start",
+			input:    "\x1b[1mBold text",
+			expected: true,
+		},
+		{
+			name:     "Line with ANSI reset at start",
+			input:    "\x1b[0mNormal text",
+			expected: true,
+		},
+		{
+			name:     "Line without ANSI at start",
+			input:    "Normal text \x1b[32m with color later",
+			expected: false,
+		},
+		{
+			name:     "Plain text without ANSI",
+			input:    "Plain text",
+			expected: false,
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := startsWithANSI(tc.input)
+			if result != tc.expected {
+				t.Errorf("Expected %v, got %v for input: %q", tc.expected, result, tc.input)
+			}
+		})
+	}
+}
+
+func TestHasANSICodes(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "Line with ANSI at start",
+			input:    "\x1b[32mGreen text\x1b[0m",
+			expected: true,
+		},
+		{
+			name:     "Line with ANSI in middle",
+			input:    "Normal \x1b[31mred\x1b[0m text",
+			expected: true,
+		},
+		{
+			name:     "Plain text without ANSI",
+			input:    "Plain text",
+			expected: false,
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := hasANSICodes(tc.input)
+			if result != tc.expected {
+				t.Errorf("Expected %v, got %v for input: %q", tc.expected, result, tc.input)
+			}
+		})
+	}
+}
+
+func TestIsLikelyNewLogEntry(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "Line starting with ANSI code",
+			input:    "\x1b[32mOct  3 21:53:27.208471\x1b[0m INF Application started",
+			expected: true,
+		},
+		{
+			name:     "Line with timestamp at start",
+			input:    "Oct  3 21:53:27.208471 INF Application started",
+			expected: true,
+		},
+		{
+			name:     "Line with log level at start",
+			input:    "INFO Application started",
+			expected: true,
+		},
+		{
+			name:     "Line with ERROR at start",
+			input:    "ERROR Connection failed",
+			expected: true,
+		},
+		{
+			name:     "Continuation line with leading whitespace",
+			input:    "  continuation of previous log",
+			expected: false,
+		},
+		{
+			name:     "Continuation line with tab",
+			input:    "\tcontinuation with tab",
+			expected: false,
+		},
+		{
+			name:     "SQL continuation line",
+			input:    "    SELECT * FROM users",
+			expected: false,
+		},
+		{
+			name:     "Empty line",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "Plain continuation text",
+			input:    "this is a continuation without special markers",
+			expected: false,
+		},
+		{
+			name:     "Line with RFC3339 timestamp",
+			input:    "2024-01-15T10:30:45.123Z INFO Service started",
+			expected: true,
+		},
+		{
+			name:     "Line with ANSI and whitespace continuation",
+			input:    "  \x1b[32mcontinuation with ansi\x1b[0m",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := IsLikelyNewLogEntry(tc.input)
+			if result != tc.expected {
+				t.Errorf("Expected %v, got %v for input: %q", tc.expected, result, tc.input)
+			}
+		})
+	}
+}
+
+func TestANSIDelineation(t *testing.T) {
+	// Test that ANSI codes help identify log boundaries in multi-line scenarios
+	testCases := []struct {
+		name           string
+		lines          []string
+		expectedBounds []bool // true if line is a new log entry
+	}{
+		{
+			name: "ANSI-marked entries with continuation",
+			lines: []string{
+				"\x1b[32m2024-01-15 10:30:45\x1b[0m INFO First entry",
+				"  continuation of first entry",
+				"\x1b[32m2024-01-15 10:30:46\x1b[0m ERROR Second entry",
+			},
+			expectedBounds: []bool{true, false, true},
+		},
+		{
+			name: "Mixed ANSI and non-ANSI entries",
+			lines: []string{
+				"\x1b[33mWARN\x1b[0m First warning",
+				"Oct  3 21:53:27 INF Second entry without ANSI",
+				"  continuation",
+			},
+			expectedBounds: []bool{true, true, false},
+		},
+		{
+			name: "All plain text with timestamps",
+			lines: []string{
+				"2024-01-15 10:30:45 INFO Entry one",
+				"2024-01-15 10:30:46 INFO Entry two",
+				"2024-01-15 10:30:47 ERROR Entry three",
+			},
+			expectedBounds: []bool{true, true, true},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			for i, line := range tc.lines {
+				result := IsLikelyNewLogEntry(line)
+				if result != tc.expectedBounds[i] {
+					t.Errorf("Line %d: expected %v, got %v for: %q",
+						i, tc.expectedBounds[i], result, line)
+				}
+			}
+		})
+	}
+}

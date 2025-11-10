@@ -24,10 +24,72 @@ var (
 	levelRegex     = regexp.MustCompile(`(FATAL|DEBUG|INFO|WARN|ERROR|DBG|TRC|INF|WRN|ERR)`)
 	fileRegex      = regexp.MustCompile(`([\w/]+\.go:\d+)`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
+	ansiStartRegex = regexp.MustCompile(`^\x1b\[`)
 	sentryRegex    = regexp.MustCompile(`^Sentry Logger \[(log|warn|error|debug)\]:\s*(.*)$`)
 	pinoRegex      = regexp.MustCompile(`^\[(\d{2}:\d{2}:\d{2}\.\d+)\]\s+(DEBUG|INFO|WARN|ERROR)\s+\((\d+)\):\s+(.*)$`)
 	queryRegex     = regexp.MustCompile(`^\[query\]\s+(.+?)(?:\s+\[took\s+(\d+)\s*ms(?:,\s*(\d+)\s+(row|result)s?\s+affected)?\])?$`)
 )
+
+// startsWithANSI checks if a line starts with an ANSI escape code
+// This can be used as a heuristic to identify log entry boundaries
+func startsWithANSI(s string) bool {
+	return ansiStartRegex.MatchString(s)
+}
+
+// hasANSICodes checks if a string contains any ANSI escape codes
+func hasANSICodes(s string) bool {
+	return ansiRegex.MatchString(s)
+}
+
+// IsLikelyNewLogEntry determines if a line is likely the start of a new log entry
+// using multiple heuristics including ANSI escape codes, timestamps, and log levels
+func IsLikelyNewLogEntry(line string) bool {
+	if strings.TrimSpace(line) == "" {
+		return false
+	}
+
+	// Check if line starts with ANSI escape code (common for new log entries)
+	if startsWithANSI(line) {
+		return true
+	}
+
+	// Check for timestamp at the beginning (after stripping ANSI)
+	stripped := stripANSI(line)
+	if timestampRegex.MatchString(stripped) {
+		// Verify timestamp is at or near the start
+		match := timestampRegex.FindStringIndex(stripped)
+		if match != nil && match[0] < 5 { // Allow a few characters before timestamp
+			return true
+		}
+	}
+
+	// Check for common log format patterns at the start
+	// e.g., [INFO], [ERROR], timestamp patterns, etc.
+	trimmed := strings.TrimSpace(stripped)
+	if len(trimmed) > 0 {
+		// Check for log level at the beginning
+		if levelRegex.MatchString(trimmed[:min(20, len(trimmed))]) {
+			match := levelRegex.FindStringIndex(trimmed)
+			if match != nil && match[0] < 10 {
+				return true
+			}
+		}
+	}
+
+	// If line starts with whitespace in the original, it's likely a continuation
+	if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+		return false
+	}
+
+	return false
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
 
 func stripANSI(s string) string {
 	cleaned := ansiRegex.ReplaceAllString(s, "")
