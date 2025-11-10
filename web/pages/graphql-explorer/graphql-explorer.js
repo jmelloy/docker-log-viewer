@@ -455,7 +455,7 @@ const app = createApp({
 
     viewExecutionDetail() {
       if (this.executionId) {
-        window.location.href = `/request-detail.html?id=${this.executionId}`;
+        window.location.href = `/requests/detail/?id=${this.executionId}`;
       }
     },
 

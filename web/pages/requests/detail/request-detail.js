@@ -30,6 +30,8 @@ const app = createApp({
       servers: [],
       showLiveLogStream: false, // Toggle between saved logs and live stream
       refreshTimer: null, // Timer for auto-refreshing recent requests
+      selectedOperationIndex: 0, // For GraphQL batch requests
+      responseFilter: "", // Search/filter for response JSON
     };
   },
 
@@ -56,7 +58,10 @@ const app = createApp({
     statusClass() {
       if (!this.requestDetail) return "";
       const statusCode = this.requestDetail.execution.statusCode;
+      const hasError = this.requestDetail.execution.error;
       if (!statusCode || statusCode === 0) return "pending";
+      // Show error class even for 200 status if there's an error (e.g., GraphQL errors)
+      if (hasError) return "error";
       return statusCode >= 200 && statusCode < 300 ? "success" : "error";
     },
 
@@ -73,21 +78,51 @@ const app = createApp({
 
     isGraphQLRequest() {
       const data = this.parsedRequestBody;
+      if (Array.isArray(data)) {
+        return data.some((item) => item && (item.query || item.operationName));
+      }
       return !!(data && (data.query || data.operationName));
+    },
+
+    isGraphQLBatchRequest() {
+      const data = this.parsedRequestBody;
+      return Array.isArray(data) && data.some((item) => item && (item.query || item.operationName));
+    },
+
+    graphqlOperations() {
+      if (!this.isGraphQLBatchRequest) return [];
+      return this.parsedRequestBody.map((item, idx) => ({
+        index: idx,
+        operationName: item.operationName || `Operation ${idx + 1}`,
+        query: item.query || "",
+        variables: item.variables || null,
+      }));
     },
 
     graphqlQuery() {
       if (!this.isGraphQLRequest) return null;
+      if (this.isGraphQLBatchRequest) {
+        const selected = this.graphqlOperations[this.selectedOperationIndex || 0];
+        return selected ? selected.query : "";
+      }
       return this.parsedRequestBody.query || "";
     },
 
     graphqlOperationName() {
       if (!this.isGraphQLRequest) return null;
+      if (this.isGraphQLBatchRequest) {
+        return null; // We'll show dropdown instead
+      }
       return this.parsedRequestBody.operationName || null;
     },
 
     graphqlVariables() {
       if (!this.isGraphQLRequest) return null;
+      if (this.isGraphQLBatchRequest) {
+        const selected = this.graphqlOperations[this.selectedOperationIndex || 0];
+        const variables = selected ? selected.variables : null;
+        return variables ? JSON.stringify(variables, null, 2) : null;
+      }
       const variables = this.parsedRequestBody.variables;
       return variables ? JSON.stringify(variables, null, 2) : null;
     },
@@ -109,6 +144,27 @@ const app = createApp({
       } catch (e) {
         console.error("Error parsing response body:", e);
         return this.requestDetail.execution.responseBody;
+      }
+    },
+
+    filteredResponseBody() {
+      if (!this.responseFilter.trim()) {
+        return this.responseBody;
+      }
+
+      try {
+        const data = JSON.parse(this.requestDetail.execution.responseBody);
+        const filter = this.responseFilter.toLowerCase();
+
+        // Simple JSON path filtering (supports basic jq-like syntax)
+        const filtered = this.filterJSON(data, filter);
+        return JSON.stringify(filtered, null, 2);
+      } catch (e) {
+        // If filtering fails, fall back to text search
+        console.error("Error filtering response body:", e);
+        const lines = this.responseBody.split("\n");
+        const matchedLines = lines.filter((line) => line.toLowerCase().includes(this.responseFilter.toLowerCase()));
+        return matchedLines.length > 0 ? matchedLines.join("\n") : "(no matches)";
       }
     },
 
@@ -214,6 +270,35 @@ const app = createApp({
     });
   },
 
+  watch: {
+    selectedOperationIndex(newIndex) {
+      // Auto-populate response filter for batch requests
+      if (this.isGraphQLBatchRequest)
+        if (!this.responseFilter.trim() || this.responseFilter.trim().match(/^\.\[\d+\]$/)) {
+          this.responseFilter = `.[${newIndex}]`;
+        }
+
+      // Re-apply syntax highlighting when operation selection changes
+      this.$nextTick(() => {
+        // Remove hljs class to force re-highlighting
+        document.querySelectorAll(".graphql-query.hljs, .json-display.hljs").forEach((block) => {
+          block.classList.remove("hljs");
+        });
+        this.applySyntaxHighlighting();
+      });
+    },
+
+    responseFilter() {
+      // Re-apply syntax highlighting when response filter changes
+      this.$nextTick(() => {
+        document.querySelectorAll(".json-display.hljs").forEach((block) => {
+          block.classList.remove("hljs");
+        });
+        this.applySyntaxHighlighting();
+      });
+    },
+  },
+
   beforeUnmount() {
     // Clean up refresh timer when component is destroyed
     if (this.refreshTimer) {
@@ -283,6 +368,11 @@ const app = createApp({
       try {
         this.requestDetail = await API.get(`/api/executions/${requestId}`);
         this.loading = false;
+
+        // Auto-populate response filter for batch GraphQL requests
+        if (this.isGraphQLBatchRequest && !this.responseFilter.trim()) {
+          this.responseFilter = `.[${this.selectedOperationIndex}]`;
+        }
 
         // Default to live stream if request is less than 3 minutes old
         const ageMinutes = this.requestAgeMinutes;
@@ -694,7 +784,7 @@ const app = createApp({
 
         // Navigate to new execution detail
         if (result.executionId) {
-          window.location.href = `/request-detail.html?id=${result.executionId}`;
+          window.location.href = `/requests/detail/?id=${result.executionId}`;
         }
       } catch (error) {
         console.error("Failed to execute request:", error);
@@ -733,7 +823,7 @@ const app = createApp({
 
         // Navigate to new execution detail
         if (result.executionId) {
-          window.location.href = `/request-detail.html?id=${result.executionId}`;
+          window.location.href = `/requests/detail/?id=${result.executionId}`;
         }
       } catch (error) {
         console.error("Failed to execute request:", error);
@@ -743,6 +833,141 @@ const app = createApp({
 
     toggleLogStream() {
       this.showLiveLogStream = !this.showLiveLogStream;
+    },
+
+    filterJSON(obj, query) {
+      // Support basic jq-like filtering
+      // Examples: ".data", ".data.users", ".data.users[0]", ".data[1].name", etc.
+
+      if (query.startsWith(".")) {
+        // Path-based filtering (jq style) with array support
+        const pathStr = query.substring(1);
+        // Split by . but preserve array indices
+        const pathParts = this.parseJSONPath(pathStr);
+
+        let result = obj;
+        for (const part of pathParts) {
+          if (result === null || result === undefined) {
+            return null;
+          }
+
+          if (part.type === "key") {
+            if (typeof result === "object" && part.value in result) {
+              result = result[part.value];
+            } else {
+              return null;
+            }
+          } else if (part.type === "index") {
+            if (Array.isArray(result) && part.value >= 0 && part.value < result.length) {
+              result = result[part.value];
+            } else {
+              return null;
+            }
+          } else if (part.type === "all") {
+            // [] means all elements in array
+            if (Array.isArray(result)) {
+              return result;
+            } else {
+              return null;
+            }
+          }
+        }
+        return result;
+      } else {
+        // Recursive text search through JSON
+        return this.searchInJSON(obj, query);
+      }
+    },
+
+    parseJSONPath(path) {
+      // Parse a path like "data.users[0].name" or "data[1]" into parts
+      const parts = [];
+      let current = "";
+      let i = 0;
+
+      while (i < path.length) {
+        const char = path[i];
+
+        if (char === "[") {
+          // Save the current key if any
+          if (current) {
+            parts.push({ type: "key", value: current });
+            current = "";
+          }
+
+          // Find the closing bracket
+          const closeIdx = path.indexOf("]", i);
+          if (closeIdx === -1) {
+            throw new Error("Unclosed bracket in path");
+          }
+
+          const indexStr = path.substring(i + 1, closeIdx);
+          if (indexStr === "") {
+            // Empty brackets [] means all elements
+            parts.push({ type: "all" });
+          } else {
+            const index = parseInt(indexStr, 10);
+            if (isNaN(index)) {
+              throw new Error(`Invalid array index: ${indexStr}`);
+            }
+            parts.push({ type: "index", value: index });
+          }
+
+          i = closeIdx + 1;
+        } else if (char === ".") {
+          // Save the current key
+          if (current) {
+            parts.push({ type: "key", value: current });
+            current = "";
+          }
+          i++;
+        } else {
+          current += char;
+          i++;
+        }
+      }
+
+      // Save any remaining key
+      if (current) {
+        parts.push({ type: "key", value: current });
+      }
+
+      return parts;
+    },
+
+    searchInJSON(obj, query) {
+      if (obj === null || obj === undefined) return null;
+
+      if (typeof obj === "string" && obj.toLowerCase().includes(query)) {
+        return obj;
+      }
+
+      if (Array.isArray(obj)) {
+        const filtered = obj.map((item) => this.searchInJSON(item, query)).filter((item) => item !== null);
+        return filtered.length > 0 ? filtered : null;
+      }
+
+      if (typeof obj === "object") {
+        const result = {};
+        let hasMatch = false;
+
+        for (const [key, value] of Object.entries(obj)) {
+          if (key.toLowerCase().includes(query)) {
+            result[key] = value;
+            hasMatch = true;
+          } else {
+            const filtered = this.searchInJSON(value, query);
+            if (filtered !== null) {
+              result[key] = filtered;
+              hasMatch = true;
+            }
+          }
+        }
+
+        return hasMatch ? result : null;
+      }
+
+      return null;
     },
   },
 

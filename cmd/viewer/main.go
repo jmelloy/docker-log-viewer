@@ -628,9 +628,9 @@ func (wa *WebApp) processLogs() {
 			}
 			receivedCount++
 
-			if receivedCount <= 10 || receivedCount%100 == 0 {
-				slog.Debug("processLogs received message", "receivedCount", receivedCount, "containerID", msg.ContainerID[:12])
-			}
+			// if receivedCount <= 10 || receivedCount%1000 == 0 {
+			// 	slog.Debug("processLogs received message", "receivedCount", receivedCount, "containerID", msg.ContainerID[:12])
+			// }
 
 			// Determine the timestamp to use for this log entry
 			var logTimestamp time.Time
@@ -673,9 +673,9 @@ func (wa *WebApp) processLogs() {
 			wa.logStore.Add(storeMsg)
 			logCount++
 
-			if receivedCount%100 == 0 {
-				slog.Debug("processLogs total in memory", "receivedCount", receivedCount, "totalInMemory", wa.logStore.Count())
-			}
+			// if receivedCount%100 == 0 {
+			// 	slog.Debug("processLogs total in memory", "receivedCount", receivedCount, "totalInMemory", wa.logStore.Count())
+			// }
 
 			// Add to batch
 			wa.batchMutex.Lock()
@@ -1184,6 +1184,17 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			execution.Error = err.Error()
+		}
+
+		// Check for GraphQL errors in response body (even with 200 status)
+		if execution.Error == "" && statusCode == 200 && responseBody != "" {
+			var responseData interface{}
+			if err := json.Unmarshal([]byte(responseBody), &responseData); err == nil {
+				if hasErrors, message, key := containsErrorsKey(responseData, ""); hasErrors {
+					slog.Warn("GraphQL errors in response", "message", message, "key", key)
+					execution.Error = message
+				}
+			}
 		}
 
 		// Update execution with results
@@ -1819,6 +1830,17 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 			execution.Error = err.Error()
 		}
 
+		// Check for GraphQL errors in response body (even with 200 status)
+		if execution.Error == "" && statusCode == 200 && responseBody != "" {
+			var responseData interface{}
+			if err := json.Unmarshal([]byte(responseBody), &responseData); err == nil {
+				if hasErrors, message, key := containsErrorsKey(responseData, ""); hasErrors {
+					slog.Warn("GraphQL errors in response", "message", message, "key", key)
+					execution.Error = fmt.Sprintf("GraphQL errors in response: %s at %s", message, key)
+				}
+			}
+		}
+
 		// Update execution with results
 		execution.ID = uint(execID)
 		if err := wa.store.UpdateExecution(execution); err != nil {
@@ -1888,14 +1910,39 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	return execID
 }
 
-func (wa *WebApp) executeRequest(requestID int64) {
-	wa.executeRequestWithOverrides(requestID, nil, "", "", "", "")
-}
-
 func generateRequestID() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// containsErrorsKey recursively checks if the data contains an "errors" key
+func containsErrorsKey(data interface{}, key string) (bool, string, string) {
+	slog.Debug("containsErrorsKey", "data", data, "key", key)
+	switch v := data.(type) {
+	case map[string]interface{}:
+		if _, exists := v["errors"]; exists {
+			if errors, ok := v["errors"].([]interface{}); ok && len(errors) > 0 {
+				if first, ok := errors[0].(map[string]interface{}); ok {
+					message, _ := json.Marshal(first)
+					return true, string(message), key
+				}
+			}
+			return true, "Unknown error", key
+		}
+		for k, value := range v {
+			if hasErrors, message, key := containsErrorsKey(value, fmt.Sprintf("%s.%s", key, k)); hasErrors {
+				return true, message, key
+			}
+		}
+	case []interface{}:
+		for i, item := range v {
+			if hasErrors, message, key := containsErrorsKey(item, fmt.Sprintf("%s.[%d]", key, i)); hasErrors {
+				return true, message, key
+			}
+		}
+	}
+	return false, "", key
 }
 
 func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
@@ -1959,20 +2006,6 @@ func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration)
 	}
 
 	return collected
-}
-
-func matchesRequestID(msg logs.LogMessage, requestID string) bool {
-	if msg.Entry == nil || msg.Entry.Fields == nil {
-		return false
-	}
-
-	for _, field := range []string{"request_id", "requestId", "requestID", "req_id"} {
-		if val, ok := msg.Entry.Fields[field]; ok && val == requestID {
-			return true
-		}
-	}
-
-	return false
 }
 
 func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
@@ -2236,7 +2269,7 @@ func (wa *WebApp) Run(addr string) error {
 
 	// Serve static assets at /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
-	
+
 	// Serve pages from root
 	http.Handle("/", http.FileServer(http.Dir("./web/pages")))
 

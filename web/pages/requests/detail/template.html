@@ -85,7 +85,30 @@
 
               <!-- GraphQL Request Display -->
               <div v-if="isGraphQLRequest">
-                <div v-if="graphqlOperationName" style="margin-bottom: 0.5rem">
+                <div v-if="isGraphQLBatchRequest" style="margin-bottom: 0.5rem">
+                  <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">
+                    Operations ({{ graphqlOperations.length }}):
+                  </div>
+                  <select
+                    v-model="selectedOperationIndex"
+                    style="
+                      width: 100%;
+                      background: #161b22;
+                      border: 1px solid #30363d;
+                      border-radius: 4px;
+                      padding: 0.5rem;
+                      font-family: monospace;
+                      font-size: 0.875rem;
+                      color: #79c0ff;
+                      cursor: pointer;
+                    "
+                  >
+                    <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">
+                      {{ op.operationName }}
+                    </option>
+                  </select>
+                </div>
+                <div v-else-if="graphqlOperationName" style="margin-bottom: 0.5rem">
                   <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Operation:</div>
                   <div
                     style="
@@ -115,11 +138,37 @@
               <pre v-else class="json-display" style="max-height: 20em">{{ requestData }}</pre>
             </div>
             <div style="flex: 1; min-width: 300px">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 0.5rem;
+                  gap: 0.5rem;
+                "
+              >
                 <h4 style="margin: 0">Response</h4>
+                <input
+                  type="text"
+                  v-model="responseFilter"
+                  placeholder="Filter (.data.users[0] or text)"
+                  style="
+                    flex: 1;
+                    max-width: 250px;
+                    padding: 0.5rem;
+                    background: #161b22;
+                    border: 1px solid #30363d;
+                    border-radius: 4px;
+                    color: #c9d1d9;
+                    font-family: monospace;
+                    font-size: 0.75rem;
+                  "
+                  title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
+                />
+
                 <div style="display: flex; gap: 0.5rem">
                   <button
-                    @click="copyToClipboard(responseBody)"
+                    @click="copyToClipboard(filteredResponseBody)"
                     class="btn-secondary"
                     style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
                     title="Copy response"
@@ -136,7 +185,7 @@
                   </button>
                 </div>
               </div>
-              <pre class="json-display" style="max-height: 20em">{{ responseBody }}</pre>
+              <pre class="json-display" style="max-height: 28em">{{ filteredResponseBody }}</pre>
             </div>
           </div>
         </div>
@@ -526,7 +575,28 @@
     <div class="modal-body">
       <!-- GraphQL Request Display -->
       <div v-if="isGraphQLRequest">
-        <div v-if="graphqlOperationName" style="margin-bottom: 1rem">
+        <div v-if="isGraphQLBatchRequest" style="margin-bottom: 1rem">
+          <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">
+            Operations ({{ graphqlOperations.length }}):
+          </h4>
+          <select
+            v-model="selectedOperationIndex"
+            style="
+              width: 100%;
+              background: #161b22;
+              border: 1px solid #30363d;
+              border-radius: 4px;
+              padding: 0.75rem;
+              font-family: &quot;Monaco&quot;, &quot;Menlo&quot;, &quot;Ubuntu Mono&quot;, monospace;
+              font-size: 0.875rem;
+              color: #79c0ff;
+              cursor: pointer;
+            "
+          >
+            <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">{{ op.operationName }}</option>
+          </select>
+        </div>
+        <div v-else-if="graphqlOperationName" style="margin-bottom: 1rem">
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Operation:</h4>
           <div
             style="
@@ -615,8 +685,25 @@
   <div class="modal-content" @click.stop style="max-width: 900px">
     <div class="modal-header">
       <h3>Response Body</h3>
-      <div style="display: flex; gap: 0.5rem">
-        <button @click="copyToClipboard(responseBody)" class="btn-secondary" style="padding: 0.5rem 1rem">
+      <div style="display: flex; gap: 0.5rem; align-items: center">
+        <input
+          type="text"
+          v-model="responseFilter"
+          placeholder="Filter (.data.users[0] or text)"
+          style="
+            flex: 1;
+            max-width: 300px;
+            padding: 0.5rem;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #c9d1d9;
+            font-family: monospace;
+            font-size: 0.875rem;
+          "
+          title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
+        />
+        <button @click="copyToClipboard(filteredResponseBody)" class="btn-secondary" style="padding: 0.5rem 1rem">
           📋 Copy
         </button>
         <button @click="showResponseModal = false">✕</button>
@@ -624,6 +711,7 @@
     </div>
     <div class="modal-body">
       <pre
+        class="json-display"
         style="
           background: #0d1117;
           border: 1px solid #30363d;
@@ -638,7 +726,7 @@
           word-break: break-word;
         "
       >
-{{ responseBody }}</pre
+{{ filteredResponseBody }}</pre
       >
     </div>
   </div>
