@@ -32,20 +32,20 @@ func main() {
 
 	for i, line := range testLines {
 		fmt.Printf("=== Example %d ===\n", i+1)
-		
+
 		// Show the line with visible ANSI codes
 		displayLine := line
 		if len(line) > 90 {
 			displayLine = line[:90] + "..."
 		}
 		fmt.Printf("Raw: %q\n", displayLine)
-		
+
 		entry := logs.ParseLogLine(line)
-		
+
 		fmt.Printf("Timestamp: %s\n", entry.Timestamp)
 		fmt.Printf("Level:     %s\n", entry.Level)
 		fmt.Printf("Message:   %s\n", entry.Message)
-		
+
 		if len(entry.Fields) > 0 {
 			fmt.Printf("Fields:\n")
 			for k, v := range entry.Fields {

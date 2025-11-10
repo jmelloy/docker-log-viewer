@@ -108,17 +108,17 @@ func parseKeyValuePairsWithANSI(s string) map[string]string {
 	// First, strip ANSI codes but remember their positions as potential field boundaries
 	ansiPositions := findANSIPositions(s)
 	stripped := stripANSI(s)
-	
+
 	// Parse the stripped string
 	fields := parseKeyValuePairs(stripped)
-	
+
 	// If we found ANSI codes and they seem to mark field boundaries, use that info
 	// This helps when fields are separated by ANSI codes instead of just spaces
 	if len(ansiPositions) > 0 && len(fields) == 0 {
 		// Try parsing with ANSI-based segmentation
 		fields = parseWithANSIBoundaries(s, ansiPositions)
 	}
-	
+
 	return fields
 }
 
@@ -137,7 +137,7 @@ func parseWithANSIBoundaries(s string, ansiPositions []int) map[string]string {
 	// Split string at ANSI positions and try to parse each segment
 	fields := make(map[string]string)
 	segments := splitAtANSIBoundaries(s, ansiPositions)
-	
+
 	for _, seg := range segments {
 		stripped := stripANSI(seg)
 		segFields := parseKeyValuePairs(stripped)
@@ -145,7 +145,7 @@ func parseWithANSIBoundaries(s string, ansiPositions []int) map[string]string {
 			fields[k] = v
 		}
 	}
-	
+
 	return fields
 }
 
@@ -154,10 +154,10 @@ func splitAtANSIBoundaries(s string, positions []int) []string {
 	if len(positions) == 0 {
 		return []string{s}
 	}
-	
+
 	segments := []string{}
 	lastPos := 0
-	
+
 	for _, pos := range positions {
 		if pos > lastPos {
 			segments = append(segments, s[lastPos:pos])
@@ -174,11 +174,11 @@ func splitAtANSIBoundaries(s string, positions []int) []string {
 		}
 		lastPos = endPos
 	}
-	
+
 	if lastPos < len(s) {
 		segments = append(segments, s[lastPos:])
 	}
-	
+
 	return segments
 }
 
@@ -448,12 +448,12 @@ func ParseLogLine(line string) *LogEntry {
 			fields = parseKeyValuePairsWithANSI(originalRemaining)
 		}
 	}
-	
+
 	// Fall back to regular parsing if ANSI-aware parsing didn't yield results
 	if len(fields) == 0 {
 		fields = parseKeyValuePairs(remaining)
 	}
-	
+
 	if len(fields) > 0 {
 		firstKey := ""
 		for k := range fields {
