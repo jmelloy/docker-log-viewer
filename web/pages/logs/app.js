@@ -1087,11 +1087,7 @@ const app = createApp({
     },
 
     isJsonField(value) {
-      return (
-        value.trim().startsWith("{") ||
-        value.trim().startsWith("[") ||
-        (Number.isFinite(Number(value)) && Number(value) < 1000000)
-      );
+      return value.trim().startsWith("{") || value.trim().startsWith("[");
     },
 
     formatJsonField(value) {
