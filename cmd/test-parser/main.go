@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -132,30 +131,78 @@ func readFromLogFile(filePath string, debug bool, verbose bool) {
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
+	buf := make([]byte, 8192)
+	var leftover []byte
+	var bufferedEntry *logs.LogEntry
 	lineCount := 0
+	entryCount := 0
 
-	for scanner.Scan() {
-		lineCount++
-		line := scanner.Text()
+	flushBuffered := func() {
+		if bufferedEntry != nil {
+			entryCount++
+			printLogEntry(entryCount, bufferedEntry, debug, verbose)
+			bufferedEntry = nil
+		}
+	}
 
-		if strings.TrimSpace(line) == "" {
-			if debug {
-				fmt.Printf("Line %d: [EMPTY LINE]\n", lineCount)
+	for {
+		n, err := file.Read(buf)
+		if n > 0 {
+			data := buf[:n]
+			allData := append(leftover, data...)
+			leftover = nil
+
+			lines := strings.Split(string(allData), "\n")
+
+			for i, line := range lines {
+				if i == len(lines)-1 && !strings.HasSuffix(string(allData), "\n") {
+					leftover = []byte(line)
+					continue
+				}
+
+				lineCount++
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					if debug {
+						fmt.Printf("Line %d: [EMPTY LINE]\n", lineCount)
+					}
+					continue
+				}
+
+				isNewEntry := logs.IsLikelyNewLogEntry(line)
+
+				if !isNewEntry && bufferedEntry != nil {
+					bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
+					bufferedEntry = logs.ParseLogLine(bufferedEntry.Raw)
+					if strings.Contains(bufferedEntry.Message, "[sql]") && len(bufferedEntry.Fields) > 0 {
+						flushBuffered()
+					}
+				} else {
+					flushBuffered()
+
+					entry := logs.ParseLogLine(trimmed)
+
+					shouldBuffer := (strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0) ||
+						(entry.Timestamp != "" && len(entry.Fields) == 0 && len(entry.Message) > 0)
+
+					if shouldBuffer {
+						bufferedEntry = entry
+					} else {
+						entryCount++
+						printLogEntry(entryCount, entry, debug, verbose)
+					}
+				}
 			}
-			continue
 		}
 
-		entry := logs.ParseLogLine(line)
-		printLogEntry(lineCount, entry, debug, verbose)
+		if err != nil {
+			break
+		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error reading file: %v\n", err)
-		os.Exit(1)
-	}
+	flushBuffered()
 
-	fmt.Printf("\nProcessed %d lines from file.\n", lineCount)
+	fmt.Printf("\nProcessed %d lines from file (%d log entries).\n", lineCount, entryCount)
 }
 
 func printLogEntry(lineNum int, entry *logs.LogEntry, debug bool, verbose bool) {

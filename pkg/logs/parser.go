@@ -3,6 +3,7 @@ package logs
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -102,84 +103,69 @@ func stripANSI(s string) string {
 	return cleaned
 }
 
-// parseKeyValuePairsWithANSI parses key=value pairs from a string that may contain ANSI codes
-// ANSI codes are used as hints for field boundaries and then stripped from values
-func parseKeyValuePairsWithANSI(s string) map[string]string {
-	// First, strip ANSI codes but remember their positions as potential field boundaries
-	ansiPositions := findANSIPositions(s)
-	stripped := stripANSI(s)
-
-	// Parse the stripped string
-	fields := parseKeyValuePairs(stripped)
-
-	// If we found ANSI codes and they seem to mark field boundaries, use that info
-	// This helps when fields are separated by ANSI codes instead of just spaces
-	if len(ansiPositions) > 0 && len(fields) == 0 {
-		// Try parsing with ANSI-based segmentation
-		fields = parseWithANSIBoundaries(s, ansiPositions)
-	}
-
-	return fields
+// Block represents a text segment with its associated ANSI codes
+type Block struct {
+	Text      string
+	ANSICodes []string // The ANSI codes applied to this block
+	Range     [2]int   // Start and end positions in the original string (including ANSI codes)
+	TextRange [2]int   // Start and end positions of just the text (excluding ANSI codes)
 }
 
-// findANSIPositions returns the byte positions where ANSI codes start in the string
-func findANSIPositions(s string) []int {
-	positions := []int{}
+// ParseANSIBlocks splits a string into blocks based on ANSI escape codes
+func ParseANSIBlocks(s string) []Block {
+	// Regex to match ANSI escape codes like ^[[90m, ^[[0m, etc.
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+	var blocks []Block
+	var currentCodes []string
+	lastIdx := 0
+	textOffset := 0 // Track position in the stripped string (without ANSI codes)
+
+	// Find all ANSI code positions
 	matches := ansiRegex.FindAllStringIndex(s, -1)
+
 	for _, match := range matches {
-		positions = append(positions, match[0])
-	}
-	return positions
-}
+		start, end := match[0], match[1]
 
-// parseWithANSIBoundaries attempts to parse fields using ANSI codes as boundary hints
-func parseWithANSIBoundaries(s string, ansiPositions []int) map[string]string {
-	// Split string at ANSI positions and try to parse each segment
-	fields := make(map[string]string)
-	segments := splitAtANSIBoundaries(s, ansiPositions)
-
-	for _, seg := range segments {
-		stripped := stripANSI(seg)
-		segFields := parseKeyValuePairs(stripped)
-		for k, v := range segFields {
-			fields[k] = v
+		// If there's text before this ANSI code, create a block
+		if start > lastIdx {
+			text := s[lastIdx:start]
+			textLen := len(text)
+			blocks = append(blocks, Block{
+				Text:      text,
+				ANSICodes: append([]string{}, currentCodes...),      // Copy current codes
+				Range:     [2]int{lastIdx, start},                   // Range in original string
+				TextRange: [2]int{textOffset, textOffset + textLen}, // Range in stripped string
+			})
+			textOffset += textLen
 		}
-	}
 
-	return fields
-}
+		// Extract the ANSI code
+		code := s[start:end]
 
-// splitAtANSIBoundaries splits a string at ANSI code positions
-func splitAtANSIBoundaries(s string, positions []int) []string {
-	if len(positions) == 0 {
-		return []string{s}
-	}
-
-	segments := []string{}
-	lastPos := 0
-
-	for _, pos := range positions {
-		if pos > lastPos {
-			segments = append(segments, s[lastPos:pos])
+		// Check if it's a reset code (^[[0m or \x1b[0m)
+		if code == "\x1b[0m" {
+			currentCodes = []string{}
+		} else {
+			currentCodes = append(currentCodes, code)
 		}
-		// Find the end of this ANSI sequence
-		endPos := pos
-		for endPos < len(s) {
-			match := ansiRegex.FindStringIndex(s[endPos:])
-			if match != nil && match[0] == 0 {
-				endPos += match[1]
-				break
-			}
-			endPos++
-		}
-		lastPos = endPos
+
+		lastIdx = end
 	}
 
-	if lastPos < len(s) {
-		segments = append(segments, s[lastPos:])
+	// Add remaining text after last ANSI code
+	if lastIdx < len(s) {
+		text := s[lastIdx:]
+		textLen := len(text)
+		blocks = append(blocks, Block{
+			Text:      text,
+			ANSICodes: append([]string{}, currentCodes...),
+			Range:     [2]int{lastIdx, len(s)},
+			TextRange: [2]int{textOffset, textOffset + textLen},
+		})
 	}
 
-	return segments
+	return blocks
 }
 
 func parseKeyValuePairs(s string) map[string]string {
@@ -278,8 +264,118 @@ func ParseLogLine(line string) *LogEntry {
 	}
 
 	// Keep original line with ANSI codes for field boundary detection
+
+	if json.Valid([]byte(line)) {
+		entry.IsJSON = true
+		entry.JSONFields = make(map[string]interface{})
+		json.Unmarshal([]byte(line), &entry.JSONFields)
+
+		extractedFields := []string{}
+		// Try multiple common timestamp field names
+		for _, key := range []string{"timestamp", "@timestamp", "time", "ts", "datetime", "date"} {
+			if ts, ok := entry.JSONFields[key].(string); ok {
+				entry.Timestamp = ts
+				tsTime, err := time.Parse(time.RFC3339Nano, ts)
+				if err == nil {
+					entry.Timestamp = tsTime.Format(time.RFC3339Nano)
+				}
+				extractedFields = append(extractedFields, key)
+				break
+			}
+		}
+
+		// Try multiple common level field names
+		for _, key := range []string{"level", "severity", "log_level", "loglevel", "lvl"} {
+			if lvl, ok := entry.JSONFields[key].(string); ok {
+				entry.Level = lvl
+				if parsedLevel, ok := ParseLevel(lvl); ok {
+					entry.Level = parsedLevel
+				}
+				extractedFields = append(extractedFields, key)
+				break
+			}
+		}
+
+		// Try multiple common message field names
+		for _, key := range []string{"message", "msg", "text", "log", "event"} {
+			if msg, ok := entry.JSONFields[key].(string); ok {
+				entry.Message = msg
+				extractedFields = append(extractedFields, key)
+				break
+			}
+		}
+
+		for _, key := range []string{"caller", "source"} {
+			if caller, ok := entry.JSONFields[key].(string); ok {
+				if _, ok := ParseFile(caller); ok {
+					entry.File = caller
+					extractedFields = append(extractedFields, key)
+					break
+				}
+			}
+		}
+
+		// Populate fields map with all JSON fields (excluding already extracted ones)
+		for key, value := range entry.JSONFields {
+			// Skip the ones we already extracted into dedicated fields
+			if slices.Contains(extractedFields, key) {
+				continue
+			}
+
+			// Convert value to string for fields map
+			switch v := value.(type) {
+			case string:
+				entry.Fields[key] = v
+			case nil:
+				entry.Fields[key] = ""
+			default:
+				// Convert complex types to JSON string
+				if jsonBytes, err := json.Marshal(v); err == nil {
+					entry.Fields[key] = string(jsonBytes)
+				}
+			}
+		}
+
+		return entry
+	}
+
 	originalLine := line
 	line = stripANSI(line)
+
+	blocks := ParseANSIBlocks(originalLine)
+	linesToStrip := []string{}
+	for i, block := range blocks {
+		// fmt.Printf("  Block: %q - %d:%d\n", block.Text, block.TextRange[0], block.TextRange[1])
+
+		if strings.HasSuffix(block.Text, "=") && i < len(blocks)-1 {
+			nextBlock := blocks[i+1]
+			entry.Fields[block.Text[:len(block.Text)-1]] = nextBlock.Text
+
+			strippedLine := line[block.TextRange[0]:nextBlock.TextRange[1]]
+			linesToStrip = append(linesToStrip, strippedLine)
+		}
+
+		if ts, ok := ParseTimestamp(block.Text); ok {
+			entry.Timestamp = ts.Format(time.RFC3339Nano)
+			linesToStrip = append(linesToStrip, block.Text)
+		}
+
+		if lvl, ok := ParseLevel(block.Text); ok {
+			entry.Level = lvl
+			linesToStrip = append(linesToStrip, block.Text)
+		}
+
+		if file, ok := ParseFile(block.Text); ok {
+			entry.File = file
+			linesToStrip = append(linesToStrip, block.Text)
+		}
+
+	}
+
+	for _, lineToStrip := range linesToStrip {
+		line = strings.Replace(line, lineToStrip, "", 1)
+	}
+	line = strings.TrimSpace(line)
 
 	// Try Sentry Logger format
 	if matches := sentryRegex.FindStringSubmatch(line); len(matches) >= 3 {
@@ -355,61 +451,6 @@ func ParseLogLine(line string) *LogEntry {
 		return entry
 	}
 
-	if json.Valid([]byte(line)) {
-		entry.IsJSON = true
-		entry.JSONFields = make(map[string]interface{})
-		json.Unmarshal([]byte(line), &entry.JSONFields)
-
-		// Try multiple common timestamp field names
-		for _, key := range []string{"timestamp", "@timestamp", "time", "ts", "datetime", "date"} {
-			if ts, ok := entry.JSONFields[key].(string); ok {
-				entry.Timestamp = ts
-				break
-			}
-		}
-
-		// Try multiple common level field names
-		for _, key := range []string{"level", "severity", "log_level", "loglevel", "lvl"} {
-			if lvl, ok := entry.JSONFields[key].(string); ok {
-				entry.Level = strings.ToUpper(lvl)
-				break
-			}
-		}
-
-		// Try multiple common message field names
-		for _, key := range []string{"message", "msg", "text", "log", "event"} {
-			if msg, ok := entry.JSONFields[key].(string); ok {
-				entry.Message = msg
-				break
-			}
-		}
-
-		// Populate fields map with all JSON fields (excluding already extracted ones)
-		for key, value := range entry.JSONFields {
-			// Skip the ones we already extracted into dedicated fields
-			if key == "level" || key == "severity" || key == "log_level" || key == "loglevel" || key == "lvl" ||
-				key == "message" || key == "msg" || key == "text" || key == "log" || key == "event" ||
-				key == "timestamp" || key == "@timestamp" || key == "time" || key == "ts" || key == "datetime" || key == "date" {
-				continue
-			}
-
-			// Convert value to string for fields map
-			switch v := value.(type) {
-			case string:
-				entry.Fields[key] = v
-			case nil:
-				entry.Fields[key] = ""
-			default:
-				// Convert complex types to JSON string
-				if jsonBytes, err := json.Marshal(v); err == nil {
-					entry.Fields[key] = string(jsonBytes)
-				}
-			}
-		}
-
-		return entry
-	}
-
 	remaining := line
 
 	if matches := timestampRegex.FindStringSubmatch(line); len(matches) > 1 {
@@ -439,15 +480,15 @@ func ParseLogLine(line string) *LogEntry {
 	// Try ANSI-aware field parsing first if original line had ANSI codes
 	// ANSI codes can serve as field boundary hints
 	var fields map[string]string
-	if hasANSICodes(originalLine) {
-		// Calculate where we are in the original line to get the corresponding segment
-		// This is an approximation - we look for the remaining text in the original
-		origIdx := strings.Index(originalLine, remaining)
-		if origIdx >= 0 {
-			originalRemaining := originalLine[origIdx:]
-			fields = parseKeyValuePairsWithANSI(originalRemaining)
-		}
-	}
+	// if hasANSICodes(originalLine) {
+	// 	// Calculate where we are in the original line to get the corresponding segment
+	// 	// This is an approximation - we look for the remaining text in the original
+	// 	origIdx := strings.Index(originalLine, remaining)
+	// 	if origIdx >= 0 {
+	// 		originalRemaining := originalLine[origIdx:]
+	// 		fields = parseKeyValuePairsWithANSI(originalRemaining)
+	// 	}
+	// }
 
 	// Fall back to regular parsing if ANSI-aware parsing didn't yield results
 	if len(fields) == 0 {
@@ -616,6 +657,33 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 	}
 
 	return time.Time{}, false
+}
+
+func ParseLevel(levelStr string) (string, bool) {
+	switch strings.ToUpper(levelStr) {
+	case "ERR", "ERROR", "FATAL":
+		return "ERR", true
+	case "WRN", "WARN":
+		return "WRN", true
+	case "INF", "INFO":
+		return "INF", true
+	case "DBG", "DEBUG":
+		return "DBG", true
+	case "TRC", "TRACE":
+		return "TRC", true
+	}
+	return "", false
+}
+
+func ParseFile(fileStr string) (string, bool) {
+	if fileStr == "" {
+		return "", false
+	}
+	matches := fileRegex.FindStringSubmatch(fileStr)
+	if len(matches) > 1 {
+		return matches[1], true
+	}
+	return "", false
 }
 
 func init() {
