@@ -1025,9 +1025,17 @@ const app = createApp({
       return div.innerHTML;
     },
 
+    shouldShowField(key, value) {
+      // Always show error field
+      if (key === "error") return true;
+      // Show fields less than 40 characters
+      const s = String(value);
+      return s.length < 40;
+    },
+
     formatFieldValue(value) {
       const s = String(value);
-      return s.length > 50 ? s.substring(0, 50) + "..." : s;
+      return s.length > 50 ? s.substring(0, 20) + "..." : s;
     },
 
     isJsonField(value) {

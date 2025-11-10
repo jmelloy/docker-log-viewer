@@ -284,6 +284,14 @@ export function createLogStreamComponent() {
         this.$emit("log-clicked", log);
       },
 
+      shouldShowField(key, value) {
+        // Always show error field
+        if (key === 'error') return true;
+        // Show fields less than 40 characters
+        const s = String(value);
+        return s.length < 40;
+      },
+
       formatFieldValue(value) {
         if (typeof value !== "string") {
           return String(value);
