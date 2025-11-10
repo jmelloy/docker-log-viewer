@@ -563,6 +563,41 @@ const app = createApp({
       return this.containers.find((c) => c.ID === containerId)?.Name || containerId;
     },
 
+    getShortContainerName(containerId) {
+      const fullName = this.getContainerName(containerId);
+      // For Docker Compose containers (format: project-service-number)
+      const parts = fullName.split("-");
+      if (parts.length >= 3 && parts[parts.length - 1].match(/^\d+$/)) {
+        // Return the service name (middle part)
+        return parts[parts.length - 2];
+      }
+      // For non-compose containers, return as-is
+      return fullName;
+    },
+
+    formatTimestamp(timestamp) {
+      if (!timestamp) return "";
+
+      // If timestamp is already in HH:MM:SS format, return it
+      if (timestamp.match(/^\d{2}:\d{2}:\d{2}/)) {
+        return timestamp.substring(0, 8); // Just HH:MM:SS
+      }
+
+      // Try to parse and format the timestamp
+      try {
+        // Handle various formats and extract time portion
+        // Oct  3 19:57:52.076536 -> 19:57:52
+        const timeMatch = timestamp.match(/(\d{2}):(\d{2}):(\d{2})(\.\d+)?/);
+        if (timeMatch) {
+          return `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}${timeMatch[4] ? `.${timeMatch[4].substring(1)}` : ""}`;
+        }
+      } catch {
+        // If parsing fails, return original
+      }
+
+      return timestamp;
+    },
+
     setTraceFilter(type, value, event) {
       if (event) event.stopPropagation();
       this.traceFilters.set(type, value);
@@ -1039,7 +1074,11 @@ const app = createApp({
     },
 
     isJsonField(value) {
-      return value.trim().startsWith("{") || value.trim().startsWith("[");
+      return (
+        value.trim().startsWith("{") ||
+        value.trim().startsWith("[") ||
+        (Number.isFinite(Number(value)) && Number(value) < 1000000)
+      );
     },
 
     formatJsonField(value) {
@@ -1047,6 +1086,7 @@ const app = createApp({
         const parsed = JSON.parse(value);
         return JSON.stringify(parsed, null, 2);
       } catch (e) {
+        console.error("Error formatting JSON field:", e);
         return value;
       }
     },
