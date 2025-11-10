@@ -102,6 +102,86 @@ func stripANSI(s string) string {
 	return cleaned
 }
 
+// parseKeyValuePairsWithANSI parses key=value pairs from a string that may contain ANSI codes
+// ANSI codes are used as hints for field boundaries and then stripped from values
+func parseKeyValuePairsWithANSI(s string) map[string]string {
+	// First, strip ANSI codes but remember their positions as potential field boundaries
+	ansiPositions := findANSIPositions(s)
+	stripped := stripANSI(s)
+	
+	// Parse the stripped string
+	fields := parseKeyValuePairs(stripped)
+	
+	// If we found ANSI codes and they seem to mark field boundaries, use that info
+	// This helps when fields are separated by ANSI codes instead of just spaces
+	if len(ansiPositions) > 0 && len(fields) == 0 {
+		// Try parsing with ANSI-based segmentation
+		fields = parseWithANSIBoundaries(s, ansiPositions)
+	}
+	
+	return fields
+}
+
+// findANSIPositions returns the byte positions where ANSI codes start in the string
+func findANSIPositions(s string) []int {
+	positions := []int{}
+	matches := ansiRegex.FindAllStringIndex(s, -1)
+	for _, match := range matches {
+		positions = append(positions, match[0])
+	}
+	return positions
+}
+
+// parseWithANSIBoundaries attempts to parse fields using ANSI codes as boundary hints
+func parseWithANSIBoundaries(s string, ansiPositions []int) map[string]string {
+	// Split string at ANSI positions and try to parse each segment
+	fields := make(map[string]string)
+	segments := splitAtANSIBoundaries(s, ansiPositions)
+	
+	for _, seg := range segments {
+		stripped := stripANSI(seg)
+		segFields := parseKeyValuePairs(stripped)
+		for k, v := range segFields {
+			fields[k] = v
+		}
+	}
+	
+	return fields
+}
+
+// splitAtANSIBoundaries splits a string at ANSI code positions
+func splitAtANSIBoundaries(s string, positions []int) []string {
+	if len(positions) == 0 {
+		return []string{s}
+	}
+	
+	segments := []string{}
+	lastPos := 0
+	
+	for _, pos := range positions {
+		if pos > lastPos {
+			segments = append(segments, s[lastPos:pos])
+		}
+		// Find the end of this ANSI sequence
+		endPos := pos
+		for endPos < len(s) {
+			match := ansiRegex.FindStringIndex(s[endPos:])
+			if match != nil && match[0] == 0 {
+				endPos += match[1]
+				break
+			}
+			endPos++
+		}
+		lastPos = endPos
+	}
+	
+	if lastPos < len(s) {
+		segments = append(segments, s[lastPos:])
+	}
+	
+	return segments
+}
+
 func parseKeyValuePairs(s string) map[string]string {
 	fields := make(map[string]string)
 	i := 0
@@ -197,6 +277,8 @@ func ParseLogLine(line string) *LogEntry {
 		return entry
 	}
 
+	// Keep original line with ANSI codes for field boundary detection
+	originalLine := line
 	line = stripANSI(line)
 
 	// Try Sentry Logger format
@@ -354,7 +436,24 @@ func ParseLogLine(line string) *LogEntry {
 		remaining = strings.TrimSpace(remaining)
 	}
 
-	fields := parseKeyValuePairs(remaining)
+	// Try ANSI-aware field parsing first if original line had ANSI codes
+	// ANSI codes can serve as field boundary hints
+	var fields map[string]string
+	if hasANSICodes(originalLine) {
+		// Calculate where we are in the original line to get the corresponding segment
+		// This is an approximation - we look for the remaining text in the original
+		origIdx := strings.Index(originalLine, remaining)
+		if origIdx >= 0 {
+			originalRemaining := originalLine[origIdx:]
+			fields = parseKeyValuePairsWithANSI(originalRemaining)
+		}
+	}
+	
+	// Fall back to regular parsing if ANSI-aware parsing didn't yield results
+	if len(fields) == 0 {
+		fields = parseKeyValuePairs(remaining)
+	}
+	
 	if len(fields) > 0 {
 		firstKey := ""
 		for k := range fields {

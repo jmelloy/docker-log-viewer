@@ -488,3 +488,83 @@ func TestANSIDelineation(t *testing.T) {
 		})
 	}
 }
+
+func TestANSIAwareFieldParsing(t *testing.T) {
+	testCases := []struct {
+		name           string
+		input          string
+		expectedFields map[string]string
+		expectedMsg    string
+	}{
+		{
+			name:  "ANSI codes around field names",
+			input: "\x1b[32mOct  3 21:53:27\x1b[0m INF Processing \x1b[33mrequest_id\x1b[0m=abc123 \x1b[36muser_id\x1b[0m=456",
+			expectedFields: map[string]string{
+				"request_id": "abc123",
+				"user_id":    "456",
+			},
+			expectedMsg: "Processing",
+		},
+		{
+			name:  "ANSI codes in field values",
+			input: "Oct  3 21:53:27 INF Processing request_id=\x1b[33mabc123\x1b[0m status=\x1b[32msuccess\x1b[0m",
+			expectedFields: map[string]string{
+				"request_id": "abc123",
+				"status":     "success",
+			},
+			expectedMsg: "Processing",
+		},
+		{
+			name:  "ANSI codes separating fields",
+			input: "Oct  3 21:53:27 INF Processing\x1b[0m request_id=abc123\x1b[0m user_id=456",
+			expectedFields: map[string]string{
+				"request_id": "abc123",
+				"user_id":    "456",
+			},
+			expectedMsg: "Processing",
+		},
+		{
+			name:  "No ANSI codes - regular parsing",
+			input: "Oct  3 21:53:27 INF Processing request_id=xyz789 user_id=123",
+			expectedFields: map[string]string{
+				"request_id": "xyz789",
+				"user_id":    "123",
+			},
+			expectedMsg: "Processing",
+		},
+		{
+			name:  "ANSI codes as field delimiters",
+			input: "Oct  3 21:53:27 TRC pkg/test.go:42 > Query \x1b[36mdb.table\x1b[0m=users \x1b[33mduration\x1b[0m=1.234",
+			expectedFields: map[string]string{
+				"db.table": "users",
+				"duration": "1.234",
+			},
+			expectedMsg: "Query",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := ParseLogLine(tc.input)
+
+			if entry.Message != tc.expectedMsg {
+				t.Errorf("Expected message %q, got %q", tc.expectedMsg, entry.Message)
+			}
+
+			for key, expectedValue := range tc.expectedFields {
+				actualValue, ok := entry.Fields[key]
+				if !ok {
+					t.Errorf("Expected field %q not found in %v", key, entry.Fields)
+					continue
+				}
+				if actualValue != expectedValue {
+					t.Errorf("Field %q: expected %q, got %q", key, expectedValue, actualValue)
+				}
+			}
+
+			if len(entry.Fields) != len(tc.expectedFields) {
+				t.Errorf("Expected %d fields, got %d: %v", len(tc.expectedFields), len(entry.Fields), entry.Fields)
+			}
+		})
+	}
+}
