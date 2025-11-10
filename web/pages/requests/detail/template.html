@@ -539,7 +539,9 @@
               <span v-if="log.message" class="log-message">{{ log.message }}</span>
               <template v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})" :key="fieldIdx">
                 <span v-if="shouldShowField(key, value)" class="log-field">
-                  <span class="log-field-key">{{ key }}</span>=<span class="log-field-value">{{ formatFieldValue(value) }}</span>
+                  <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
+                    >{{ formatFieldValue(key, value) }}</span
+                  >
                 </span>
               </template>
             </div>
@@ -769,7 +771,9 @@
     <div v-if="selectedLog" class="modal-body">
       <div class="modal-section">
         <h4>Raw Log</h4>
-        <pre v-html="convertAnsiToHtml(selectedLog.entry?.rawLog || selectedLog.entry?.raw || 'No raw log available')"></pre>
+        <pre
+          v-html="convertAnsiToHtml(selectedLog.entry?.rawLog || selectedLog.entry?.raw || 'No raw log available')"
+        ></pre>
       </div>
       <div class="modal-section">
         <h4>Parsed Fields</h4>

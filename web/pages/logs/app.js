@@ -1062,14 +1062,27 @@ const app = createApp({
 
     shouldShowField(key, value) {
       // Always show error field
-      if (key === "error") return true;
+      if (key === "error" || key === "stack_trace" || key === "db.error") return true;
       // Show fields less than 40 characters
       const s = String(value);
       return s.length < 40;
     },
 
-    formatFieldValue(value) {
+    formatFieldValue(key, value) {
       const s = String(value);
+      if (key === "stack_trace") {
+        const ret = [];
+        value.split("\\n").forEach((line, index) => {
+          if (index < 5) {
+            ret.push(line);
+          }
+        });
+        return ret.join(" ").replaceAll("\\t", "    ");
+      }
+      if (key === "error" || key === "db.error") {
+        return value;
+      }
+
       return s.length > 50 ? s.substring(0, 20) + "..." : s;
     },
 

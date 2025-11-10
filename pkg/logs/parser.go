@@ -109,6 +109,10 @@ type Block struct {
 	Range     [2]int   // Start and end positions in the original string (including ANSI codes)
 }
 
+func (b Block) Equals(other Block) bool {
+	return b.Text == other.Text && b.Range[0] == other.Range[0] && b.Range[1] == other.Range[1]
+}
+
 // ParseANSIBlocks splits a string into blocks based on ANSI escape codes
 func ParseANSIBlocks(s string) []Block {
 	// Regex to match ANSI escape codes like ^[[90m, ^[[0m, etc.
@@ -468,30 +472,38 @@ func ParseLogLine(line string) *LogEntry {
 	blocks := ParseANSIBlocks(originalLine)
 	linesToStrip := []string{}
 
+	nextBlock := Block{}
 	for i, block := range blocks {
-		// fmt.Printf("  Block: %q - %d:%d\n", block.Text, block.TextRange[0], block.TextRange[1])
+
+		if block.Equals(nextBlock) || strings.TrimSpace(block.Text) == "" {
+			continue
+		}
 
 		if strings.HasSuffix(block.Text, "=") && i < len(blocks)-1 {
-			nextBlock := blocks[i+1]
+			nextBlock = blocks[i+1]
 			entry.Fields[block.Text[:len(block.Text)-1]] = nextBlock.Text
 			linesToStrip = append(linesToStrip, block.Text+nextBlock.Text)
+
+			continue
 		}
 
 		if ts, ok := ParseTimestamp(block.Text); ok {
 			entry.Timestamp = ts.Format(time.RFC3339Nano)
 			linesToStrip = append(linesToStrip, block.Text)
+			continue
 		}
 
 		if lvl, ok := ParseLevel(block.Text); ok {
 			entry.Level = lvl
 			linesToStrip = append(linesToStrip, block.Text)
+			continue
 		}
 
 		if file, ok := ParseFile(block.Text); ok {
 			entry.File = file
 			linesToStrip = append(linesToStrip, block.Text)
+			continue
 		}
-
 	}
 
 	for _, lineToStrip := range linesToStrip {
@@ -529,14 +541,13 @@ func ParseLogLine(line string) *LogEntry {
 	}
 
 	if entry.File == "" {
-		if matches := fileRegex.FindStringSubmatch(line); len(matches) > 1 {
-			entry.File = matches[1]
+		if matches := fileRegex.FindStringSubmatch(line); len(matches) > 0 {
+			entry.File = matches[0]
 			line = strings.Replace(line, matches[0], "", 1)
 		}
 	}
 
 	entry.Message = line
-
 	// Fall back to regular parsing if ANSI-aware parsing didn't yield results
 	if len(entry.Fields) == 0 {
 		fields, remaining := ParseKeyValues(line)
