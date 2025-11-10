@@ -244,8 +244,8 @@
     <main class="log-viewer">
       <div ref="logsContainer" class="logs">
         <div v-for="(log, index) in filteredLogs" :key="index" class="log-line" @click="openLogDetails(log)">
-          <span class="log-container">{{ getContainerName(log.containerId) }}</span>
-          <span v-if="log.entry?.timestamp" class="log-timestamp">{{ log.entry.timestamp }}</span>
+          <span class="log-container">{{ getShortContainerName(log.containerId) }}</span>
+          <span v-if="log.entry?.timestamp" class="log-timestamp">{{ formatTimestamp(log.entry.timestamp) }}</span>
           <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
           <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
           <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
@@ -274,7 +274,10 @@
     <div v-if="selectedLog" class="modal-body">
       <div class="modal-section">
         <h4>Raw Log</h4>
-        <pre v-html="convertAnsiToHtml(selectedLog.entry?.raw || 'No raw log available')"></pre>
+        <pre
+          style="white-space: pre-wrap"
+          v-html="convertAnsiToHtml(selectedLog.entry?.raw || 'No raw log available')"
+        ></pre>
       </div>
       <div class="modal-section">
         <h4>Parsed Fields</h4>
