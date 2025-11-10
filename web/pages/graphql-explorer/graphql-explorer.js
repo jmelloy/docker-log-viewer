@@ -54,6 +54,7 @@ const app = createApp({
         const parsed = JSON.parse(this.result);
         return JSON.stringify(parsed, null, 2);
       } catch (e) {
+        console.error("Error parsing result:", e);
         // If not valid JSON, return as-is
         return this.result;
       }
@@ -789,14 +790,6 @@ const app = createApp({
     toggleLogs() {
       this.showLogs = !this.showLogs;
     },
-  },
-
-  watch: {
-    schema(newSchema) {
-      if (newSchema) {
-        this.updateEditorSchema();
-      }
-    },
 
     applySyntaxHighlighting() {
       // Only apply if hljs is available
@@ -812,9 +805,18 @@ const app = createApp({
             block.classList.add("hljs");
           }
         } catch (e) {
+          console.error("Error applying syntax highlighting:", e);
           // If highlighting fails, leave as is
         }
       });
+    },
+  },
+
+  watch: {
+    schema(newSchema) {
+      if (newSchema) {
+        this.updateEditorSchema();
+      }
     },
   },
 
