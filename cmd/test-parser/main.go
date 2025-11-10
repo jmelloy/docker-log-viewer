@@ -208,10 +208,8 @@ func readFromLogFile(filePath string, debug bool, verbose bool) {
 func printLogEntry(lineNum int, entry *logs.LogEntry, debug bool, verbose bool) {
 	fmt.Printf("\n--- Line %d ---\n", lineNum)
 
-	if debug {
-		fmt.Printf("Raw: %s\n", entry.Raw)
-		fmt.Println(strings.Repeat("-", 40))
-	}
+	fmt.Printf("Raw: %s\n", entry.Raw)
+	fmt.Println(strings.Repeat("-", 40))
 
 	fmt.Printf("IsJSON: %v\n", entry.IsJSON)
 	fmt.Printf("Timestamp: %s\n", entry.Timestamp)
