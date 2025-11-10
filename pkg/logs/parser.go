@@ -2,6 +2,8 @@ package logs
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -26,9 +28,6 @@ var (
 	fileRegex      = regexp.MustCompile(`([\w/]+\.go:\d+)`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
 	ansiStartRegex = regexp.MustCompile(`^\x1b\[`)
-	sentryRegex    = regexp.MustCompile(`^Sentry Logger \[(log|warn|error|debug)\]:\s*(.*)$`)
-	pinoRegex      = regexp.MustCompile(`^\[(\d{2}:\d{2}:\d{2}\.\d+)\]\s+(DEBUG|INFO|WARN|ERROR)\s+\((\d+)\):\s+(.*)$`)
-	queryRegex     = regexp.MustCompile(`^\[query\]\s+(.+?)(?:\s+\[took\s+(\d+)\s*ms(?:,\s*(\d+)\s+(row|result)s?\s+affected)?\])?$`)
 )
 
 // startsWithANSI checks if a line starts with an ANSI escape code
@@ -168,89 +167,217 @@ func ParseANSIBlocks(s string) []Block {
 	return blocks
 }
 
-func parseKeyValuePairs(s string) map[string]string {
-	fields := make(map[string]string)
-	i := 0
+// ParseKeyValues extracts key=value pairs from the end of a string.
+// Keys match pattern [\w.] and values can be numbers, JSON, or strings.
+// Returns a map of key-value pairs.
+func ParseKeyValues(s string) (map[string]string, string) {
+	result := make(map[string]string)
 
-	for i < len(s) {
-		keyStart := i
-		for i < len(s) && (s[i] == '_' || s[i] == '.' || (s[i] >= 'a' && s[i] <= 'z') || (s[i] >= 'A' && s[i] <= 'Z') || (s[i] >= '0' && s[i] <= '9')) {
-			i++
+	// Find where structured data starts (first key=value pattern)
+	start := findStructuredDataStart(s)
+	if start < 0 {
+		return result, s
+	}
+
+	remaining := s[start:]
+	pos := 0
+
+	extractedStrings := []string{}
+	for pos < len(remaining) {
+		// Skip whitespace
+		for pos < len(remaining) && (remaining[pos] == ' ' || remaining[pos] == '\t' || remaining[pos] == '\n' || remaining[pos] == '\r') {
+			pos++
 		}
-
-		if i >= len(s) || s[i] != '=' {
-			i++
-			continue
-		}
-
-		key := s[keyStart:i]
-		if key == "" {
-			i++
-			continue
-		}
-
-		i++
-		if i >= len(s) {
+		if pos >= len(remaining) {
 			break
 		}
 
-		var value string
-		if s[i] == '"' {
-			i++
-			valueStart := i
-			for i < len(s) && s[i] != '"' {
-				if s[i] == '\\' && i+1 < len(s) {
-					i += 2
-				} else {
-					i++
-				}
-			}
-			value = s[valueStart:i]
-			if i < len(s) {
-				i++
-			}
-		} else if s[i] == '{' {
-			depth := 1
-			i++
-			valueStart := i - 1
-			for i < len(s) && depth > 0 {
-				if s[i] == '{' {
-					depth++
-				} else if s[i] == '}' {
-					depth--
-				}
-				i++
-			}
-			value = s[valueStart:i]
-		} else if s[i] == '[' {
-			depth := 1
-			i++
-			valueStart := i - 1
-			for i < len(s) && depth > 0 {
-				if s[i] == '[' {
-					depth++
-				} else if s[i] == ']' {
-					depth--
-				}
-				i++
-			}
-			value = s[valueStart:i]
-		} else {
-			valueStart := i
-			for i < len(s) && s[i] != ' ' {
-				i++
-			}
-			value = s[valueStart:i]
+		// Try to match key=
+		keyMatch := regexp.MustCompile(`^([\w.]+)=`).FindStringSubmatchIndex(remaining[pos:])
+		if keyMatch == nil {
+			pos++
+			continue
 		}
 
-		fields[key] = value
+		key := remaining[pos+keyMatch[2] : pos+keyMatch[3]]
+		valueStart := pos + keyMatch[1] // position after '='
 
-		for i < len(s) && s[i] == ' ' {
-			i++
+		// Extract the value
+		value, newPos := extractValue(remaining, valueStart)
+		if value != "" {
+			result[key] = value
+			extractedStrings = append(extractedStrings, s[pos:newPos])
+			pos = newPos
+		} else {
+			pos = valueStart + 1
 		}
 	}
 
-	return fields
+	for _, extractedString := range extractedStrings {
+		s = strings.Replace(s, extractedString, "", 1)
+	}
+	return result, s
+}
+
+// findStructuredDataStart finds where structured key=value data begins
+func findStructuredDataStart(s string) int {
+	re := regexp.MustCompile(`[\w.]+=["\{\[]`)
+	if match := re.FindStringIndex(s); match != nil {
+		return match[0]
+	}
+
+	re = regexp.MustCompile(`[\w.]+=`)
+	if match := re.FindStringIndex(s); match != nil {
+		return match[0]
+	}
+
+	return 0
+}
+
+// extractValue extracts a value starting at position i
+func extractValue(s string, i int) (string, int) {
+	if i >= len(s) {
+		return "", i
+	}
+
+	start := i
+
+	// Handle quoted string
+	if s[i] == '"' {
+		i++
+		for i < len(s) {
+			if s[i] == '\\' && i+1 < len(s) {
+				i += 2
+				continue
+			}
+			if s[i] == '"' {
+				i++
+				return s[start:i], i
+			}
+			i++
+		}
+		return s[start:], len(s)
+	}
+
+	// Handle JSON object
+	if s[i] == '{' {
+		return extractBracketed(s, i, '{', '}')
+	}
+
+	// Handle JSON array
+	if s[i] == '[' {
+		return extractBracketed(s, i, '[', ']')
+	}
+
+	// Handle unquoted value - stop at whitespace followed by key=
+	for i < len(s) {
+		if s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r' {
+			// Look ahead to see if next non-whitespace is a key=
+			j := i
+			for j < len(s) && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r') {
+				j++
+			}
+			if j < len(s) && regexp.MustCompile(`^[\w.]+=["\{\[]`).MatchString(s[j:]) {
+				return strings.TrimSpace(s[start:i]), i
+			}
+			if j < len(s) && regexp.MustCompile(`^[\w.]+=`).MatchString(s[j:]) {
+				return strings.TrimSpace(s[start:i]), i
+			}
+		}
+		i++
+	}
+
+	return strings.TrimSpace(s[start:i]), i
+}
+
+// extractBracketed extracts bracketed content (JSON objects/arrays)
+func extractBracketed(s string, i int, open, close byte) (string, int) {
+	start := i
+	depth := 0
+	inString := false
+
+	for i < len(s) {
+		c := s[i]
+
+		if inString {
+			if c == '\\' && i+1 < len(s) {
+				i += 2
+				continue
+			}
+			if c == '"' {
+				inString = false
+			}
+			i++
+			continue
+		}
+
+		if c == '"' {
+			inString = true
+		} else if c == open {
+			depth++
+		} else if c == close {
+			depth--
+			if depth == 0 {
+				i++
+				return s[start:i], i
+			}
+		}
+		i++
+	}
+
+	return s[start:], len(s)
+}
+
+func extractRequestFields(line string) (map[string]string, bool) {
+	requestFields := make(map[string]string)
+	if strings.HasSuffix(line, "}") {
+		// try to extract chunk of json
+		for i := len(line) - 1; i >= 0; i-- {
+			if line[i] == '{' {
+				jsonPart := line[i:]
+				if json.Valid([]byte(jsonPart)) {
+					var jsonFields map[string]interface{}
+					err := json.Unmarshal([]byte(jsonPart), &jsonFields)
+					if err != nil {
+						return nil, false
+					}
+					if req, ok := jsonFields["req"].(map[string]interface{}); ok {
+						if id, ok := req["id"]; ok {
+							requestFields["request_id"] = fmt.Sprintf("%v", id)
+						}
+						if method, ok := req["method"].(string); ok {
+							requestFields["method"] = method
+						}
+						if headers, ok := req["headers"].(map[string]interface{}); ok {
+							if contentLength, ok := headers["content-length"].(string); ok {
+								requestFields["content-length"] = contentLength
+							}
+							if baggage, ok := headers["baggage"].(string); ok {
+								// Parse baggage for sentry-trace_id
+								for _, pair := range strings.Split(baggage, ",") {
+									kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+									if len(kv) == 2 && kv[0] == "sentry-trace_id" {
+										requestFields["trace_id"] = kv[1]
+										break
+									}
+								}
+							}
+						}
+					}
+					if res, ok := jsonFields["res"].(map[string]interface{}); ok {
+						if statusCode, ok := res["statusCode"].(float64); ok {
+							requestFields["status"] = strconv.Itoa(int(statusCode))
+						}
+					}
+					if responseTime, ok := jsonFields["responseTime"].(float64); ok {
+						requestFields["responseTime"] = strconv.FormatFloat(responseTime, 'f', -1, 64)
+					}
+					return requestFields, true
+				}
+			}
+		}
+	}
+	return nil, false
 }
 
 func ParseLogLine(line string) *LogEntry {
@@ -377,141 +504,52 @@ func ParseLogLine(line string) *LogEntry {
 	}
 	line = strings.TrimSpace(line)
 
-	// Try Sentry Logger format
-	if matches := sentryRegex.FindStringSubmatch(line); len(matches) >= 3 {
-		entry.Level = strings.ToUpper(matches[1])
-		entry.Message = matches[2]
-		return entry
+	if strings.HasSuffix(line, "}") {
+		jsonFields, ok := extractRequestFields(line)
+		if ok && len(jsonFields) > 0 {
+			fmt.Println("jsonFields", jsonFields)
+			maps.Copy(entry.Fields, jsonFields)
+		}
 	}
 
-	// Try Pino format: [HH:MM:SS.mmm] LEVEL (pid): message {json}
-	if matches := pinoRegex.FindStringSubmatch(line); len(matches) >= 5 {
-		entry.Timestamp = matches[1]
-		entry.Level = matches[2]
-		entry.Fields["pid"] = matches[3]
-		remaining := matches[4]
-
-		// Check if there's JSON at the end
-		if idx := strings.Index(remaining, "{"); idx >= 0 {
-			entry.Message = strings.TrimSpace(remaining[:idx])
-			jsonPart := remaining[idx:]
-			if json.Valid([]byte(jsonPart)) {
-				entry.IsJSON = true
-				entry.JSONFields = make(map[string]interface{})
-				json.Unmarshal([]byte(jsonPart), &entry.JSONFields)
-
-				// Extract specific fields from nested JSON
-				if req, ok := entry.JSONFields["req"].(map[string]interface{}); ok {
-					if method, ok := req["method"].(string); ok {
-						entry.Fields["method"] = method
-					}
-					if headers, ok := req["headers"].(map[string]interface{}); ok {
-						if contentLength, ok := headers["content-length"].(string); ok {
-							entry.Fields["content-length"] = contentLength
-						}
-						if baggage, ok := headers["baggage"].(string); ok {
-							// Parse baggage for sentry-trace_id
-							pairs := strings.Split(baggage, ",")
-							for _, pair := range pairs {
-								kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
-								if len(kv) == 2 && kv[0] == "sentry-trace_id" {
-									entry.Fields["trace_id"] = kv[1]
-									break
-								}
-							}
-						}
-					}
-				}
-				if res, ok := entry.JSONFields["res"].(map[string]interface{}); ok {
-					if statusCode, ok := res["statusCode"].(float64); ok {
-						entry.Fields["statusCode"] = strconv.Itoa(int(statusCode))
-					}
-				}
-				if responseTime, ok := entry.JSONFields["responseTime"].(float64); ok {
-					entry.Fields["responseTime"] = strconv.FormatFloat(responseTime, 'f', -1, 64)
-				}
+	if entry.Timestamp == "" {
+		if matches := timestampRegex.FindStringSubmatch(line); len(matches) > 1 {
+			entry.Timestamp = matches[1]
+			tsTime, ok := ParseTimestamp(entry.Timestamp)
+			if ok {
+				entry.Timestamp = tsTime.Format(time.RFC3339Nano)
 			}
-		} else {
-			entry.Message = remaining
+			line = strings.Replace(line, matches[1], "", 1)
 		}
-		return entry
 	}
 
-	// Try query format: [query] statement [took X ms, Y results]
-	if matches := queryRegex.FindStringSubmatch(line); len(matches) >= 2 {
-		entry.Level = "INFO"
-		entry.Message = matches[1]
-		entry.Fields["type"] = "query"
-		if len(matches) > 2 && matches[2] != "" {
-			entry.Fields["duration_ms"] = matches[2]
+	if entry.Level == "" {
+		if matches := levelRegex.FindStringSubmatch(line); len(matches) > 0 {
+			entry.Level = matches[0]
+			parsedLevel, ok := ParseLevel(entry.Level)
+			if ok {
+				entry.Level = parsedLevel
+			}
+			line = strings.Replace(line, matches[0], "", 1)
 		}
-		if len(matches) > 3 && matches[3] != "" {
-			entry.Fields["rows"] = matches[3]
+	}
+
+	if entry.File == "" {
+		if matches := fileRegex.FindStringSubmatch(line); len(matches) > 1 {
+			entry.File = matches[1]
+			line = strings.Replace(line, matches[0], "", 1)
 		}
-		return entry
 	}
 
-	remaining := line
-
-	if matches := timestampRegex.FindStringSubmatch(line); len(matches) > 1 {
-		entry.Timestamp = matches[1]
-		idx := strings.Index(line, matches[1])
-		remaining = line[idx+len(matches[1]):]
-		remaining = strings.TrimSpace(remaining)
-	}
-
-	if matches := levelRegex.FindStringSubmatch(remaining); len(matches) > 0 {
-		entry.Level = matches[0]
-		remaining = strings.Replace(remaining, matches[0], "", 1)
-		remaining = strings.TrimSpace(remaining)
-	}
-
-	if matches := fileRegex.FindStringSubmatch(remaining); len(matches) > 1 {
-		entry.File = matches[1]
-		remaining = strings.Replace(remaining, matches[0], "", 1)
-		remaining = strings.TrimSpace(remaining)
-	}
-
-	if strings.HasPrefix(remaining, ">") {
-		remaining = strings.TrimPrefix(remaining, ">")
-		remaining = strings.TrimSpace(remaining)
-	}
-
-	// Try ANSI-aware field parsing first if original line had ANSI codes
-	// ANSI codes can serve as field boundary hints
-	var fields map[string]string
-	// if hasANSICodes(originalLine) {
-	// 	// Calculate where we are in the original line to get the corresponding segment
-	// 	// This is an approximation - we look for the remaining text in the original
-	// 	origIdx := strings.Index(originalLine, remaining)
-	// 	if origIdx >= 0 {
-	// 		originalRemaining := originalLine[origIdx:]
-	// 		fields = parseKeyValuePairsWithANSI(originalRemaining)
-	// 	}
-	// }
+	entry.Message = line
 
 	// Fall back to regular parsing if ANSI-aware parsing didn't yield results
-	if len(fields) == 0 {
-		fields = parseKeyValuePairs(remaining)
-	}
-
-	if len(fields) > 0 {
-		firstKey := ""
-		for k := range fields {
-			idx := strings.Index(remaining, k+"=")
-			if idx >= 0 && (firstKey == "" || idx < strings.Index(remaining, firstKey+"=")) {
-				firstKey = k
-			}
+	if len(entry.Fields) == 0 {
+		fields, remaining := ParseKeyValues(line)
+		if len(fields) > 0 {
+			entry.Message = remaining
+			maps.Copy(entry.Fields, fields)
 		}
-		if firstKey != "" {
-			firstFieldIdx := strings.Index(remaining, firstKey+"=")
-			if firstFieldIdx > 0 {
-				entry.Message = strings.TrimSpace(remaining[:firstFieldIdx])
-			}
-		}
-		entry.Fields = fields
-	} else {
-		entry.Message = remaining
 	}
 
 	return entry
@@ -620,7 +658,7 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 		"2006-01-02 15:04:05.000000",
 		"2006-01-02T15:04:05",
 		"2006-01-02 15:04:05",
-		// [19:57:52.076]
+		"[19:57:52.076]",
 		"[15:04:05.000]",
 		// 19:57:52.076536
 		"15:04:05.000000",
