@@ -1192,7 +1192,11 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal([]byte(responseBody), &responseData); err == nil {
 				if hasErrors, message, key := containsErrorsKey(responseData, ""); hasErrors {
 					slog.Warn("GraphQL errors in response", "message", message, "key", key)
-					execution.Error = message
+					msg := fmt.Sprintf("GraphQL errors: %s", message)
+					if key != "" {
+						msg += fmt.Sprintf(" at %s", key)
+					}
+					execution.Error = msg
 				}
 			}
 		}
@@ -1919,6 +1923,8 @@ func generateRequestID() string {
 // containsErrorsKey recursively checks if the data contains an "errors" key
 func containsErrorsKey(data interface{}, key string) (bool, string, string) {
 	slog.Debug("containsErrorsKey", "data", data, "key", key)
+	errors := map[string]string{}
+
 	switch v := data.(type) {
 	case map[string]interface{}:
 		if _, exists := v["errors"]; exists {
@@ -1938,9 +1944,16 @@ func containsErrorsKey(data interface{}, key string) (bool, string, string) {
 	case []interface{}:
 		for i, item := range v {
 			if hasErrors, message, key := containsErrorsKey(item, fmt.Sprintf("%s.[%d]", key, i)); hasErrors {
-				return true, message, key
+				errors[key] = message
 			}
 		}
+	}
+	if len(errors) > 0 {
+		errorsString := ""
+		for k, v := range errors {
+			errorsString += fmt.Sprintf("%s: %s\n", k, v)
+		}
+		return true, errorsString, ""
 	}
 	return false, "", key
 }
