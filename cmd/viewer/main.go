@@ -2234,7 +2234,11 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/retention", loggingMiddleware(wa.handleRetention))
 	http.HandleFunc("/api/retention/", loggingMiddleware(wa.handleRetentionDetail))
 
-	http.Handle("/", http.FileServer(http.Dir("./web")))
+	// Serve static assets at /static/
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
+	
+	// Serve pages from root
+	http.Handle("/", http.FileServer(http.Dir("./web/pages")))
 
 	// Create HTTP server with graceful shutdown
 	server := &http.Server{

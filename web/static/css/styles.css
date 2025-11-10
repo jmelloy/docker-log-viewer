@@ -958,7 +958,8 @@ button:disabled {
   overflow-x: auto;
 }
 
-.json-display {
+.json-display,
+.graphql-query {
   background: #0d1117;
   border: 1px solid #30363d;
   border-radius: 4px;

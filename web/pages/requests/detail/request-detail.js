@@ -1,11 +1,11 @@
-import { createAppHeader } from "./shared/navigation.js";
-import { API } from "./shared/api.js";
-import { formatSQL } from "./utils.js";
-import { createLogStreamComponent } from "./shared/log-stream-component.js";
-import { loadTemplate } from "./shared/template-loader.js";
+import { createAppHeader } from "/static/js/shared/navigation.js";
+import { API } from "/static/js/shared/api.js";
+import { formatSQL } from "/static/js/utils.js";
+import { createLogStreamComponent } from "/static/js/shared/log-stream-component.js";
+import { loadTemplate } from "/static/js/shared/template-loader.js";
 
-const pev2Template = await loadTemplate("/templates/request-detail-pev2.html");
-const mainTemplate = await loadTemplate("/templates/request-detail-main.html");
+const pev2Template = await loadTemplate("pev2-template.html");
+const mainTemplate = await loadTemplate("template.html");
 
 const { createApp } = Vue;
 
@@ -66,6 +66,7 @@ const app = createApp({
       try {
         return JSON.parse(this.requestDetail.execution.requestBody);
       } catch (e) {
+        console.error("Error parsing request body:", e);
         return null;
       }
     },
@@ -106,6 +107,7 @@ const app = createApp({
         const data = JSON.parse(this.requestDetail.execution.responseBody);
         return JSON.stringify(data, null, 2);
       } catch (e) {
+        console.error("Error parsing response body:", e);
         return this.requestDetail.execution.responseBody;
       }
     },
@@ -235,6 +237,7 @@ const app = createApp({
             block.classList.add("hljs");
           }
         } catch (e) {
+          console.error("Error highlighting JSON:", e);
           // If highlighting fails, leave as is
         }
       });
@@ -247,6 +250,7 @@ const app = createApp({
           block.innerHTML = highlighted.value;
           block.classList.add("hljs");
         } catch (e) {
+          console.error("Error highlighting GraphQL query:", e);
           // If highlighting fails, leave as is
         }
       });
@@ -259,6 +263,7 @@ const app = createApp({
           block.innerHTML = highlighted.value;
           block.classList.add("hljs");
         } catch (e) {
+          console.error("Error highlighting SQL query:", e);
           // If highlighting fails, leave as is
         }
       });
@@ -269,6 +274,7 @@ const app = createApp({
           block.innerHTML = highlighted.value;
           block.classList.add("hljs");
         } catch (e) {
+          console.error("Error highlighting SQL query:", e);
           // If highlighting fails, leave as is
         }
       });
@@ -320,7 +326,7 @@ const app = createApp({
         } catch (error) {
           console.error("Failed to auto-refresh request details:", error);
         }
-      }, 30000); // 30 seconds
+      }, 10000); // 10 seconds
     },
 
     goBack() {
@@ -570,7 +576,7 @@ const app = createApp({
         } else if (Array.isArray(parsed)) {
           // Handle array of requests - look for variables in each
           const allVariables = {};
-          parsed.forEach((item, index) => {
+          parsed.forEach((item, _) => {
             if (item.variables && typeof item.variables === "object") {
               Object.assign(allVariables, item.variables);
             }
@@ -597,6 +603,7 @@ const app = createApp({
           parsedValue = Number(value);
         }
       } catch (e) {
+        console.error("Error parsing GraphQL variable:", e);
         // Not valid JSON, use as string
         parsedValue = value;
       }
