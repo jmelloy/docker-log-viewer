@@ -254,7 +254,7 @@
               <span class="log-field-key">{{ key }}</span>=<span
                 :class="{ 'log-field-value': !isJsonField(value) }"
                 @click.stop="!isJsonField(value) && setTraceFilter(key, value, $event)"
-                >{{ formatFieldValue(value) }}</span
+                >{{ formatFieldValue(key, value) }}</span
               >
             </template>
           </span>
@@ -276,7 +276,7 @@
         <h4>Raw Log</h4>
         <pre
           style="white-space: pre-wrap"
-          v-html="convertAnsiToHtml(selectedLog.entry?.raw || 'No raw log available')"
+          v-html="convertAnsiToHtml(selectedLog.entry?.raw.replaceAll('\\n', '\n').replaceAll('\\t', '    ') || 'No raw log available')"
         ></pre>
       </div>
       <div class="modal-section">
