@@ -154,26 +154,33 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							continue
 						}
 
-						entry := ParseLogLine(trimmed)
+						// Use ANSI codes and other heuristics to detect new log entries
+						isNewEntry := IsLikelyNewLogEntry(line)
 
-						// Check if this is a continuation line for a [sql] entry
-						// Continuation lines have no timestamp and the buffered entry contains [sql]
-						if entry.Timestamp == "" && bufferedEntry != nil && strings.Contains(bufferedEntry.Message, "[sql]") {
+						// If this looks like a continuation line and we have a buffered entry, append to it
+						if !isNewEntry && bufferedEntry != nil {
 							// Combine with the buffered entry
 							bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
 							// Re-parse the combined raw text
 							bufferedEntry = ParseLogLine(bufferedEntry.Raw)
-							// If the buffered entry now has fields, flush it
-							if len(bufferedEntry.Fields) > 0 {
+							// Check if the buffered entry now looks complete (has structured fields)
+							// For SQL entries, we need fields. For other entries, we'll flush on next new entry.
+							if strings.Contains(bufferedEntry.Message, "[sql]") && len(bufferedEntry.Fields) > 0 {
 								flushBuffered()
 							}
 						} else {
 							// Flush any buffered entry first
 							flushBuffered()
 
-							// Check if this new entry contains [sql] and has no fields (needs combining)
-							if strings.Contains(entry.Message, "[sql]") && entry.Timestamp != "" && len(entry.Fields) == 0 {
-								// Buffer it, waiting for continuation lines
+							entry := ParseLogLine(trimmed)
+
+							// Check if this entry might have continuation lines
+							// SQL entries without fields or entries ending with incomplete patterns
+							shouldBuffer := (strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0) ||
+								(entry.Timestamp != "" && len(entry.Fields) == 0 && len(entry.Message) > 0)
+
+							if shouldBuffer {
+								// Buffer it, waiting for potential continuation lines
 								bufferedEntry = entry
 							} else {
 								// Send immediately, but check context first
