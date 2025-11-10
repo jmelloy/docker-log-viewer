@@ -1,7 +1,7 @@
 import { loadTemplate } from "./template-loader.js";
 
-const headerTemplate = await loadTemplate("/templates/navigation-header.html");
-const navTemplate = await loadTemplate("/templates/navigation-nav.html");
+const headerTemplate = await loadTemplate("/static/js/shared/navigation-header-template.html");
+const navTemplate = await loadTemplate("/static/js/shared/navigation-nav-template.html");
 
 export function createNavigation(activePage) {
   return {

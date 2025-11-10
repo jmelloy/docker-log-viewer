@@ -63,7 +63,9 @@
               :checked="selectedRequestIds.includes(req.id)"
               @change="updateCompareButton"
             />
-            <span class="exec-status" :class="getExecutionStatusClass(req)">{{ req.statusCode || 'ERR' }}</span>
+            <span class="exec-status" :class="getExecutionStatusClass(req)"
+              >{{ req.statusCode ?? 'EXECUTING' || 'ERR' }}</span
+            >
             <span class="exec-name">{{ req.displayName }}</span>
             <span class="exec-time">{{ getExecutionTimeString(req) }}</span>
             <span class="exec-server">{{ getExecutionServerUrl(req) }}</span>

@@ -1,13 +1,13 @@
-import { createAppHeader } from "./shared/navigation.js";
-import { API } from "./shared/api.js";
-import { GraphQLEditorManager } from "./graphql-editor-manager.js";
-import { createLogStreamComponent } from "./shared/log-stream-component.js";
-import { loadTemplate } from "./shared/template-loader.js";
+import { createAppHeader } from "../../static/js/shared/navigation.js";
+import { API } from "../../static/js/shared/api.js";
+import { GraphQLEditorManager } from "../../static/js/graphql-editor-manager.js";
+import { createLogStreamComponent } from "../../static/js/shared/log-stream-component.js";
+import { loadTemplate } from "../../static/js/shared/template-loader.js";
 
 const { createApp } = Vue;
 
 // Load template
-const template = await loadTemplate("/templates/graphql-explorer-main.html");
+const template = await loadTemplate("template.html");
 
 const app = createApp({
   data() {

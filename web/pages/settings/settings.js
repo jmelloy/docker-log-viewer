@@ -1,8 +1,8 @@
-import { createAppHeader } from "./shared/navigation.js";
-import { API } from "./shared/api.js";
-import { loadTemplate } from "./shared/template-loader.js";
+import { createAppHeader } from "../../static/js/shared/navigation.js";
+import { API } from "../../static/js/shared/api.js";
+import { loadTemplate } from "../../static/js/shared/template-loader.js";
 
-const template = await loadTemplate("/templates/settings-main.html");
+const template = await loadTemplate("template.html");
 
 const { createApp } = Vue;
 

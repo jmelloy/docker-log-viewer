@@ -19,7 +19,7 @@
 import { API } from "./api.js";
 import { loadTemplate } from "./template-loader.js";
 
-const template = await loadTemplate("/templates/log-stream.html");
+const template = await loadTemplate("/static/js/shared/log-stream-template.html");
 
 export function createLogStreamComponent() {
   const { createApp } = Vue;

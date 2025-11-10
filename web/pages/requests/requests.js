@@ -1,9 +1,9 @@
-import { createAppHeader } from "./shared/navigation.js";
-import { API } from "./shared/api.js";
-import { formatSQL } from "./utils.js";
-import { loadTemplate } from "./shared/template-loader.js";
+import { createAppHeader } from "/static/js/shared/navigation.js";
+import { API } from "/static/js/shared/api.js";
+import { formatSQL } from "/static/js/utils.js";
+import { loadTemplate } from "/static/js/shared/template-loader.js";
 
-const template = await loadTemplate("/templates/requests-main.html");
+const template = await loadTemplate("template.html");
 
 const { createApp } = Vue;
 
@@ -83,6 +83,7 @@ const app = createApp({
         const data = JSON.parse(this.selectedSampleQuery.requestData);
         return JSON.stringify(data, null, 2);
       } catch (e) {
+        console.error("Error parsing selected sample query data:", e);
         return this.selectedSampleQuery.requestData;
       }
     },
@@ -93,6 +94,7 @@ const app = createApp({
         const data = JSON.parse(this.selectedSampleQuery.requestData);
         return data.variables ? JSON.stringify(data.variables, null, 2) : null;
       } catch (e) {
+        console.error("Error parsing selected sample query variables:", e);
         return null;
       }
     },
@@ -229,7 +231,7 @@ const app = createApp({
     },
 
     showRequestDetail(requestId) {
-      window.location.href = `/request-detail.html?id=${requestId}`;
+      window.location.href = `/requests/detail/?id=${requestId}`;
     },
 
     async compareSelectedRequests() {
@@ -508,7 +510,7 @@ const app = createApp({
           parsedValue = Number(value);
         }
       } catch (e) {
-        // Not valid JSON, use as string
+        console.error("Error parsing GraphQL variable:", e);
         parsedValue = value;
       }
 

@@ -1,6 +1,6 @@
 import { loadTemplate } from "./template-loader.js";
 
-const template = await loadTemplate("/templates/modal.html");
+const template = await loadTemplate("/static/js/shared/modal-template.html");
 
 export function createModal() {
   return {
