@@ -273,6 +273,41 @@ export function createLogStreamComponent() {
         return this.containerIDNames[containerId] || containerId;
       },
 
+      getShortContainerName(containerId) {
+        const fullName = this.getContainerName(containerId);
+        // For Docker Compose containers (format: project-service-number)
+        const parts = fullName.split('-');
+        if (parts.length >= 3 && parts[parts.length - 1].match(/^\d+$/)) {
+          // Return the service name (middle part)
+          return parts[parts.length - 2];
+        }
+        // For non-compose containers, return as-is
+        return fullName;
+      },
+
+      formatTimestamp(timestamp) {
+        if (!timestamp) return '';
+        
+        // If timestamp is already in HH:MM:SS format, return it
+        if (timestamp.match(/^\d{2}:\d{2}:\d{2}/)) {
+          return timestamp.substring(0, 8); // Just HH:MM:SS
+        }
+        
+        // Try to parse and format the timestamp
+        try {
+          // Handle various formats and extract time portion
+          // Oct  3 19:57:52.076536 -> 19:57:52
+          const timeMatch = timestamp.match(/(\d{2}):(\d{2}):(\d{2})/);
+          if (timeMatch) {
+            return `${timeMatch[1]}:${timeMatch[2]}:${timeMatch[3]}`;
+          }
+        } catch (e) {
+          // If parsing fails, return original
+        }
+        
+        return timestamp;
+      },
+
       scrollToBottom() {
         const logsEl = this.$refs.logsContainer;
         if (logsEl) {
