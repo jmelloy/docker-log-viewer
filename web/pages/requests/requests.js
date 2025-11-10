@@ -198,10 +198,14 @@ const app = createApp({
     },
 
     getRequestStatusClass(req) {
+      // Show error class if there's an error field, even with 200 status
+      if (req.error) return "error";
       return req.statusCode >= 200 && req.statusCode < 300 ? "success" : "error";
     },
 
     getExecutionStatusClass(req) {
+      // Show error class if there's an error field, even with 200 status
+      if (req.error) return "error";
       return req.statusCode >= 200 && req.statusCode < 300 ? "success" : "error";
     },
 
@@ -429,7 +433,7 @@ const app = createApp({
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/request-detail.html?id=${result.executionId}`;
+            window.location.href = `/requests/detail/?id=${result.executionId}`;
           }
         } else {
           // No sample query - execute directly using /api/execute endpoint
@@ -455,7 +459,7 @@ const app = createApp({
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/request-detail.html?id=${result.executionId}`;
+            window.location.href = `/requests/detail/?id=${result.executionId}`;
           }
         }
       } catch (error) {

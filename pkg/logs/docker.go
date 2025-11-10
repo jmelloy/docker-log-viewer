@@ -120,7 +120,7 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 			default:
 				n, err := reader.Read(buf)
 				if n > 0 {
-					slog.Debug("Container read bytes from Docker", "container_id", containerID[:12], "bytes", n)
+					// slog.Debug("Container read bytes from Docker", "container_id", containerID[:12], "bytes", n)
 					data := buf[:n]
 
 					cleanedData := make([]byte, 0, len(data))
@@ -191,12 +191,12 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 							}
 						}
 					}
-					if sentCount > 0 {
-						slog.Debug("Container sent messages to logChan", "container_id", containerID[:12], "messages", sentCount)
-					}
-					if emptyCount > 0 {
-						slog.Debug("Container skipped empty lines", "container_id", containerID[:12], "lines", emptyCount)
-					}
+					// if sentCount > 0 {
+					// 	slog.Debug("Container sent messages to logChan", "container_id", containerID[:12], "messages", sentCount)
+					// }
+					// if emptyCount > 0 {
+					// 	slog.Debug("Container skipped empty lines", "container_id", containerID[:12], "lines", emptyCount)
+					// }
 					if lineCount > 0 && lineCount%100 == 0 {
 						slog.Info("Container processed log lines", "container_id", containerID[:12], "lines", lineCount)
 					}
