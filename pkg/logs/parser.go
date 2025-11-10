@@ -107,7 +107,6 @@ type Block struct {
 	Text      string
 	ANSICodes []string // The ANSI codes applied to this block
 	Range     [2]int   // Start and end positions in the original string (including ANSI codes)
-	TextRange [2]int   // Start and end positions of just the text (excluding ANSI codes)
 }
 
 // ParseANSIBlocks splits a string into blocks based on ANSI escape codes
@@ -132,9 +131,8 @@ func ParseANSIBlocks(s string) []Block {
 			textLen := len(text)
 			blocks = append(blocks, Block{
 				Text:      text,
-				ANSICodes: append([]string{}, currentCodes...),      // Copy current codes
-				Range:     [2]int{lastIdx, start},                   // Range in original string
-				TextRange: [2]int{textOffset, textOffset + textLen}, // Range in stripped string
+				ANSICodes: append([]string{}, currentCodes...), // Copy current codes
+				Range:     [2]int{lastIdx, start},              // Range in original string
 			})
 			textOffset += textLen
 		}
@@ -155,12 +153,10 @@ func ParseANSIBlocks(s string) []Block {
 	// Add remaining text after last ANSI code
 	if lastIdx < len(s) {
 		text := s[lastIdx:]
-		textLen := len(text)
 		blocks = append(blocks, Block{
 			Text:      text,
 			ANSICodes: append([]string{}, currentCodes...),
 			Range:     [2]int{lastIdx, len(s)},
-			TextRange: [2]int{textOffset, textOffset + textLen},
 		})
 	}
 
@@ -471,15 +467,14 @@ func ParseLogLine(line string) *LogEntry {
 
 	blocks := ParseANSIBlocks(originalLine)
 	linesToStrip := []string{}
+
 	for i, block := range blocks {
 		// fmt.Printf("  Block: %q - %d:%d\n", block.Text, block.TextRange[0], block.TextRange[1])
 
 		if strings.HasSuffix(block.Text, "=") && i < len(blocks)-1 {
 			nextBlock := blocks[i+1]
 			entry.Fields[block.Text[:len(block.Text)-1]] = nextBlock.Text
-
-			strippedLine := line[block.TextRange[0]:nextBlock.TextRange[1]]
-			linesToStrip = append(linesToStrip, strippedLine)
+			linesToStrip = append(linesToStrip, block.Text+nextBlock.Text)
 		}
 
 		if ts, ok := ParseTimestamp(block.Text); ok {
@@ -507,7 +502,6 @@ func ParseLogLine(line string) *LogEntry {
 	if strings.HasSuffix(line, "}") {
 		jsonFields, ok := extractRequestFields(line)
 		if ok && len(jsonFields) > 0 {
-			fmt.Println("jsonFields", jsonFields)
 			maps.Copy(entry.Fields, jsonFields)
 		}
 	}
