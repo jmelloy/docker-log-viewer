@@ -532,12 +532,16 @@
             <p v-if="filteredRequestLogs.length === 0" style="color: #6c757d">
               No logs captured (or all logs are TRACE level)
             </p>
-            <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-entry">
-              <div class="log-entry-header">
-                <span class="log-level" :class="log.level || 'INFO'">{{ log.level || 'INFO' }}</span>
-                <span class="log-timestamp">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
-              </div>
-              <div class="log-message">{{ log.message || log.rawLog }}</div>
+            <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-line" @click="openLogDetails(log)">
+              <span v-if="log.timestamp" class="log-timestamp">{{ new Date(log.timestamp).toLocaleString() }}</span>
+              <span v-if="log.level" class="log-level" :class="log.level">{{ log.level }}</span>
+              <span v-if="log.file" class="log-file">{{ log.file }}</span>
+              <span v-if="log.message" class="log-message">{{ log.message }}</span>
+              <template v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})" :key="fieldIdx">
+                <span v-if="shouldShowField(key, value)" class="log-field">
+                  <span class="log-field-key">{{ key }}</span>=<span class="log-field-value">{{ formatFieldValue(value) }}</span>
+                </span>
+              </template>
             </div>
           </div>
 
@@ -751,6 +755,54 @@
         {{ explainPlanData.error }}
       </div>
       <div id="pev2ExplainApp" class="d-flex flex-column" style="height: 100%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Log Details Modal -->
+<div v-if="showLogModal" class="modal" @click="showLogModal = false">
+  <div class="modal-content" @click.stop>
+    <div class="modal-header">
+      <h3>Log Details</h3>
+      <button @click="showLogModal = false">✕</button>
+    </div>
+    <div v-if="selectedLog" class="modal-body">
+      <div class="modal-section">
+        <h4>Raw Log</h4>
+        <pre v-html="convertAnsiToHtml(selectedLog.entry?.rawLog || selectedLog.entry?.raw || 'No raw log available')"></pre>
+      </div>
+      <div class="modal-section">
+        <h4>Parsed Fields</h4>
+        <div>
+          <div v-if="selectedLog.entry?.timestamp" class="parsed-field">
+            <div class="parsed-field-key">Timestamp</div>
+            <div class="parsed-field-value">{{ new Date(selectedLog.entry.timestamp).toLocaleString() }}</div>
+          </div>
+          <div v-if="selectedLog.entry?.level" class="parsed-field">
+            <div class="parsed-field-key">Level</div>
+            <div class="parsed-field-value">{{ selectedLog.entry.level }}</div>
+          </div>
+          <div v-if="selectedLog.entry?.file" class="parsed-field">
+            <div class="parsed-field-key">File</div>
+            <div class="parsed-field-value">{{ selectedLog.entry.file }}</div>
+          </div>
+          <div v-if="selectedLog.entry?.message" class="parsed-field">
+            <div class="parsed-field-key">Message</div>
+            <div class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+          </div>
+          <div
+            v-for="([key, value], idx) in Object.entries(selectedLog.entry?.fields || {})"
+            :key="idx"
+            class="parsed-field"
+          >
+            <div class="parsed-field-key">{{ key }}</div>
+            <div v-if="isJsonField(value)" class="parsed-field-value">
+              <pre>{{ formatJsonField(value) }}</pre>
+            </div>
+            <div v-else class="parsed-field-value">{{ value }}</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

@@ -21,6 +21,8 @@ const app = createApp({
       showRequestModal: false,
       showResponseModal: false,
       showExecuteModal: false,
+      showLogModal: false, // For log details modal
+      selectedLog: null, // Currently selected log for details view
       executeForm: {
         tokenOverride: "",
         devIdOverride: "",
@@ -40,11 +42,23 @@ const app = createApp({
       if (!this.requestDetail || !this.requestDetail.logs) {
         return [];
       }
-      // Filter out TRACE level logs (case-insensitive)
-      return this.requestDetail.logs.filter((log) => {
-        const level = (log.level || "").toUpperCase();
-        return level !== "TRC" && level !== "TRACE";
-      });
+      // Filter out TRACE level logs (case-insensitive) and parse fields JSON
+      return this.requestDetail.logs
+        .filter((log) => {
+          const level = (log.level || "").toUpperCase();
+          return level !== "TRC" && level !== "TRACE";
+        })
+        .map((log) => {
+          // Parse fields if it's a JSON string
+          if (typeof log.fields === "string" && log.fields) {
+            try {
+              return { ...log, fields: JSON.parse(log.fields) };
+            } catch {
+              return log;
+            }
+          }
+          return log;
+        });
     },
 
     requestViewerLink() {
@@ -52,7 +66,7 @@ const app = createApp({
         return null;
       }
       const requestId = this.requestDetail.execution.requestIdHeader;
-      return `/?request_id=${encodeURIComponent(requestId)}`;
+      return `/logs/?request_id=${encodeURIComponent(requestId)}`;
     },
 
     statusClass() {
@@ -968,6 +982,115 @@ const app = createApp({
       }
 
       return null;
+    },
+
+    // Methods for displaying saved logs similar to regular log viewer
+    shouldShowField(key, value) {
+      // Always show error field
+      if (key === "error") return true;
+      // Show fields less than 40 characters
+      const s = String(value);
+      return s.length < 40;
+    },
+
+    formatFieldValue(value) {
+      const s = String(value);
+      return s.length > 50 ? s.substring(0, 50) + "..." : s;
+    },
+
+    isJsonField(value) {
+      const s = String(value);
+      return s.trim().startsWith("{") || s.trim().startsWith("[");
+    },
+
+    formatJsonField(value) {
+      try {
+        const parsed = JSON.parse(value);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return value;
+      }
+    },
+
+    openLogDetails(log) {
+      // Parse fields if it's a JSON string
+      let parsedLog = log;
+      if (typeof log.fields === "string" && log.fields) {
+        try {
+          parsedLog = { ...log, fields: JSON.parse(log.fields) };
+        } catch {
+          parsedLog = log;
+        }
+      }
+      this.selectedLog = { entry: parsedLog };
+      this.showLogModal = true;
+    },
+
+    convertAnsiToHtml(text) {
+      const ansiMap = {
+        0: "",
+        1: "ansi-bold",
+        30: "ansi-gray",
+        31: "ansi-red",
+        32: "ansi-green",
+        33: "ansi-yellow",
+        34: "ansi-blue",
+        35: "ansi-magenta",
+        36: "ansi-cyan",
+        37: "ansi-white",
+        90: "ansi-gray",
+        91: "ansi-bright-red",
+        92: "ansi-bright-green",
+        93: "ansi-bright-yellow",
+        94: "ansi-bright-blue",
+        95: "ansi-bright-magenta",
+        96: "ansi-bright-cyan",
+        97: "ansi-bright-white",
+      };
+
+      const parts = [];
+      const regex = /\x1b\[([0-9;]+)m/g;
+      let lastIndex = 0;
+      let currentClasses = [];
+      let match;
+
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          const content = text.substring(lastIndex, match.index);
+          if (currentClasses.length > 0) {
+            parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
+          } else {
+            parts.push(this.escapeHtml(content));
+          }
+        }
+
+        const codes = match[1].split(";");
+        currentClasses = [];
+        codes.forEach((code) => {
+          if (ansiMap[code]) {
+            currentClasses.push(ansiMap[code]);
+          }
+        });
+
+        lastIndex = regex.lastIndex;
+      }
+
+      if (lastIndex < text.length) {
+        const content = text.substring(lastIndex);
+        if (currentClasses.length > 0) {
+          parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
+        } else {
+          parts.push(this.escapeHtml(content));
+        }
+      }
+
+      return parts.join("");
+    },
+
+    escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
     },
   },
 
