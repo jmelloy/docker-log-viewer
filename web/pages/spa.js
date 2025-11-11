@@ -140,18 +140,13 @@ const app = createApp({
         'app-nav': {
           template: `
             <nav class="app-nav">
-              <a href="#/" :class="{ active: activePage === 'viewer' }" @click.prevent="navigate('/')">Log Viewer</a>
-              <a href="#/requests" :class="{ active: activePage === 'requests' }" @click.prevent="navigate('/requests')">Request Manager</a>
-              <a href="#/graphql" :class="{ active: activePage === 'graphql-explorer' }" @click.prevent="navigate('/graphql')">GraphQL Explorer</a>
-              <a href="#/settings" :class="{ active: activePage === 'settings' }" @click.prevent="navigate('/settings')">Settings</a>
+              <a href="#/" :class="{ active: activePage === 'viewer' }">Log Viewer</a>
+              <a href="#/requests" :class="{ active: activePage === 'requests' }">Request Manager</a>
+              <a href="#/graphql" :class="{ active: activePage === 'graphql-explorer' }">GraphQL Explorer</a>
+              <a href="#/settings" :class="{ active: activePage === 'settings' }">Settings</a>
             </nav>
           `,
           props: ['activePage'],
-          methods: {
-            navigate(path) {
-              window.location.hash = path;
-            },
-          },
         },
       },
     },
