@@ -176,8 +176,7 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 
 							// Check if this entry might have continuation lines
 							// SQL entries without fields or entries ending with incomplete patterns
-							shouldBuffer := (strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0) ||
-								(entry.Timestamp != "" && len(entry.Fields) == 0 && len(entry.Message) > 0)
+							shouldBuffer := (strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0) || entry.Timestamp == ""
 
 							if shouldBuffer {
 								// Buffer it, waiting for potential continuation lines
