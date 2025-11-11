@@ -29,17 +29,15 @@
     </div>
     <div v-for="(log, index) in filteredLogs" :key="index" class="log-line" @click="onLogClick(log)">
       <span v-if="showContainer && !compact" class="log-container">{{ getShortContainerName(log.containerId) }}</span>
+      <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
       <span v-if="log.entry?.timestamp" class="log-timestamp">{{ formatTimestamp(log.entry.timestamp) }}</span>
       <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
       <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
       <span v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})" :key="idx" class="log-field">
-        <template v-if="!compact">
-          <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
-            >{{ formatFieldValue(key, value) }}</span
-          >
-        </template>
+        <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
+          >{{ formatFieldValue(key, value) }}</span
+        >
       </span>
-      <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
     </div>
   </div>
 </div>
