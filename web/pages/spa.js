@@ -9,6 +9,20 @@ class Router {
     this.currentPath = '';
     this.listeners = [];
     
+    // If there's no hash but the pathname indicates a specific page, set the hash
+    if (!window.location.hash && window.location.pathname !== '/' && window.location.pathname !== '/spa.html') {
+      const pathname = window.location.pathname;
+      if (pathname.startsWith('/logs')) {
+        window.location.hash = '/';
+      } else if (pathname.startsWith('/requests')) {
+        window.location.hash = '/requests';
+      } else if (pathname.startsWith('/graphql')) {
+        window.location.hash = '/graphql';
+      } else if (pathname.startsWith('/settings')) {
+        window.location.hash = '/settings';
+      }
+    }
+    
     window.addEventListener('hashchange', () => this.handleRouteChange());
     this.handleRouteChange();
   }
