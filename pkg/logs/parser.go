@@ -181,7 +181,7 @@ func ParseKeyValues(s string) (map[string]string, string) {
 	for pos < len(s) {
 		fmt.Println("len:", len(s[pos:]))
 		index := findStructuredDataStart(s[pos:])
-		if index < 0 {
+		if index < 0 || pos+index >= len(s) {
 			break
 		}
 
