@@ -1,8 +1,14 @@
-import { createAppHeader } from "/static/js/shared/navigation.js";
-import { API } from "/static/js/shared/api.js";
-import { loadTemplate } from "/static/js/shared/template-loader.js";
-import { convertAnsiToHtml, formatFieldValue, isJsonField, formatJsonField, normalizeQuery } from "/static/js/utils.js";
-import { applySyntaxHighlighting } from "/static/js/shared/ui-utils.js";
+import { createAppHeader } from "../../static/js/shared/navigation.js";
+import { API } from "../../static/js/shared/api.js";
+import { loadTemplate } from "../../static/js/shared/template-loader.js";
+import {
+  convertAnsiToHtml,
+  formatFieldValue,
+  isJsonField,
+  formatJsonField,
+  normalizeQuery,
+} from "../../static/js/utils.js";
+import { applySyntaxHighlighting } from "../../static/js/shared/ui-utils.js";
 
 const template = await loadTemplate("/logs/template.html");
 
@@ -497,6 +503,19 @@ const app = createApp({
       return containerName;
     },
 
+    getContainerName(containerId) {
+      return this.containers.find((c) => c.ID === containerId)?.Name || containerId;
+    },
+
+    getShortContainerName(containerId) {
+      const fullName = this.getContainerName(containerId);
+      const projectName = this.getProjectName(fullName);
+      if (projectName) {
+        return fullName.replace(`${projectName}-`, "");
+      }
+      return fullName;
+    },
+
     toggleContainer(containerName) {
       if (this.selectedContainers.has(containerName)) {
         this.selectedContainers.delete(containerName);
@@ -548,22 +567,6 @@ const app = createApp({
 
     isProjectCollapsed(project) {
       return this.collapsedProjects.has(project);
-    },
-
-    getContainerName(containerId) {
-      return this.containers.find((c) => c.ID === containerId)?.Name || containerId;
-    },
-
-    getShortContainerName(containerId) {
-      const fullName = this.getContainerName(containerId);
-      // For Docker Compose containers (format: project-service-number)
-      const parts = fullName.split("-");
-      if (parts.length >= 3 && parts[parts.length - 1].match(/^\d+$/)) {
-        // Return the service name (middle part)
-        return parts[parts.length - 2];
-      }
-      // For non-compose containers, return as-is
-      return fullName;
     },
 
     formatTimestamp(timestamp) {

@@ -173,14 +173,13 @@ export function convertAnsiToHtml(text) {
  * @param {*} value - The field value
  * @param {Object} options - Formatting options
  * @param {number} options.maxLength - Maximum length before truncation (default: 50)
- * @param {boolean} options.handleStackTrace - Whether to handle stack_trace specially (default: true)
  * @returns {string} Formatted field value
  */
 export function formatFieldValue(key, value, options = {}) {
-  const { maxLength = 50, handleStackTrace = true } = options;
+  const { maxLength = 50, truncateLength = 25 } = options;
   const s = String(value);
 
-  if (handleStackTrace && key === "stack_trace") {
+  if (key === "stack_trace") {
     const ret = [];
     value.split("\\n").forEach((line, index) => {
       if (index < 5) {
@@ -194,7 +193,7 @@ export function formatFieldValue(key, value, options = {}) {
     return value;
   }
 
-  return s.length > maxLength ? s.substring(0, 20) + "..." : s;
+  return s.length > maxLength ? s.substring(0, truncateLength) + "..." : s;
 }
 
 /**

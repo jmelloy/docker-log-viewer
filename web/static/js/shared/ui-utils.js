@@ -20,43 +20,49 @@ export function applySyntaxHighlighting(options = {}) {
     sqlSelector = ".sql-query-text, .query-text-compact",
   } = options;
 
-  // Highlight JSON
-  document.querySelectorAll(`${jsonSelector}:not(.hljs)`).forEach((block) => {
-    try {
-      const text = block.textContent.trim();
-      if (text.startsWith("{") || text.startsWith("[")) {
-        const highlighted = hljs.highlight(text, { language: "json" });
+  // Highlight JSON (only if selector is provided)
+  if (jsonSelector) {
+    document.querySelectorAll(`${jsonSelector}:not(.hljs)`).forEach((block) => {
+      try {
+        const text = block.textContent.trim();
+        if (text.startsWith("{") || text.startsWith("[")) {
+          const highlighted = hljs.highlight(text, { language: "json" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        }
+      } catch (e) {
+        console.error("Error highlighting JSON:", e);
+      }
+    });
+  }
+
+  // Highlight GraphQL queries (only if selector is provided)
+  if (graphqlSelector) {
+    document.querySelectorAll(`${graphqlSelector}:not(.hljs)`).forEach((block) => {
+      try {
+        const text = block.textContent.trim();
+        const highlighted = hljs.highlight(text, { language: "graphql" });
         block.innerHTML = highlighted.value;
         block.classList.add("hljs");
+      } catch (e) {
+        console.error("Error highlighting GraphQL query:", e);
       }
-    } catch (e) {
-      console.error("Error highlighting JSON:", e);
-    }
-  });
+    });
+  }
 
-  // Highlight GraphQL queries
-  document.querySelectorAll(`${graphqlSelector}:not(.hljs)`).forEach((block) => {
-    try {
-      const text = block.textContent.trim();
-      const highlighted = hljs.highlight(text, { language: "graphql" });
-      block.innerHTML = highlighted.value;
-      block.classList.add("hljs");
-    } catch (e) {
-      console.error("Error highlighting GraphQL query:", e);
-    }
-  });
-
-  // Highlight SQL queries
-  document.querySelectorAll(`${sqlSelector}:not(.hljs)`).forEach((block) => {
-    try {
-      const text = block.textContent;
-      const highlighted = hljs.highlight(text, { language: "sql" });
-      block.innerHTML = highlighted.value;
-      block.classList.add("hljs");
-    } catch (e) {
-      console.error("Error highlighting SQL query:", e);
-    }
-  });
+  // Highlight SQL queries (only if selector is provided)
+  if (sqlSelector) {
+    document.querySelectorAll(`${sqlSelector}:not(.hljs)`).forEach((block) => {
+      try {
+        const text = block.textContent;
+        const highlighted = hljs.highlight(text, { language: "sql" });
+        block.innerHTML = highlighted.value;
+        block.classList.add("hljs");
+      } catch (e) {
+        console.error("Error highlighting SQL query:", e);
+      }
+    });
+  }
 }
 
 /**

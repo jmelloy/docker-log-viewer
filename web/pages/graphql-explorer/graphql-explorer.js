@@ -3,6 +3,7 @@ import { API } from "../../static/js/shared/api.js";
 import { GraphQLEditorManager } from "../../static/js/graphql-editor-manager.js";
 import { createLogStreamComponent } from "../../static/js/shared/log-stream-component.js";
 import { loadTemplate } from "../../static/js/shared/template-loader.js";
+import { copyToClipboard, applySyntaxHighlighting } from "../../static/js/shared/ui-utils.js";
 
 const { createApp } = Vue;
 
@@ -459,19 +460,8 @@ const app = createApp({
       }
     },
 
-    async copyToClipboard(text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        const notification = document.createElement("div");
-        notification.textContent = "Copied to clipboard!";
-        notification.style.cssText =
-          "position: fixed; top: 20px; right: 20px; background: #238636; color: white; padding: 0.75rem 1rem; border-radius: 4px; z-index: 10000; font-size: 0.875rem;";
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 2000);
-      } catch (err) {
-        console.error("Failed to copy:", err);
-        alert("Failed to copy to clipboard");
-      }
+    copyToClipboard(text) {
+      return copyToClipboard(text);
     },
 
     initializeEditors() {
@@ -792,23 +782,8 @@ const app = createApp({
     },
 
     applySyntaxHighlighting() {
-      // Only apply if hljs is available
-      if (typeof hljs === "undefined") return;
-
-      // Highlight JSON in response
-      document.querySelectorAll(".json-display:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent.trim();
-          if (text.startsWith("{") || text.startsWith("[")) {
-            const highlighted = hljs.highlight(text, { language: "json" });
-            block.innerHTML = highlighted.value;
-            block.classList.add("hljs");
-          }
-        } catch (e) {
-          console.error("Error applying syntax highlighting:", e);
-          // If highlighting fails, leave as is
-        }
-      });
+      // Only highlight JSON for this page
+      applySyntaxHighlighting({ graphqlSelector: "", sqlSelector: "" });
     },
   },
 

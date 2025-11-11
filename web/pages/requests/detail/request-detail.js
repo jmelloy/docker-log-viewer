@@ -7,10 +7,10 @@ import {
   isJsonField,
   formatJsonField,
   normalizeQuery,
-} from "/static/js/utils.js";
-import { applySyntaxHighlighting, copyToClipboard } from "/static/js/shared/ui-utils.js";
-import { createLogStreamComponent } from "/static/js/shared/log-stream-component.js";
-import { loadTemplate } from "/static/js/shared/template-loader.js";
+} from "../../../static/js/utils.js";
+import { applySyntaxHighlighting, copyToClipboard } from "../../../static/js/shared/ui-utils.js";
+import { createLogStreamComponent } from "../../../static/js/shared/log-stream-component.js";
+import { loadTemplate } from "../../../static/js/shared/template-loader.js";
 
 const pev2Template = await loadTemplate("pev2-template.html");
 const mainTemplate = await loadTemplate("template.html");
@@ -919,7 +919,7 @@ const app = createApp({
     },
 
     formatFieldValue(key, value) {
-      return formatFieldValue(key, value, { maxLength: 50, handleStackTrace: false });
+      return formatFieldValue(key, value, { maxLength: 50 });
     },
 
     isJsonField(value) {
