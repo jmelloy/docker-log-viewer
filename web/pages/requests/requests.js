@@ -1,6 +1,6 @@
 import { createAppHeader } from "/static/js/shared/navigation.js";
 import { API } from "/static/js/shared/api.js";
-import { formatSQL } from "/static/js/utils.js";
+import { formatSQL, escapeHtml } from "/static/js/utils.js";
 import { loadTemplate } from "/static/js/shared/template-loader.js";
 
 const template = await loadTemplate("template.html");
@@ -265,12 +265,6 @@ const app = createApp({
 
     getComparisonTimeDiffClass() {
       return this.getComparisonTimeDiff() > 0 ? "diff-slower" : "diff-faster";
-    },
-
-    escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
     },
 
     // Wrapper for global formatSQL function
