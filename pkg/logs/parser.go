@@ -174,48 +174,43 @@ func ParseANSIBlocks(s string) []Block {
 func ParseKeyValues(s string) (map[string]string, string) {
 	result := make(map[string]string)
 
-	// Find where structured data starts (first key=value pattern)
-	start := findStructuredDataStart(s)
-	if start < 0 {
-		return result, s
-	}
+	fmt.Println(s[:min(100, len(s))], len(s))
 
-	remaining := s[start:]
 	pos := 0
-
 	extractedStrings := []string{}
-	for pos < len(remaining) {
-		// Skip whitespace
-		for pos < len(remaining) && unicode.IsSpace(rune(remaining[pos])) {
-			pos++
-		}
-		if pos >= len(remaining) {
+	for pos < len(s) {
+		fmt.Println("len:", len(s[pos:]))
+		index := findStructuredDataStart(s[pos:])
+		if index < 0 {
 			break
 		}
 
+		pos += index
+
 		// Try to match key=
-		keyMatch := regexp.MustCompile(`^([\w.]+)=`).FindStringSubmatchIndex(remaining[pos:])
+		keyMatch := regexp.MustCompile(`^([\w.]+)=`).FindStringSubmatchIndex(s[pos:])
 		if keyMatch == nil {
-			pos++
-			continue
+			panic("keyMatch is nil")
 		}
 
-		key := remaining[pos+keyMatch[2] : pos+keyMatch[3]]
+		key := s[pos+keyMatch[2] : pos+keyMatch[3]]
 		valueStart := pos + keyMatch[1] // position after '='
 
 		// Extract the value
-		value, newPos := extractValue(remaining, valueStart)
+		value, valueEnd := extractValue(s, valueStart)
 		if value != "" {
 			result[key] = value
-			extractedStrings = append(extractedStrings, s[pos:newPos])
-			pos = newPos
+			extractedStrings = append(extractedStrings, s[pos:valueEnd])
+			pos = valueEnd
 		} else {
 			pos = valueStart + 1
 		}
 	}
 
 	for _, extractedString := range extractedStrings {
+		fmt.Printf("S: %s\n", extractedString)
 		s = strings.Replace(s, extractedString, "", 1)
+		// fmt.Printf("R: %s\n", s)
 	}
 	return result, s
 }
@@ -232,7 +227,7 @@ func findStructuredDataStart(s string) int {
 		return match[0]
 	}
 
-	return 0
+	return -1
 }
 
 // extractValue extracts a value starting at position i
@@ -278,9 +273,6 @@ func extractValue(s string, i int) (string, int) {
 			for j < len(s) && unicode.IsSpace(rune(s[j])) {
 				j++
 			}
-			if s[i] == '\n' || s[i] == '\r' {
-				return "", -1
-			}
 
 			if j < len(s) && regexp.MustCompile(`^[\w.]+=["\{\[]`).MatchString(s[j:]) {
 				return strings.TrimSpace(s[start:i]), i
@@ -288,6 +280,12 @@ func extractValue(s string, i int) (string, int) {
 			if j < len(s) && regexp.MustCompile(`^[\w.]+=`).MatchString(s[j:]) {
 				return strings.TrimSpace(s[start:i]), i
 			}
+
+			if j == len(s) {
+				return strings.TrimSpace(s[start:i]), i
+			}
+
+			return "", -1
 		}
 		i++
 	}

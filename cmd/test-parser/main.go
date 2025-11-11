@@ -210,17 +210,17 @@ func printLogEntry(lineNum int, entry *logs.LogEntry, debug bool, verbose bool) 
 	fmt.Println(entry.Raw)
 	// fmt.Println(strings.Repeat("-", 40))
 
-	fmt.Println(fmt.Sprintf("%4d |"+strings.Repeat("-", 80)+"|", lineNum))
+	fmt.Println(fmt.Sprintf("%3d |"+strings.Repeat("-", 80)+"|", lineNum))
 	fmt.Printf("    |----- %-20s -----|-- %-6s --|----- %-21s ------|\n", "Timestamp", "Level", "File")
 	message := entry.Message
 	if len(message) > 120 {
 		message = message[:80] + "..." + message[len(message)-40:]
 	}
-	fmt.Printf("    | %-30s | %-10s | %32s |\n    | %s\n", entry.Timestamp, entry.Level, entry.File, message)
-
+	fmt.Printf("    | %-30s | %-10s | %32s |\n    | %s\n", entry.Timestamp, entry.Level, entry.File[len(entry.File)-min(len(entry.File), 32):], message)
+	fmt.Println("    |" + strings.Repeat("-", 80) + "|")
 	if len(entry.Fields) > 0 {
 		for k, v := range entry.Fields {
-			fmt.Printf("    |  %s | %+v\n", k, v)
+			fmt.Printf("    |  %25s | %+v\n", k, v)
 		}
 	}
 	fmt.Println("    |" + strings.Repeat("-", 80) + "|")
