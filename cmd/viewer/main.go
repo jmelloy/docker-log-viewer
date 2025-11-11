@@ -2283,8 +2283,27 @@ func (wa *WebApp) Run(addr string) error {
 	// Serve static assets at /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
 
-	// Serve pages from root
-	http.Handle("/", http.FileServer(http.Dir("./web/pages")))
+	// Serve SPA for all non-API routes
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// If it's an API route, let it 404 naturally
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+		
+		// Serve specific files directly (for backward compatibility with old links)
+		if r.URL.Path != "/" && !strings.HasSuffix(r.URL.Path, "/") {
+			// Try to serve the file directly
+			filePath := "./web/pages" + r.URL.Path
+			if _, err := os.Stat(filePath); err == nil {
+				http.ServeFile(w, r, filePath)
+				return
+			}
+		}
+		
+		// Serve SPA HTML for all other routes
+		http.ServeFile(w, r, "./web/pages/spa.html")
+	})
 
 	// Create HTTP server with graceful shutdown
 	server := &http.Server{
