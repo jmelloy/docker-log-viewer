@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type LogEntry struct {
@@ -24,7 +25,7 @@ type LogEntry struct {
 
 var (
 	timestampRegex = regexp.MustCompile(`(\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+(?:\.\d+)?|\[\d{2}:\d{2}:\d{2}\.\d+\]|\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d+[-/]\d+[-/]\d+\s+\d+:\d+:\d+(?:\.\d+)?|\b\d{10,13}\b)`)
-	levelRegex     = regexp.MustCompile(`(FATAL|DEBUG|INFO|WARN|ERROR|DBG|TRC|INF|WRN|ERR)`)
+	levelRegex     = regexp.MustCompile(`\b(FATAL|DEBUG|INFO|ERROR|DBG|TRC|INF|WARNING|WARN|WRN|ERR)\b`)
 	fileRegex      = regexp.MustCompile(`([\w/]+\.go:\d+)`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
 	ansiStartRegex = regexp.MustCompile(`^\x1b\[`)
@@ -185,7 +186,7 @@ func ParseKeyValues(s string) (map[string]string, string) {
 	extractedStrings := []string{}
 	for pos < len(remaining) {
 		// Skip whitespace
-		for pos < len(remaining) && (remaining[pos] == ' ' || remaining[pos] == '\t' || remaining[pos] == '\n' || remaining[pos] == '\r') {
+		for pos < len(remaining) && unicode.IsSpace(rune(remaining[pos])) {
 			pos++
 		}
 		if pos >= len(remaining) {
@@ -271,12 +272,16 @@ func extractValue(s string, i int) (string, int) {
 
 	// Handle unquoted value - stop at whitespace followed by key=
 	for i < len(s) {
-		if s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r' {
+		if unicode.IsSpace(rune(s[i])) {
 			// Look ahead to see if next non-whitespace is a key=
 			j := i
-			for j < len(s) && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r') {
+			for j < len(s) && unicode.IsSpace(rune(s[j])) {
 				j++
 			}
+			if s[i] == '\n' || s[i] == '\r' {
+				return "", -1
+			}
+
 			if j < len(s) && regexp.MustCompile(`^[\w.]+=["\{\[]`).MatchString(s[j:]) {
 				return strings.TrimSpace(s[start:i]), i
 			}
@@ -474,7 +479,6 @@ func ParseLogLine(line string) *LogEntry {
 
 	nextBlock := Block{}
 	for i, block := range blocks {
-
 		if block.Equals(nextBlock) || strings.TrimSpace(block.Text) == "" {
 			continue
 		}
@@ -530,13 +534,19 @@ func ParseLogLine(line string) *LogEntry {
 	}
 
 	if entry.Level == "" {
-		if matches := levelRegex.FindStringSubmatch(line); len(matches) > 0 {
-			entry.Level = matches[0]
+		match := levelRegex.FindStringIndex(line)
+		if match != nil {
+			entry.Level = line[match[0]:match[1]]
 			parsedLevel, ok := ParseLevel(entry.Level)
 			if ok {
 				entry.Level = parsedLevel
 			}
-			line = strings.Replace(line, matches[0], "", 1)
+
+			start := match[0] - 1
+			end := match[1] + 1
+			if start >= 0 && (unicode.IsSpace(rune(line[start])) || line[start] == '[') && end <= len(line) && (unicode.IsSpace(rune(line[end])) || line[end] == ']') {
+				line = line[:match[0]-1] + line[end:]
+			}
 		}
 	}
 
@@ -669,6 +679,7 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 		"15:04:05.000000",
 		"15:04:05.000",
 		"15:04:05",
+		"15:04PM",
 	}
 
 	for _, format := range formats {
@@ -678,7 +689,7 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 			if format == "Jan  2 15:04:05.000000" || format == "Jan _2 15:04:05.000000" {
 				now := time.Now()
 				t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
-			} else if format == "[15:04:05.000]" || format == "15:04:05.000000" || format == "15:04:05.000" || format == "15:04:05" {
+			} else if format == "[15:04:05.000]" || format == "15:04:05.000000" || format == "15:04:05.000" || format == "15:04:05" || format == "15:04PM" {
 				now := time.Now()
 				t = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 			}
@@ -706,7 +717,7 @@ func ParseLevel(levelStr string) (string, bool) {
 	switch strings.ToUpper(levelStr) {
 	case "ERR", "ERROR", "FATAL":
 		return "ERR", true
-	case "WRN", "WARN":
+	case "WRN", "WARN", "WARNING":
 		return "WRN", true
 	case "INF", "INFO":
 		return "INF", true

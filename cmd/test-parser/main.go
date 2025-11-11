@@ -207,42 +207,23 @@ func readFromLogFile(filePath string, debug bool, verbose bool) {
 }
 
 func printLogEntry(lineNum int, entry *logs.LogEntry, debug bool, verbose bool) {
-	fmt.Printf("\n--- Line %d ---\n", lineNum)
-
-	// fmt.Printf("Raw: %s\n", entry.Raw)
+	fmt.Println(entry.Raw)
 	// fmt.Println(strings.Repeat("-", 40))
 
-	fmt.Printf("IsJSON: %v\n", entry.IsJSON)
-	fmt.Printf("Timestamp: %s\n", entry.Timestamp)
-	fmt.Printf("Level: %s\n", entry.Level)
-	fmt.Printf("File: %s\n", entry.File)
-	fmt.Printf("Message: %s\n", entry.Message)
+	fmt.Println(fmt.Sprintf("%4d |"+strings.Repeat("-", 80)+"|", lineNum))
+	fmt.Printf("    |----- %-20s -----|-- %-6s --|----- %-21s ------|\n", "Timestamp", "Level", "File")
+	message := entry.Message
+	if len(message) > 120 {
+		message = message[:80] + "..." + message[len(message)-40:]
+	}
+	fmt.Printf("    | %-30s | %-10s | %32s |\n    | %s\n", entry.Timestamp, entry.Level, entry.File, message)
 
 	if len(entry.Fields) > 0 {
-		fmt.Printf("Fields (%d):\n", len(entry.Fields))
 		for k, v := range entry.Fields {
-			if verbose || len(v) < 200 {
-				fmt.Printf("  %s = %s\n", k, v)
-			} else {
-				fmt.Printf("  %s = %s... (truncated, %d chars)\n", k, v[:200], len(v))
-			}
+			fmt.Printf("    |  %s | %+v\n", k, v)
 		}
 	}
+	fmt.Println("    |" + strings.Repeat("-", 80) + "|")
 
-	if entry.IsJSON && len(entry.JSONFields) > 0 {
-		fmt.Printf("JSON Fields (%d):\n", len(entry.JSONFields))
-		for k, v := range entry.JSONFields {
-			if verbose {
-				fmt.Printf("  %s = %+v\n", k, v)
-			} else {
-				fmt.Printf("  %s = %T\n", k, v)
-			}
-		}
-	}
-
-	if debug {
-		fmt.Printf("Formatted: %s\n", entry.FormattedString())
-	}
-
-	fmt.Println(strings.Repeat("-", 40))
+	fmt.Println()
 }
