@@ -33,9 +33,9 @@
       <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
       <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
       <span v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})" :key="idx" class="log-field">
-        <template v-if="!compact || shouldShowField(key, value)">
+        <template v-if="!compact">
           <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
-            >{{ formatFieldValue(value) }}</span
+            >{{ formatFieldValue(key, value) }}</span
           >
         </template>
       </span>
