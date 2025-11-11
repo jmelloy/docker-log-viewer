@@ -537,13 +537,9 @@
               <span v-if="log.level" class="log-level" :class="log.level">{{ log.level }}</span>
               <span v-if="log.file" class="log-file">{{ log.file }}</span>
               <span v-if="log.message" class="log-message">{{ log.message }}</span>
-              <template v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})" :key="fieldIdx">
-                <span v-if="shouldShowField(key, value)" class="log-field">
-                  <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
-                    >{{ formatFieldValue(key, value) }}</span
-                  >
-                </span>
-              </template>
+              <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
+                >{{ formatFieldValue(key, value) }}</span
+              >
             </div>
           </div>
 
