@@ -3,40 +3,32 @@ import { loadTemplate } from "/static/js/shared/template-loader.js";
 
 const { createApp } = Vue;
 
-// Simple hash-based router
+// Path-based router using History API
 class Router {
   constructor() {
     this.currentPath = '';
     this.listeners = [];
     
-    // If there's no hash but the pathname indicates a specific page, set the hash
-    if (!window.location.hash && window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
-      const pathname = window.location.pathname;
-      if (pathname.startsWith('/logs')) {
-        window.location.hash = '/';
-      } else if (pathname.startsWith('/requests')) {
-        window.location.hash = '/requests';
-      } else if (pathname.startsWith('/graphql')) {
-        window.location.hash = '/graphql';
-      } else if (pathname.startsWith('/settings')) {
-        window.location.hash = '/settings';
-      }
-    }
+    // Listen for popstate (back/forward button)
+    window.addEventListener('popstate', () => this.handleRouteChange());
     
-    window.addEventListener('hashchange', () => this.handleRouteChange());
+    // Handle initial route
     this.handleRouteChange();
   }
   
   handleRouteChange() {
-    const hash = window.location.hash.slice(1) || '/';
-    if (hash !== this.currentPath) {
-      this.currentPath = hash;
-      this.notifyListeners(hash);
+    const path = window.location.pathname;
+    if (path !== this.currentPath) {
+      this.currentPath = path;
+      this.notifyListeners(path);
     }
   }
   
   push(path) {
-    window.location.hash = path;
+    if (path !== this.currentPath) {
+      window.history.pushState({}, '', path);
+      this.handleRouteChange();
+    }
   }
   
   onChange(callback) {
@@ -140,13 +132,19 @@ const app = createApp({
         'app-nav': {
           template: `
             <nav class="app-nav">
-              <a href="#/" :class="{ active: activePage === 'viewer' }">Log Viewer</a>
-              <a href="#/requests" :class="{ active: activePage === 'requests' }">Request Manager</a>
-              <a href="#/graphql" :class="{ active: activePage === 'graphql-explorer' }">GraphQL Explorer</a>
-              <a href="#/settings" :class="{ active: activePage === 'settings' }">Settings</a>
+              <a href="/" :class="{ active: activePage === 'viewer' }" @click.prevent="navigate('/')">Log Viewer</a>
+              <a href="/requests" :class="{ active: activePage === 'requests' }" @click.prevent="navigate('/requests')">Request Manager</a>
+              <a href="/graphql" :class="{ active: activePage === 'graphql-explorer' }" @click.prevent="navigate('/graphql')">GraphQL Explorer</a>
+              <a href="/settings" :class="{ active: activePage === 'settings' }" @click.prevent="navigate('/settings')">Settings</a>
             </nav>
           `,
           props: ['activePage'],
+          methods: {
+            navigate(path) {
+              // Use the router's push method for navigation
+              router.push(path);
+            },
+          },
         },
       },
     },

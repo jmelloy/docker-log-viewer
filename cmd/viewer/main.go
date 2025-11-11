@@ -2283,7 +2283,7 @@ func (wa *WebApp) Run(addr string) error {
 	// Serve static assets at /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
 
-	// Serve SPA for all non-API routes
+	// Serve SPA for all non-API and non-static routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// If it's an API route, let it 404 naturally
 		if strings.HasPrefix(r.URL.Path, "/api/") {
@@ -2291,9 +2291,15 @@ func (wa *WebApp) Run(addr string) error {
 			return
 		}
 		
-		// Serve specific files directly (for backward compatibility with old links)
-		if r.URL.Path != "/" && !strings.HasSuffix(r.URL.Path, "/") {
-			// Try to serve the file directly
+		// Serve static files from /static/ (already handled by the /static/ handler above)
+		// This shouldn't be reached due to the earlier /static/ handler, but just in case
+		if strings.HasPrefix(r.URL.Path, "/static/") {
+			http.NotFound(w, r)
+			return
+		}
+		
+		// Serve .js and .html files from pages directory (for component modules and templates)
+		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".html") {
 			filePath := "./web/pages" + r.URL.Path
 			if _, err := os.Stat(filePath); err == nil {
 				http.ServeFile(w, r, filePath)
@@ -2301,7 +2307,8 @@ func (wa *WebApp) Run(addr string) error {
 			}
 		}
 		
-		// Serve SPA HTML for all other routes
+		// For SPA routes, serve index.html for all other paths
+		// This enables path-based routing (e.g., /requests, /graphql, /settings)
 		http.ServeFile(w, r, "./web/pages/index.html")
 	})
 
