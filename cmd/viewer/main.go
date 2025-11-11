@@ -2302,7 +2302,7 @@ func (wa *WebApp) Run(addr string) error {
 		}
 		
 		// Serve SPA HTML for all other routes
-		http.ServeFile(w, r, "./web/pages/spa.html")
+		http.ServeFile(w, r, "./web/pages/index.html")
 	})
 
 	// Create HTTP server with graceful shutdown

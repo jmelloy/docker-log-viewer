@@ -10,7 +10,7 @@ class Router {
     this.listeners = [];
     
     // If there's no hash but the pathname indicates a specific page, set the hash
-    if (!window.location.hash && window.location.pathname !== '/' && window.location.pathname !== '/spa.html') {
+    if (!window.location.hash && window.location.pathname !== '/' && window.location.pathname !== '/index.html') {
       const pathname = window.location.pathname;
       if (pathname.startsWith('/logs')) {
         window.location.hash = '/';
