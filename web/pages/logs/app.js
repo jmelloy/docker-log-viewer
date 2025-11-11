@@ -1,6 +1,8 @@
 import { createAppHeader } from "/static/js/shared/navigation.js";
 import { API } from "/static/js/shared/api.js";
 import { loadTemplate } from "/static/js/shared/template-loader.js";
+import { convertAnsiToHtml, formatFieldValue, isJsonField, formatJsonField, normalizeQuery } from "/static/js/utils.js";
+import { applySyntaxHighlighting } from "/static/js/shared/ui-utils.js";
 
 const template = await loadTemplate("/logs/template.html");
 
@@ -129,18 +131,7 @@ const app = createApp({
 
   methods: {
     applySyntaxHighlighting() {
-      // Only apply if hljs is available
-      if (typeof hljs === "undefined") return;
-
-      // Highlight SQL queries in analyzer
-      document.querySelectorAll(".query-text-compact").forEach((block) => {
-        if (!block.classList.contains("hljs")) {
-          const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: "sql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        }
-      });
+      applySyntaxHighlighting({ sqlSelector: ".query-text-compact" });
     },
     parseURLParameters() {
       const params = new URLSearchParams(window.location.search);
@@ -727,22 +718,13 @@ const app = createApp({
               operation,
               rows,
               variables,
-              normalized: this.normalizeQuery(query),
+              normalized: normalizeQuery(query),
             });
           }
         }
       });
 
       return queries;
-    },
-
-    normalizeQuery(query) {
-      return query
-        .replace(/\$\d+/g, "$N")
-        .replace(/'[^']*'/g, "'?'")
-        .replace(/\d+/g, "N")
-        .replace(/\s+/g, " ")
-        .trim();
     },
 
     renderAnalysis(queries) {
@@ -819,67 +801,6 @@ const app = createApp({
     openLogDetails(log) {
       this.selectedLog = log;
       this.showLogModal = true;
-    },
-
-    convertAnsiToHtml(text) {
-      const ansiMap = {
-        0: "",
-        1: "ansi-bold",
-        30: "ansi-gray",
-        31: "ansi-red",
-        32: "ansi-green",
-        33: "ansi-yellow",
-        34: "ansi-blue",
-        35: "ansi-magenta",
-        36: "ansi-cyan",
-        37: "ansi-white",
-        90: "ansi-gray",
-        91: "ansi-bright-red",
-        92: "ansi-bright-green",
-        93: "ansi-bright-yellow",
-        94: "ansi-bright-blue",
-        95: "ansi-bright-magenta",
-        96: "ansi-bright-cyan",
-        97: "ansi-bright-white",
-      };
-
-      const parts = [];
-      const regex = /\x1b\[([0-9;]+)m/g;
-      let lastIndex = 0;
-      let currentClasses = [];
-      let match;
-
-      while ((match = regex.exec(text)) !== null) {
-        if (match.index > lastIndex) {
-          const content = text.substring(lastIndex, match.index);
-          if (currentClasses.length > 0) {
-            parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
-          } else {
-            parts.push(this.escapeHtml(content));
-          }
-        }
-
-        const codes = match[1].split(";");
-        currentClasses = [];
-        codes.forEach((code) => {
-          if (ansiMap[code]) {
-            currentClasses.push(ansiMap[code]);
-          }
-        });
-
-        lastIndex = regex.lastIndex;
-      }
-
-      if (lastIndex < text.length) {
-        const content = text.substring(lastIndex);
-        if (currentClasses.length > 0) {
-          parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
-        } else {
-          parts.push(this.escapeHtml(content));
-        }
-      }
-
-      return parts.join("");
     },
 
     getDatabaseConnectionString() {
@@ -1054,50 +975,20 @@ const app = createApp({
       }
     },
 
-    escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
-    },
-
-    shouldShowField(key, value) {
-      // Always show error field
-      if (key === "error" || key === "stack_trace" || key === "db.error") return true;
-      // Show fields less than 40 characters
-      const s = String(value);
-      return s.length < 40;
-    },
-
     formatFieldValue(key, value) {
-      const s = String(value);
-      if (key === "stack_trace") {
-        const ret = [];
-        value.split("\\n").forEach((line, index) => {
-          if (index < 5) {
-            ret.push(line);
-          }
-        });
-        return ret.join(" ").replaceAll("\\t", "    ");
-      }
-      if (key === "error" || key === "db.error") {
-        return value;
-      }
-
-      return s.length > 50 ? s.substring(0, 20) + "..." : s;
+      return formatFieldValue(key, value);
     },
 
     isJsonField(value) {
-      return value.trim().startsWith("{") || value.trim().startsWith("[");
+      return isJsonField(value);
     },
 
     formatJsonField(value) {
-      try {
-        const parsed = JSON.parse(value);
-        return JSON.stringify(parsed, null, 2);
-      } catch (e) {
-        console.error("Error formatting JSON field:", e);
-        return value;
-      }
+      return formatJsonField(value);
+    },
+
+    convertAnsiToHtml(text) {
+      return convertAnsiToHtml(text);
     },
 
     saveContainerState() {
