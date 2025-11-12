@@ -230,7 +230,9 @@ export default {
     },
 
     showRequestDetail(requestId) {
-      window.location.href = `/requests/detail/?id=${requestId}`;
+      // Use router push for SPA navigation
+      window.history.pushState({}, '', `/requests/${requestId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     },
 
     async compareSelectedRequests() {
@@ -422,7 +424,7 @@ export default {
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/requests/detail/?id=${result.executionId}`;
+            window.history.pushState({}, '', `/requests/${result.executionId}`); window.dispatchEvent(new PopStateEvent('popstate'));
           }
         } else {
           // No sample query - execute directly using /api/execute endpoint
@@ -448,7 +450,7 @@ export default {
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/requests/detail/?id=${result.executionId}`;
+            window.history.pushState({}, '', `/requests/${result.executionId}`); window.dispatchEvent(new PopStateEvent('popstate'));
           }
         }
       } catch (error) {

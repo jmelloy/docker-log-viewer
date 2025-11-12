@@ -91,7 +91,13 @@ const app = createApp({
           template = await loadTemplate("/logs/template.html");
           pageModule = await import('/logs/app-component.js');
           pageName = 'viewer';
+        } else if (path.match(/^\/requests\/[^\/]+$/)) {
+          // Route: /requests/:id (detail view)
+          template = await loadTemplate("/requests/detail/template.html");
+          pageModule = await import('/requests/detail/request-detail-component.js');
+          pageName = 'request-detail';
         } else if (path.startsWith('/requests')) {
+          // Route: /requests (list view)
           template = await loadTemplate("/requests/template.html");
           pageModule = await import('/requests/requests-component.js');
           pageName = 'requests';
