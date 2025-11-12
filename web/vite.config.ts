@@ -24,4 +24,5 @@ export default defineConfig({
       },
     },
   },
+  publicDir: 'static', // Copy static directory to dist
 })
