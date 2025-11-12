@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -2280,8 +2281,21 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/retention", loggingMiddleware(wa.handleRetention))
 	http.HandleFunc("/api/retention/", loggingMiddleware(wa.handleRetentionDetail))
 
-	// Serve static assets at /static/
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
+	// Serve static assets from Vite build output
+	// In production, serve from dist folder built by Vite
+	// In development, the Vite dev server will handle this
+	distDir := "./web/dist"
+	if _, err := os.Stat(distDir); os.IsNotExist(err) {
+		slog.Warn("dist directory not found. Run 'npm run build' in web directory.")
+		distDir = "./web"
+	}
+	
+	// Serve static files
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(distDir+"/static"))))
+	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(distDir+"/assets"))))
+	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(distDir+"/js"))))
+	http.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir(distDir+"/css"))))
+	http.Handle("/lib/", http.StripPrefix("/lib/", http.FileServer(http.Dir(distDir+"/lib"))))
 
 	// Serve SPA for all non-API and non-static routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -2291,25 +2305,20 @@ func (wa *WebApp) Run(addr string) error {
 			return
 		}
 		
-		// Serve static files from /static/ (already handled by the /static/ handler above)
-		// This shouldn't be reached due to the earlier /static/ handler, but just in case
-		if strings.HasPrefix(r.URL.Path, "/static/") {
+		// Serve static files (handled by above handlers)
+		if strings.HasPrefix(r.URL.Path, "/static/") ||
+		   strings.HasPrefix(r.URL.Path, "/assets/") ||
+		   strings.HasPrefix(r.URL.Path, "/js/") ||
+		   strings.HasPrefix(r.URL.Path, "/css/") ||
+		   strings.HasPrefix(r.URL.Path, "/lib/") {
 			http.NotFound(w, r)
 			return
 		}
 		
-		// Serve .js and .html files from pages directory (for component modules and templates)
-		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".html") {
-			filePath := "./web/pages" + r.URL.Path
-			if _, err := os.Stat(filePath); err == nil {
-				http.ServeFile(w, r, filePath)
-				return
-			}
-		}
-		
-		// For SPA routes, serve index.html for all other paths
-		// This enables path-based routing (e.g., /requests, /graphql, /settings)
-		http.ServeFile(w, r, "./web/pages/index.html")
+		// For SPA routes, serve index.html from dist folder for all other paths
+		// This enables Vue Router client-side routing
+		indexPath := filepath.Join(distDir, "index.html")
+		http.ServeFile(w, r, indexPath)
 	})
 
 	// Create HTTP server with graceful shutdown
