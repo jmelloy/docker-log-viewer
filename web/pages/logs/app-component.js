@@ -1,4 +1,5 @@
 import { API } from "/static/js/shared/api.js";
+import { applySyntaxHighlighting } from "/static/js/shared/ui-utils.js";
 
 // Export component definition (template will be provided by SPA loader)
 export default {
