@@ -1,7 +1,7 @@
 import { API } from "../../static/js/shared/api.js";
 import { GraphQLEditorManager } from "../../static/js/graphql-editor-manager.js";
 import { createLogStreamComponent } from "../../static/js/shared/log-stream-component.js";
-import { applySyntaxHighlighting } from "../../static/js/shared/ui-utils.js";
+import { applySyntaxHighlighting, copyToClipboard } from "../../static/js/shared/ui-utils.js";
 
 // Export component definition (template will be provided by SPA loader)
 export default {
