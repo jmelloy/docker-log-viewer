@@ -262,12 +262,6 @@ export default {
       return this.getComparisonTimeDiff() > 0 ? "diff-slower" : "diff-faster";
     },
 
-    escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
-    },
-
     // Wrapper for global formatSQL function
     formatSQL(sql) {
       return formatSQL(sql);
