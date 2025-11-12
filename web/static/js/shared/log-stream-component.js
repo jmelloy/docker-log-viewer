@@ -18,6 +18,7 @@
 
 import { API } from "./api.js";
 import { loadTemplate } from "./template-loader.js";
+import { formatFieldValue } from "../utils.js";
 
 const template = await loadTemplate("/static/js/shared/log-stream-template.html");
 
@@ -276,7 +277,7 @@ export function createLogStreamComponent() {
       getShortContainerName(containerId) {
         const fullName = this.getContainerName(containerId);
         // For Docker Compose containers (format: project-service-number)
-        const parts = fullName.split('-');
+        const parts = fullName.split("-");
         if (parts.length >= 3 && parts[parts.length - 1].match(/^\d+$/)) {
           // Return the service name (middle part)
           return parts[parts.length - 2];
@@ -286,13 +287,13 @@ export function createLogStreamComponent() {
       },
 
       formatTimestamp(timestamp) {
-        if (!timestamp) return '';
-        
+        if (!timestamp) return "";
+
         // If timestamp is already in HH:MM:SS format, return it
         if (timestamp.match(/^\d{2}:\d{2}:\d{2}/)) {
           return timestamp.substring(0, 8); // Just HH:MM:SS
         }
-        
+
         // Try to parse and format the timestamp
         try {
           // Handle various formats and extract time portion
@@ -304,7 +305,7 @@ export function createLogStreamComponent() {
         } catch (e) {
           // If parsing fails, return original
         }
-        
+
         return timestamp;
       },
 
@@ -319,26 +320,8 @@ export function createLogStreamComponent() {
         this.$emit("log-clicked", log);
       },
 
-      shouldShowField(key, value) {
-        // Always show error field
-        if (key === 'error') return true;
-        // Show fields less than 40 characters
-        const s = String(value);
-        return s.length < 40;
-      },
-
-      formatFieldValue(value) {
-        if (typeof value !== "string") {
-          return String(value);
-        }
-        const shortValue = value.length > 100 ? value.substring(0, 100) + "..." : value;
-        return shortValue;
-      },
-
-      isJsonField(value) {
-        if (typeof value !== "string") return false;
-        const trimmed = value.trim();
-        return trimmed.startsWith("{") || trimmed.startsWith("[");
+      formatFieldValue(key, value) {
+        return formatFieldValue(key, value);
       },
 
       clearLogs() {
