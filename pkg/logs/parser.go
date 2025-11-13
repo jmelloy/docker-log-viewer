@@ -174,12 +174,9 @@ func ParseANSIBlocks(s string) []Block {
 func ParseKeyValues(s string) (map[string]string, string) {
 	result := make(map[string]string)
 
-	fmt.Println(s[:min(100, len(s))], len(s))
-
 	pos := 0
 	extractedStrings := []string{}
 	for pos < len(s) {
-		fmt.Println("len:", len(s[pos:]))
 		index := findStructuredDataStart(s[pos:])
 		if index < 0 || pos+index >= len(s) {
 			break
@@ -208,9 +205,7 @@ func ParseKeyValues(s string) (map[string]string, string) {
 	}
 
 	for _, extractedString := range extractedStrings {
-		fmt.Printf("S: %s\n", extractedString)
 		s = strings.Replace(s, extractedString, "", 1)
-		// fmt.Printf("R: %s\n", s)
 	}
 	return result, s
 }
