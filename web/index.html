@@ -9,7 +9,10 @@
   <body>
     <div id="app"></div>
     
-    <!-- External libraries loaded via UMD for compatibility -->
+    <!-- Load Vue globally first for pev2 compatibility -->
+    <script src="/static/lib/vue.global.prod.js"></script>
+    
+    <!-- External libraries that depend on Vue -->
     <script src="/static/lib/pev2.umd.js"></script>
     <script src="/static/lib/highlight.js"></script>
     

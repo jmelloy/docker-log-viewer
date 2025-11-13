@@ -454,8 +454,10 @@ import type {
   ContainerData
 } from '@/types'
 
-export default defineComponent(// Export component definition (template will be provided by SPA loader)
-{
+export default defineComponent({
+  components: {
+    pev2: (window as any).pev2?.Plan,
+  },
   data() {
     // Load persisted container state from localStorage (by name, not ID)
     let selectedContainers = new Set();

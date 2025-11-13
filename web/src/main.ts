@@ -9,6 +9,15 @@ import "../static/lib/pev2.css";
 import "../static/lib/highlight.css";
 import "../static/css/codemirror-graphql.css";
 
+// Declare global types for external libraries
+declare global {
+  interface Window {
+    Vue: any;
+    pev2: any;
+    hljs: any;
+  }
+}
+
 // Create app instance
 const app = createApp(App);
 
@@ -17,14 +26,6 @@ app.component("app-header", AppHeader);
 
 // Use router
 app.use(router);
-
-// Make pev2 and hljs available globally (loaded via CDN in index.html)
-declare global {
-  interface Window {
-    pev2: any;
-    hljs: any;
-  }
-}
 
 // Mount app
 app.mount("#app");
