@@ -599,7 +599,7 @@ import type {
 } from '@/types'
 
 import LogStream from '../components/LogStream.vue'
-import { GraphQLEditorManager } from "../../static/js/graphql-editor-manager.js";
+import { GraphQLEditorManager } from "@/utils/graphql-editor-manager";
 
 export default defineComponent(// Export component definition (template will be provided by SPA loader)
 {
