@@ -2005,7 +2005,5 @@ export default defineComponent({
       return div.innerHTML;
     },
   },
-
-  template: mainTemplate,
 })
 </script>
