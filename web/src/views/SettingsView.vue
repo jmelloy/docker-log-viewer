@@ -183,43 +183,39 @@
 import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
 import type { 
-  Container, 
-  LogEntry, 
-  SQLAnalysis,
-  ExplainData,
-  RecentRequest,
-  RetentionSettings,
-  WebSocketMessage,
-  ContainerData
+  Server,
+  DatabaseURL,
+  CreateServerResponse,
+  CreateDatabaseURLResponse
 } from '@/types'
 
 export default defineComponent(// Export component definition (template will be provided by SPA loader)
 {
   data() {
     return {
-      servers: [],
-      databaseURLs: [],
+      servers: [] as Server[],
+      databaseURLs: [] as DatabaseURL[],
       // Modal visibility
       showServerModal: false,
       showDatabaseModal: false,
       // Form data
       serverForm: {
-        id: null,
+        id: null as number | null,
         name: "",
         url: "",
         bearerToken: "",
         devId: "",
-        defaultDatabaseId: null,
+        defaultDatabaseId: null as number | null,
       },
       databaseForm: {
-        id: null,
+        id: null as number | null,
         name: "",
         connectionString: "",
         databaseType: "postgresql",
       },
       // Editing state
-      editingServer: null,
-      editingDatabase: null,
+      editingServer: null as Server | null,
+      editingDatabase: null as DatabaseURL | null,
     };
   },
 
@@ -240,7 +236,7 @@ export default defineComponent(// Export component definition (template will be 
   methods: {
     async loadServers() {
       try {
-        this.servers = await API.get("/api/servers");
+        this.servers = await API.get<Server[]>("/api/servers");
       } catch (error) {
         console.error("Error loading servers:", error);
       }
@@ -248,7 +244,7 @@ export default defineComponent(// Export component definition (template will be 
 
     async loadDatabaseURLs() {
       try {
-        this.databaseURLs = await API.get("/api/database-urls");
+        this.databaseURLs = await API.get<DatabaseURL[]>("/api/database-urls");
       } catch (error) {
         console.error("Error loading database URLs:", error);
       }
@@ -267,7 +263,7 @@ export default defineComponent(// Export component definition (template will be 
       this.showServerModal = true;
     },
 
-    openEditServerModal(server) {
+    openEditServerModal(server: Server) {
       this.editingServer = server;
       this.serverForm = {
         id: server.id,
@@ -287,7 +283,7 @@ export default defineComponent(// Export component definition (template will be 
 
     async saveServer() {
       try {
-        const payload = {
+        const payload: Partial<Server> = {
           name: this.serverForm.name,
           url: this.serverForm.url,
           bearerToken: this.serverForm.bearerToken,
@@ -295,7 +291,7 @@ export default defineComponent(// Export component definition (template will be 
           defaultDatabaseId: this.serverForm.defaultDatabaseId || null,
         };
 
-        let response;
+        let response: Response;
         if (this.editingServer) {
           // Update existing server
           response = await fetch(`/api/servers/${this.serverForm.id}`, {
@@ -325,7 +321,7 @@ export default defineComponent(// Export component definition (template will be 
       }
     },
 
-    async deleteServer(id) {
+    async deleteServer(id: number) {
       if (!confirm("Are you sure you want to delete this server?")) {
         return;
       }
@@ -350,7 +346,7 @@ export default defineComponent(// Export component definition (template will be 
       this.showDatabaseModal = true;
     },
 
-    openEditDatabaseModal(database) {
+    openEditDatabaseModal(database: DatabaseURL) {
       this.editingDatabase = database;
       this.databaseForm = {
         id: database.id,
@@ -368,13 +364,13 @@ export default defineComponent(// Export component definition (template will be 
 
     async saveDatabase() {
       try {
-        const payload = {
+        const payload: Partial<DatabaseURL> = {
           name: this.databaseForm.name,
           connectionString: this.databaseForm.connectionString,
           databaseType: this.databaseForm.databaseType,
         };
 
-        let response;
+        let response: Response;
         if (this.editingDatabase) {
           // Update existing database URL
           response = await fetch(`/api/database-urls/${this.databaseForm.id}`, {
@@ -404,7 +400,7 @@ export default defineComponent(// Export component definition (template will be 
       }
     },
 
-    async deleteDatabase(id) {
+    async deleteDatabase(id: number) {
       if (!confirm("Are you sure you want to delete this database URL?")) {
         return;
       }
@@ -418,7 +414,8 @@ export default defineComponent(// Export component definition (template will be 
       }
     },
 
-    getDatabaseName(id) {
+    getDatabaseName(id: number | null | undefined): string {
+      if (!id) return "None";
       const db = this.databaseURLs.find((d) => d.id === id);
       return db ? db.name : "None";
     },

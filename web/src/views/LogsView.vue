@@ -153,7 +153,7 @@
                 <div @click="toggleContainer(container.Name)" style="display: flex; flex: 1; align-items: center">
                   <div class="checkbox" :class="{ checked: isContainerSelected(container.Name) }"></div>
                   <div class="container-info">
-                    <div class="container-name">{{ container.Name }}</div>
+                    <div class="container-name">{{ getShortContainerName(container.ID) }}</div>
                     <div class="container-id">{{ container.ID.substring(0, 12) }}</div>
                   </div>
                 </div>
@@ -188,7 +188,7 @@
                 v-if="req.latency"
                 class="request-latency"
                 :class="{ 'latency-slow': parseFloat(req.latency) > 1000 }"
-                >{{ parseFloat(req.latency).toFixed(0) }}ms</span
+                >{{ parseFloat(req.latency || '0').toFixed(0) }}ms</span
               >
               <span
                 v-if="req.statusCode"
@@ -446,13 +446,18 @@ import { API } from '@/utils/api'
 import { convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
 import type { 
   Container, 
-  LogEntry, 
+  LogMessage, 
   SQLAnalysis,
   ExplainData,
   RecentRequest,
   RetentionSettings,
   WebSocketMessage,
-  ContainerData
+  ContainerData,
+  SQLQuery,
+  FrequentQuery,
+  SaveTraceResponse,
+  ExplainResponse,
+  RetentionResponse
 } from '@/types'
 
 export default defineComponent({
@@ -472,9 +477,9 @@ export default defineComponent({
     }
 
     return {
-      containers: [],
+      containers: [] as Container[],
       selectedContainers,
-      logs: [],
+      logs: [] as LogMessage[],
       searchQuery: "",
       traceFilters: new Map(), // Map<fieldName, fieldValue>
       selectedLevels: new Set([
@@ -496,19 +501,19 @@ export default defineComponent({
       showLogModal: false,
       showExplainModal: false,
       showAnalyzer: false,
-      selectedLog: null,
+      selectedLog: null as LogMessage | null,
       explainData: {
         planSource: "",
         planQuery: "",
         error: null,
         metadata: null,
       },
-      sqlAnalysis: null,
+      sqlAnalysis: null as SQLAnalysis | null,
       collapsedProjects: new Set(),
-      portToServerMap: {}, // Map of port -> connectionString
-      recentRequests: [], // Last 5 unique request IDs with paths
-      logCounts: {}, // Map of container name -> log count
-      retentions: {}, // Map of container name -> retention settings
+      portToServerMap: {} as Record<number, string>, // Map of port -> connectionString
+      recentRequests: [] as RecentRequest[], // Last 5 unique request IDs with paths
+      logCounts: {} as Record<string, number>, // Map of container name -> log count
+      retentions: {} as Record<string, RetentionSettings>, // Map of container name -> retention settings
       showRetentionModal: false,
       retentionContainer: null,
       retentionForm: {
@@ -533,7 +538,8 @@ export default defineComponent({
     containersByProject() {
       const groups = {};
       this.containers.forEach((container) => {
-        const project = this.getProjectName(container.Name);
+        // Use Project field from container if available, otherwise calculate it
+        const project = container.Project || "";
         if (!groups[project]) {
           groups[project] = [];
         }
@@ -669,7 +675,7 @@ export default defineComponent({
 
     async loadContainers() {
       try {
-        const data = await API.get("/api/containers");
+        const data = await API.get<ContainerData | Container[]>("/api/containers");
 
         // Handle both old format (array) and new format (object with containers and portToServerMap)
         if (Array.isArray(data)) {
@@ -718,7 +724,7 @@ export default defineComponent({
 
     async loadInitialLogs() {
       try {
-        const logs = await API.get("/api/logs");
+        const logs = await API.get<LogMessage[]>("/api/logs");
         this.logs = logs;
         this.$nextTick(() => this.scrollToBottom());
       } catch (error) {
@@ -738,15 +744,15 @@ export default defineComponent({
       };
 
       this.ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
+        const message = JSON.parse(event.data) as WebSocketMessage;
         if (message.type === "log") {
-          this.handleNewLog(message.data);
+          this.handleNewLog(message.data as LogMessage);
         } else if (message.type === "logs") {
-          this.handleNewLogs(message.data);
+          this.handleNewLogs(message.data as LogMessage[]);
         } else if (message.type === "logs_initial") {
-          this.handleInitialLogs(message.data);
+          this.handleInitialLogs(message.data as LogMessage[]);
         } else if (message.type === "containers") {
-          this.handleContainerUpdate(message.data);
+          this.handleContainerUpdate(message.data as ContainerData);
         }
       };
 
@@ -760,7 +766,7 @@ export default defineComponent({
       };
     },
 
-    handleNewLog(log) {
+    handleNewLog(log: LogMessage) {
       this.logs.push(log);
       if (this.logs.length > 100000) {
         this.logs = this.logs.slice(-50000);
@@ -769,7 +775,7 @@ export default defineComponent({
       this.$nextTick(() => this.scrollToBottom());
     },
 
-    handleNewLogs(logs) {
+    handleNewLogs(logs: LogMessage[]) {
       // Handle batched logs from backend
       this.logs.push(...logs);
       if (this.logs.length > 100000) {
@@ -779,7 +785,7 @@ export default defineComponent({
       this.$nextTick(() => this.scrollToBottom());
     },
 
-    handleInitialLogs(logs) {
+    handleInitialLogs(logs: LogMessage[]) {
       // Replace all logs with initial filtered set
       console.log(`Received ${logs.length} initial filtered logs`);
       this.logs = logs;
@@ -787,7 +793,7 @@ export default defineComponent({
       this.$nextTick(() => this.scrollToBottom());
     },
 
-    updateRecentRequests(log) {
+    updateRecentRequests(log: LogMessage) {
       const requestId = log.entry?.fields?.request_id;
       const path = log.entry?.fields?.path;
       const operationName =
@@ -802,7 +808,7 @@ export default defineComponent({
 
       if (!requestId || !path) return;
 
-      if (latency && latency < 5) return;
+      if (latency && Number.parseFloat(latency) < 5) return;
 
       // Check if request ID already exists
       const existingIndex = this.recentRequests.findIndex((r) => r.requestId === requestId);
@@ -823,7 +829,7 @@ export default defineComponent({
 
         // Update latency if we have one
         if (latency) {
-          existing.latency = latency;
+          existing.latency = Number.parseFloat(latency);
         }
 
         // Update timestamp to latest
@@ -892,16 +898,16 @@ export default defineComponent({
       );
     },
 
-    handleContainerUpdate(data) {
+    handleContainerUpdate(data: ContainerData) {
       const newContainers = data.containers;
-      const oldNames = new Set(this.containers.map((c) => c.Name));
-      const newNames = new Set(newContainers.map((c) => c.Name));
+      const oldNames = new Set(this.containers.map((c: Container) => c.Name));
+      const newNames = new Set(newContainers.map((c: Container) => c.Name));
 
-      const added = newContainers.filter((c) => !oldNames.has(c.Name));
-      const removed = this.containers.filter((c) => !newNames.has(c.Name));
+      const added = newContainers.filter((c: Container) => !oldNames.has(c.Name));
+      const removed = this.containers.filter((c: Container) => !newNames.has(c.Name));
 
       if (added.length > 0) {
-        added.forEach((c) => {
+        added.forEach((c: Container) => {
           this.selectedContainers.add(c.Name);
           console.log(`Container started: ${c.Name} (${c.ID})`);
         });
@@ -941,24 +947,7 @@ export default defineComponent({
       }
     },
 
-    getProjectName(containerName) {
-      const parts = containerName.split(/-/);
-      if (parts.length <= 1) {
-        return containerName;
-      }
-
-      if (parts[parts.length - 1].match(/^\d+$/)) {
-        parts.pop();
-        if (parts.length <= 2) {
-          return parts[0];
-        }
-        return parts.slice(0, 2).join("-");
-      }
-
-      return containerName;
-    },
-
-    toggleContainer(containerName) {
+    toggleContainer(containerName: Container['Name']) {
       if (this.selectedContainers.has(containerName)) {
         this.selectedContainers.delete(containerName);
       } else {
@@ -968,11 +957,11 @@ export default defineComponent({
       this.sendFilterUpdate();
     },
 
-    isContainerSelected(containerName) {
+    isContainerSelected(containerName: Container['Name']) {
       return this.selectedContainers.has(containerName);
     },
 
-    toggleProject(project) {
+    toggleProject(project: string) {
       const projectContainers = this.containersByProject[project];
       const allSelected = projectContainers.every((c) => this.selectedContainers.has(c.Name));
 
@@ -987,19 +976,19 @@ export default defineComponent({
       this.sendFilterUpdate();
     },
 
-    isProjectSelected(project) {
+    isProjectSelected(project: string) {
       const projectContainers = this.containersByProject[project];
       return projectContainers.every((c) => this.selectedContainers.has(c.Name));
     },
 
-    isProjectIndeterminate(project) {
+    isProjectIndeterminate(project: string) {
       const projectContainers = this.containersByProject[project];
       const someSelected = projectContainers.some((c) => this.selectedContainers.has(c.Name));
       const allSelected = projectContainers.every((c) => this.selectedContainers.has(c.Name));
       return someSelected && !allSelected;
     },
 
-    toggleProjectCollapse(project) {
+    toggleProjectCollapse(project: string) {
       if (this.collapsedProjects.has(project)) {
         this.collapsedProjects.delete(project);
       } else {
@@ -1007,27 +996,25 @@ export default defineComponent({
       }
     },
 
-    isProjectCollapsed(project) {
+    isProjectCollapsed(project: string) {
       return this.collapsedProjects.has(project);
     },
 
-    getContainerName(containerId) {
+    getContainerName(containerId: Container['ID']) {
       return this.containers.find((c) => c.ID === containerId)?.Name || containerId;
     },
 
-    getShortContainerName(containerId) {
-      const fullName = this.getContainerName(containerId);
-      // For Docker Compose containers (format: project-service-number)
-      const parts = fullName.split("-");
-      if (parts.length >= 3 && parts[parts.length - 1].match(/^\d+$/)) {
-        // Return the service name (middle part)
-        return parts[parts.length - 2];
+    getShortContainerName(containerId: Container['ID']) {
+      const container = this.containers.find((c) => c.ID === containerId);
+      if (container) {
+        if (container.Project) {
+          return container.Name.replace(`${container.Project}-`, '');
+        }
+        return container.Name;
       }
-      // For non-compose containers, return as-is
-      return fullName;
     },
 
-    formatTimestamp(timestamp) {
+    formatTimestamp(timestamp: string) {
       if (!timestamp) return "";
 
       // If timestamp is already in HH:MM:SS format, return it
@@ -1111,7 +1098,7 @@ export default defineComponent({
           sqlQueries: sqlQueries,
         };
 
-        const result = await API.post("/api/save-trace", payload);
+        const result = await API.post<SaveTraceResponse>("/api/save-trace", payload);
         alert(`Trace saved successfully! ID: ${result.id}`);
       } catch (error) {
         console.error("Error saving trace:", error);
@@ -1197,7 +1184,7 @@ export default defineComponent({
         .trim();
     },
 
-    renderAnalysis(queries) {
+    renderAnalysis(queries: SQLQuery[]) {
       if (queries.length === 0) {
         this.sqlAnalysis = {
           totalQueries: 0,
@@ -1208,7 +1195,7 @@ export default defineComponent({
           frequentQueries: [],
           nPlusOne: [],
           tables: [],
-        };
+        } as SQLAnalysis;
         return;
       }
 
@@ -1216,7 +1203,7 @@ export default defineComponent({
       const totalDuration = queries.reduce((sum, q) => sum + q.duration, 0);
       const avgDuration = totalDuration / totalQueries;
 
-      const queryGroups = {};
+      const queryGroups: Record<string, { queries: SQLQuery[]; count: number }> = {};
       queries.forEach((q) => {
         if (!queryGroups[q.normalized]) {
           queryGroups[q.normalized] = {
@@ -1232,7 +1219,7 @@ export default defineComponent({
 
       const slowestQueries = [...queries].sort((a, b) => b.duration - a.duration).slice(0, 5);
 
-      const frequentQueries = Object.entries(queryGroups)
+      const frequentQueries: FrequentQuery[] = Object.entries(queryGroups)
         .map(([normalized, data]) => ({
           normalized,
           count: data.count,
@@ -1244,7 +1231,7 @@ export default defineComponent({
 
       const nPlusOne = frequentQueries.filter((item) => item.count > 5);
 
-      const tables = {};
+      const tables = {} as Record<string, number>;
       queries.forEach((q) => {
         if (!tables[q.table]) {
           tables[q.table] = 0;
@@ -1314,7 +1301,7 @@ export default defineComponent({
           connectionString: connectionString,
         };
 
-        const result = await API.post("/api/explain", payload);
+        const result = await API.post<ExplainResponse>("/api/explain", payload);
 
         if (result.error) {
           this.explainData.error = result.error;
@@ -1372,7 +1359,7 @@ export default defineComponent({
 
     async saveRetention() {
       try {
-        const data = await API.post("/api/retention", {
+        const data = await API.post<RetentionResponse>("/api/retention", {
           containerName: this.retentionContainer,
           retentionType: this.retentionForm.type,
           retentionValue: this.retentionForm.value,

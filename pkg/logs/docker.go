@@ -17,10 +17,12 @@ type DockerClient struct {
 }
 
 type Container struct {
-	ID    string
-	Name  string
-	Image string
-	Ports []PortMapping
+	ID      string
+	Name    string
+	Image   string
+	Ports   []PortMapping
+	Project string // Docker Compose project name
+	Service string // Docker Compose service name
 }
 
 type PortMapping struct {
@@ -57,11 +59,25 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 			})
 		}
 
+		// Extract Docker Compose project and service names from labels
+		project := ""
+		service := ""
+		if c.Labels != nil {
+			if p, ok := c.Labels["com.docker.compose.project"]; ok {
+				project = p
+			}
+			if s, ok := c.Labels["com.docker.compose.service"]; ok {
+				service = s
+			}
+		}
+
 		result = append(result, Container{
-			ID:    c.ID, // Use full ID for StreamLogs
-			Name:  name,
-			Image: c.Image,
-			Ports: ports,
+			ID:      c.ID, // Use full ID for StreamLogs
+			Name:    name,
+			Image:   c.Image,
+			Ports:   ports,
+			Project: project,
+			Service: service,
 		})
 	}
 	return result, nil

@@ -589,7 +589,7 @@ import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
 import type { 
   Container, 
-  LogEntry, 
+  LogMessage, 
   SQLAnalysis,
   ExplainData,
   RecentRequest,
