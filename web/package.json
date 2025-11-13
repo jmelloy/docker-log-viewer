@@ -5,13 +5,17 @@
   "description": "Web frontend for Docker Log Viewer with GraphQL Explorer",
   "private": true,
   "scripts": {
-    "build": "npm run build:codemirror && npm run build:highlight",
-    "build:codemirror": "esbuild js/codemirror-graphql-bundle.js --bundle --format=esm --outfile=lib/codemirror-graphql.js",
-    "build:highlight": "esbuild js/highlight-bundle.js --bundle --format=iife --global-name=hljsBundle --outfile=lib/highlight.js",
-    "format": "prettier --write \"**/*.{js,html,css,json}\"",
-    "format:check": "prettier --check \"**/*.{js,html,css,json}\"",
-    "lint": "eslint \"**/*.js\"",
-    "lint:fix": "eslint \"**/*.js\" --fix"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit -p tsconfig.json --composite false",
+    "build:legacy": "npm run build:codemirror && npm run build:highlight",
+    "build:codemirror": "esbuild static/js/codemirror-graphql-bundle.js --bundle --format=esm --outfile=static/lib/codemirror-graphql.js",
+    "build:highlight": "esbuild static/js/highlight-bundle.js --bundle --format=iife --global-name=hljsBundle --outfile=static/lib/highlight.js",
+    "format": "prettier --write \"**/*.{js,ts,vue,html,css,json}\"",
+    "format:check": "prettier --check \"**/*.{js,ts,vue,html,css,json}\"",
+    "lint": "eslint \"**/*.{js,ts,vue}\"",
+    "lint:fix": "eslint \"**/*.{js,ts,vue}\" --fix"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.12.0",
@@ -23,13 +27,22 @@
     "@codemirror/view": "^6.23.0",
     "cm6-graphql": "^0.2.1",
     "graphql": "^16.8.1",
-    "highlight.js": "^11.11.1"
+    "highlight.js": "^11.11.1",
+    "pev2": "^1.17.0",
+    "vue": "^3.5.24",
+    "vue-router": "^4.6.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
     "esbuild": "^0.25.12",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2",
+    "vue-tsc": "^3.1.3"
   }
 }
