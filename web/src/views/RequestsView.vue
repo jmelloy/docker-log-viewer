@@ -591,7 +591,9 @@ export default defineComponent(// Export component definition (template will be 
     },
 
     showRequestDetail(requestId) {
-      window.location.href = `/requests/detail/?id=${requestId}`;
+      // Use router push for SPA navigation
+      window.history.pushState({}, '', `/requests/${requestId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     },
 
     async compareSelectedRequests() {
@@ -621,12 +623,6 @@ export default defineComponent(// Export component definition (template will be 
 
     getComparisonTimeDiffClass() {
       return this.getComparisonTimeDiff() > 0 ? "diff-slower" : "diff-faster";
-    },
-
-    escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
     },
 
     // Wrapper for global formatSQL function
@@ -789,7 +785,7 @@ export default defineComponent(// Export component definition (template will be 
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/requests/detail/?id=${result.executionId}`;
+            window.history.pushState({}, '', `/requests/${result.executionId}`); window.dispatchEvent(new PopStateEvent('popstate'));
           }
         } else {
           // No sample query - execute directly using /api/execute endpoint
@@ -815,7 +811,7 @@ export default defineComponent(// Export component definition (template will be 
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/requests/detail/?id=${result.executionId}`;
+            window.history.pushState({}, '', `/requests/${result.executionId}`); window.dispatchEvent(new PopStateEvent('popstate'));
           }
         }
       } catch (error) {
