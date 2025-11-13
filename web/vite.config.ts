@@ -17,9 +17,10 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://localhost:9000',
+        target: process.env.API_URL || 'http://localhost:9000',
         changeOrigin: true,
         ws: true, // Enable WebSocket proxying
       },

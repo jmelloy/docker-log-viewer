@@ -1,6 +1,6 @@
 <template>
 <div class="app-container">
-  <app-header></app-header>
+  <app-header activePage="requests"></app-header>
 
   <div class="main-layout">
     <aside class="sidebar">
@@ -351,6 +351,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
+import { formatSQL as formatSQLUtil } from '@/utils/ui-utils'
 import type { 
   Container, 
   LogEntry, 
@@ -361,6 +362,7 @@ import type {
   WebSocketMessage,
   ContainerData
 } from '@/types'
+
 
 export default defineComponent(// Export component definition (template will be provided by SPA loader)
 {
@@ -625,9 +627,9 @@ export default defineComponent(// Export component definition (template will be 
       return this.getComparisonTimeDiff() > 0 ? "diff-slower" : "diff-faster";
     },
 
-    // Wrapper for global formatSQL function
+    // SQL formatter
     formatSQL(sql) {
-      return formatSQL(sql);
+      return formatSQLUtil(sql);
     },
 
     openNewSampleQueryModal() {

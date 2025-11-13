@@ -1,6 +1,6 @@
 <template>
 <div class="app-container">
-  <app-header>
+  <app-header activePage="viewer">
     <div class="header-controls">
       <div class="trace-filter-display" v-if="hasTraceFilters">
         <span v-for="([key, value], index) in Array.from(traceFilters.entries())" :key="key" class="trace-filter-badge">
@@ -443,6 +443,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
+import { convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
 import type { 
   Container, 
   LogEntry, 
@@ -1273,64 +1274,7 @@ export default defineComponent({
     },
 
     convertAnsiToHtml(text) {
-      const ansiMap = {
-        0: "",
-        1: "ansi-bold",
-        30: "ansi-gray",
-        31: "ansi-red",
-        32: "ansi-green",
-        33: "ansi-yellow",
-        34: "ansi-blue",
-        35: "ansi-magenta",
-        36: "ansi-cyan",
-        37: "ansi-white",
-        90: "ansi-gray",
-        91: "ansi-bright-red",
-        92: "ansi-bright-green",
-        93: "ansi-bright-yellow",
-        94: "ansi-bright-blue",
-        95: "ansi-bright-magenta",
-        96: "ansi-bright-cyan",
-        97: "ansi-bright-white",
-      };
-
-      const parts = [];
-      const regex = /\x1b\[([0-9;]+)m/g;
-      let lastIndex = 0;
-      let currentClasses = [];
-      let match;
-
-      while ((match = regex.exec(text)) !== null) {
-        if (match.index > lastIndex) {
-          const content = text.substring(lastIndex, match.index);
-          if (currentClasses.length > 0) {
-            parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
-          } else {
-            parts.push(this.escapeHtml(content));
-          }
-        }
-
-        const codes = match[1].split(";");
-        currentClasses = [];
-        codes.forEach((code) => {
-          if (ansiMap[code]) {
-            currentClasses.push(ansiMap[code]);
-          }
-        });
-
-        lastIndex = regex.lastIndex;
-      }
-
-      if (lastIndex < text.length) {
-        const content = text.substring(lastIndex);
-        if (currentClasses.length > 0) {
-          parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
-        } else {
-          parts.push(this.escapeHtml(content));
-        }
-      }
-
-      return parts.join("");
+      return convertAnsiToHtmlUtil(text);
     },
 
     getDatabaseConnectionString() {
@@ -1356,9 +1300,17 @@ export default defineComponent({
         // Determine connection string based on container ports
         const connectionString = this.getDatabaseConnectionString();
 
+        // Convert variables to string map (backend expects map[string]string)
+        const varsStringMap = {};
+        if (variables) {
+          for (const [key, value] of Object.entries(variables)) {
+            varsStringMap[key] = typeof value === 'string' ? value : JSON.stringify(value);
+          }
+        }
+
         const payload = {
           query: query,
-          variables: variables,
+          variables: varsStringMap,
           connectionString: connectionString,
         };
 

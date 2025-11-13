@@ -10,13 +10,25 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /app/tmp
       - /app/bin
-      - /app/web/node_modules
-      - /app/web/dist
       - go-modules:/go/pkg/mod
     environment:
       - DATABASE_URL=${DATABASE_URL:-}
     working_dir: /app
-    command: sh -c "cd /app/web && npm install && npm run build && cd /app && air -c .air.toml"
+    command: air -c .air.toml
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev.frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app/web
+      - /app/web/node_modules
+    environment:
+      - API_URL=http://app:9000
+    working_dir: /app/web
+    command: sh -c "npm install && npm run dev"
 
 volumes:
   go-modules:

@@ -111,3 +111,177 @@ export function normalizeQuery(query: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/**
+ * Escapes HTML special characters
+ * @param text - The text to escape
+ */
+export function escapeHtml(text: string): string {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Converts ANSI color codes to HTML with CSS classes
+ * @param text - The text with ANSI codes
+ */
+export function convertAnsiToHtml(text: string): string {
+  const ansiMap: Record<number, string> = {
+    0: "",
+    1: "ansi-bold",
+    30: "ansi-gray",
+    31: "ansi-red",
+    32: "ansi-green",
+    33: "ansi-yellow",
+    34: "ansi-blue",
+    35: "ansi-magenta",
+    36: "ansi-cyan",
+    37: "ansi-white",
+    90: "ansi-gray",
+    91: "ansi-bright-red",
+    92: "ansi-bright-green",
+    93: "ansi-bright-yellow",
+    94: "ansi-bright-blue",
+    95: "ansi-bright-magenta",
+    96: "ansi-bright-cyan",
+    97: "ansi-bright-white",
+  };
+
+  const parts: string[] = [];
+  const regex = /\x1b\[([0-9;]+)m/g;
+  let lastIndex = 0;
+  let currentClasses: string[] = [];
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const content = text.substring(lastIndex, match.index);
+      if (currentClasses.length > 0) {
+        parts.push(`<span class="${currentClasses.join(" ")}">${escapeHtml(content)}</span>`);
+      } else {
+        parts.push(escapeHtml(content));
+      }
+    }
+
+    const codes = match[1].split(";");
+    currentClasses = [];
+    codes.forEach((code) => {
+      const ansiClass = ansiMap[parseInt(code)];
+      if (ansiClass) {
+        currentClasses.push(ansiClass);
+      }
+    });
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    const content = text.substring(lastIndex);
+    if (currentClasses.length > 0) {
+      parts.push(`<span class="${currentClasses.join(" ")}">${escapeHtml(content)}</span>`);
+    } else {
+      parts.push(escapeHtml(content));
+    }
+  }
+
+  return parts.join("");
+}
+
+/**
+ * Formats SQL for better readability
+ * @param sql - The SQL query to format
+ */
+export function formatSQL(sql: string): string {
+  if (!sql?.trim()) return sql;
+
+  let formatted = sql.replace(/\s+/g, " ").trim();
+
+  const keywords = [
+    "SELECT",
+    "WHERE",
+    "GROUP BY",
+    "ORDER BY",
+    "HAVING",
+    "UNION",
+    "INSERT INTO",
+    "UPDATE",
+    "SET",
+    "VALUES",
+  ];
+
+  formatted = formatted.replaceAll(new RegExp(`\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)\\b`, "gi"), `\n$1`);
+
+  formatted = formatted.replaceAll(new RegExp(`\\b(DELETE FROM|FROM)\\b`, "gi"), `\n$1`);
+
+  keywords.forEach((kw) => {
+    formatted = formatted.replace(new RegExp(`\\b${kw}\\b`, "gi"), `\n${kw.toUpperCase()}`);
+  });
+
+  const lines = formatted
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const output: string[] = [];
+  const indentStack: boolean[] = [];
+
+  for (const line of lines) {
+    if (/^(SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|UNION)$/i.test(line)) {
+      indentStack.length = 0;
+    }
+
+    const opens = (line.match(/\(/g) || []).length;
+    const closes = (line.match(/\)/g) || []).length;
+    const netChange = opens - closes;
+
+    if (netChange <= 0) {
+      // Break on AND/OR outside parens
+      let depth = 0;
+      let result = "  ".repeat(indentStack.length);
+      let i = 0;
+      while (i < line.length) {
+        const char = line[i];
+        if (char === "(") depth++;
+        else if (char === ")") depth--;
+
+        if (depth == 0) {
+          const remaining = line.substring(i);
+          if (/^\s+(AND|OR)\b/i.test(remaining)) {
+            const match = remaining.match(/^(\s+)(AND|OR)\b/i);
+            if (match) {
+              result += "\n" + "  ".repeat(indentStack.length + 1) + match[2].toUpperCase();
+              i += match[0].length;
+              continue;
+            }
+          }
+
+          if (result.length > 100 && char == ",") {
+            output.push(result + ",");
+            result = "  ".repeat(indentStack.length + 1);
+            i += 1;
+            continue;
+          }
+        }
+        result += char;
+        i++;
+      }
+      output.push(result);
+
+      if (netChange < 0) {
+        for (let i = 0; i < Math.abs(netChange); i++) {
+          indentStack.pop();
+        }
+      }
+    } else {
+      output.push("  ".repeat(indentStack.length) + line);
+    }
+
+    if (netChange > 0) {
+      for (let i = 0; i < netChange; i++) {
+        indentStack.push(true);
+      }
+    }
+  }
+
+  return output.join("\n");
+}
