@@ -1,6 +1,6 @@
 <template>
 <div class="app-container">
-  <app-header></app-header>
+  <app-header activePage="requests"></app-header>
 
   <div class="main-layout">
     <main class="content content-padded">
@@ -910,7 +910,9 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue'
+import { useRoute } from 'vue-router'
 import { API } from '@/utils/api'
+import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
 import type { 
   Container, 
   LogEntry, 
@@ -923,6 +925,10 @@ import type {
 } from '@/types'
 
 export default defineComponent({
+  setup() {
+    const route = useRoute()
+    return { route }
+  },
   data() {
     return {
       requestDetail: null,
@@ -1176,8 +1182,7 @@ export default defineComponent({
   },
 
   async mounted() {
-    const params = new URLSearchParams(window.location.search);
-    const requestId = params.get("id");
+    const requestId = this.route.params.id as string;
 
     if (!requestId) {
       this.error = "No request ID provided";
@@ -1293,8 +1298,10 @@ export default defineComponent({
     },
     async loadRequestDetail(requestId) {
       try {
+        console.log(`Loading request detail for ID: ${requestId}`);
         this.requestDetail = await API.get(`/api/executions/${requestId}`);
         this.loading = false;
+        console.log('Request detail loaded successfully:', this.requestDetail);
 
         // Auto-populate response filter for batch GraphQL requests
         if (this.isGraphQLBatchRequest && !this.responseFilter.trim()) {
@@ -1315,7 +1322,7 @@ export default defineComponent({
         }
       } catch (error) {
         console.error("Failed to load request detail:", error);
-        this.error = error.message;
+        this.error = error.message || String(error);
         this.loading = false;
       }
     },
@@ -1510,9 +1517,9 @@ export default defineComponent({
       }
     },
 
-    // Wrapper for global formatSQL function
+    // SQL formatter
     formatSQL(sql) {
-      return formatSQL(sql);
+      return formatSQLUtil(sql);
     },
 
     normalizeQuery(query) {
@@ -1939,70 +1946,7 @@ export default defineComponent({
     },
 
     convertAnsiToHtml(text) {
-      const ansiMap = {
-        0: "",
-        1: "ansi-bold",
-        30: "ansi-gray",
-        31: "ansi-red",
-        32: "ansi-green",
-        33: "ansi-yellow",
-        34: "ansi-blue",
-        35: "ansi-magenta",
-        36: "ansi-cyan",
-        37: "ansi-white",
-        90: "ansi-gray",
-        91: "ansi-bright-red",
-        92: "ansi-bright-green",
-        93: "ansi-bright-yellow",
-        94: "ansi-bright-blue",
-        95: "ansi-bright-magenta",
-        96: "ansi-bright-cyan",
-        97: "ansi-bright-white",
-      };
-
-      const parts = [];
-      const regex = /\x1b\[([0-9;]+)m/g;
-      let lastIndex = 0;
-      let currentClasses = [];
-      let match;
-
-      while ((match = regex.exec(text)) !== null) {
-        if (match.index > lastIndex) {
-          const content = text.substring(lastIndex, match.index);
-          if (currentClasses.length > 0) {
-            parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
-          } else {
-            parts.push(this.escapeHtml(content));
-          }
-        }
-
-        const codes = match[1].split(";");
-        currentClasses = [];
-        codes.forEach((code) => {
-          if (ansiMap[code]) {
-            currentClasses.push(ansiMap[code]);
-          }
-        });
-
-        lastIndex = regex.lastIndex;
-      }
-
-      if (lastIndex < text.length) {
-        const content = text.substring(lastIndex);
-        if (currentClasses.length > 0) {
-          parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
-        } else {
-          parts.push(this.escapeHtml(content));
-        }
-      }
-
-      return parts.join("");
-    },
-
-    escapeHtml(text) {
-      const div = document.createElement("div");
-      div.textContent = text;
-      return div.innerHTML;
+      return convertAnsiToHtmlUtil(text);
     },
   },
 })

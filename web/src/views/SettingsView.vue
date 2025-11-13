@@ -1,6 +1,6 @@
 <template>
 <div class="app-container">
-  <app-header></app-header>
+  <app-header activePage="settings"></app-header>
 
   <div class="settings-container">
     <section class="settings-section">
