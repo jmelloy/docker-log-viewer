@@ -1487,14 +1487,16 @@ export default defineComponent({
 
     async runExplain(query, variables = {}, connectionString) {
       try {
+        // Convert variables to string map (backend expects map[string]string)
         const vars = {};
         if (Array.isArray(variables)) {
           for (let i = 0; i < variables.length; i++) {
-            vars[`${i + 1}`] = variables[i];
+            const value = variables[i];
+            vars[`${i + 1}`] = typeof value === 'string' ? value : JSON.stringify(value);
           }
         } else {
           for (const [key, value] of Object.entries(variables)) {
-            vars[key] = value;
+            vars[key] = typeof value === 'string' ? value : JSON.stringify(value);
           }
         }
 
