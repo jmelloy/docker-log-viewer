@@ -6,9 +6,9 @@ declare module '*.vue' {
   export default component
 }
 
-// Declare global libraries
+// Declare global libraries loaded via script tags
 declare global {
-  const Vue: typeof import('vue')
+  const Vue: any
   const pev2: any
   const hljs: any
 }
