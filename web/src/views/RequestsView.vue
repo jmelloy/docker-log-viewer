@@ -354,7 +354,7 @@ import { API } from '@/utils/api'
 import { formatSQL as formatSQLUtil } from '@/utils/ui-utils'
 import type { 
   Container, 
-  LogEntry, 
+  LogMessage, 
   SQLAnalysis,
   ExplainData,
   RecentRequest,

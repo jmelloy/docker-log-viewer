@@ -915,7 +915,7 @@ import { API } from '@/utils/api'
 import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
 import type { 
   Container, 
-  LogEntry, 
+  LogMessage, 
   SQLAnalysis,
   ExplainData,
   RecentRequest,

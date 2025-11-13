@@ -46,12 +46,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import type { Container, LogEntry } from '@/types'
+import type { Container, LogMessage, ContainerData } from '@/types'
 
-interface LogMessage {
-  containerId: string
-  entry?: LogEntry
-}
+
 
 interface Props {
   requestIdFilter?: string | null
@@ -131,8 +128,11 @@ watch(() => props.levelFilter, () => {
 
 async function loadContainers() {
   try {
-    const response = await fetch('/api/containers')
-    const data = await response.json()
+    const response: Response = await fetch('/api/containers')
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    const data: ContainerData | Container[]  = await response.json()
 
     if (Array.isArray(data)) {
       containers.value = data

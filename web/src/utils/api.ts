@@ -1,20 +1,20 @@
 export const API = {
   async get<T = any>(url: string): Promise<T> {
     try {
-      const response = await fetch(url);
+      const response: Response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      return await response.json();
+      return (await response.json()) as T;
     } catch (error) {
       console.error(`GET ${url} failed:`, error);
       throw error;
     }
   },
 
-  async post<T = any>(url: string, data: any): Promise<T> {
+  async post<T = any>(url: string, data: unknown): Promise<T> {
     try {
-      const response = await fetch(url, {
+      const response: Response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -24,16 +24,16 @@ export const API = {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      return await response.json();
+      return (await response.json()) as T;
     } catch (error) {
       console.error(`POST ${url} failed:`, error);
       throw error;
     }
   },
 
-  async put<T = any>(url: string, data: any): Promise<T> {
+  async put<T = any>(url: string, data: unknown): Promise<T> {
     try {
-      const response = await fetch(url, {
+      const response: Response = await fetch(url, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -43,7 +43,7 @@ export const API = {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      return await response.json();
+      return (await response.json()) as T;
     } catch (error) {
       console.error(`PUT ${url} failed:`, error);
       throw error;
@@ -52,14 +52,14 @@ export const API = {
 
   async delete<T = any>(url: string): Promise<T | null> {
     try {
-      const response = await fetch(url, {
+      const response: Response = await fetch(url, {
         method: "DELETE",
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       const text = await response.text();
-      return text ? JSON.parse(text) : null;
+      return text ? (JSON.parse(text) as T) : null;
     } catch (error) {
       console.error(`DELETE ${url} failed:`, error);
       throw error;

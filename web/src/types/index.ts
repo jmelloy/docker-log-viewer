@@ -1,7 +1,10 @@
 export interface Container {
   ID: string;
   Name: string;
+  Image?: string;
   Ports?: Port[];
+  Project?: string; // Docker Compose project name
+  Service?: string; // Docker Compose service name
 }
 
 export interface Port {
@@ -9,7 +12,7 @@ export interface Port {
   privatePort?: number;
 }
 
-export interface LogEntry {
+export interface LogMessage {
   containerId: string;
   timestamp: string;
   entry?: {
@@ -100,4 +103,49 @@ export interface ContainerData {
   portToServerMap?: Record<number, string>;
   logCounts?: Record<string, number>;
   retentions?: Record<string, RetentionSettings>;
+}
+
+export interface Server {
+  id: number;
+  name: string;
+  url: string;
+  bearerToken?: string;
+  devId?: string;
+  experimentalMode?: string;
+  defaultDatabaseId?: number | null;
+  defaultDatabase?: DatabaseURL | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DatabaseURL {
+  id: number;
+  name: string;
+  connectionString: string;
+  databaseType: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateServerResponse {
+  id: number;
+}
+
+export interface CreateDatabaseURLResponse {
+  id: number;
+}
+
+export interface ExplainResponse {
+  queryPlan?: any[];
+  query?: string;
+  error?: string;
+}
+
+export interface SaveTraceResponse {
+  id: number;
+}
+
+export interface RetentionResponse {
+  retentionType: "count" | "time";
+  retentionValue: number;
 }

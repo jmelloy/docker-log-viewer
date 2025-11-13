@@ -2131,8 +2131,8 @@ func normalizeQuery(query string) string {
 
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		slog.Info("request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
 		next(w, r)
+		slog.Info("request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
 	}
 }
 
