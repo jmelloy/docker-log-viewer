@@ -3,6 +3,16 @@ set -e
 
 mkdir -p bin
 
+echo "Building Frontend (TypeScript + Vue)..."
+cd web
+if [ ! -d "node_modules" ]; then
+  echo "Installing npm dependencies..."
+  npm install
+fi
+npm run build
+cd ..
+
+echo ""
 echo "Building Docker Log Viewer..."
 go build -o bin/docker-log-viewer cmd/viewer/main.go
 
@@ -20,7 +30,7 @@ go build -o bin/test-parser cmd/test-parser/main.go
 
 echo ""
 echo "Build complete!"
-echo "  - ./bin/docker-log-viewer - Web-based log viewer"
+echo "  - ./bin/docker-log-viewer - Web-based log viewer (frontend: web/dist/)"
 echo "  - ./bin/compare - API comparison tool"
 echo "  - ./bin/graphql-tester - GraphQL request manager CLI"
 echo "  - ./bin/analyze - Query analysis tool for two execution IDs"
