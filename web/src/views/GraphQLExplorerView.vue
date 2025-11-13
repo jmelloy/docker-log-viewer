@@ -598,10 +598,13 @@ import type {
   ContainerData
 } from '@/types'
 
+import LogStream from '../components/LogStream.vue'
+import { GraphQLEditorManager } from "../../static/js/graphql-editor-manager.js";
+
 export default defineComponent(// Export component definition (template will be provided by SPA loader)
 {
   components: {
-    "log-stream": createLogStreamComponent(),
+    LogStream,
   },
   data() {
     return {
