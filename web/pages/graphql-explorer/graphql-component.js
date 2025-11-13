@@ -1,16 +1,13 @@
-import { createAppHeader } from "../../static/js/shared/navigation.js";
 import { API } from "../../static/js/shared/api.js";
 import { GraphQLEditorManager } from "../../static/js/graphql-editor-manager.js";
 import { createLogStreamComponent } from "../../static/js/shared/log-stream-component.js";
-import { loadTemplate } from "../../static/js/shared/template-loader.js";
-import { copyToClipboard, applySyntaxHighlighting } from "../../static/js/shared/ui-utils.js";
+import { applySyntaxHighlighting, copyToClipboard } from "../../static/js/shared/ui-utils.js";
 
-const { createApp } = Vue;
-
-// Load template
-const template = await loadTemplate("template.html");
-
-const app = createApp({
+// Export component definition (template will be provided by SPA loader)
+export default {
+  components: {
+    "log-stream": createLogStreamComponent(),
+  },
   data() {
     return {
       servers: [],
@@ -800,11 +797,4 @@ const app = createApp({
       this.editorManager.destroy();
     }
   },
-
-  template,
-});
-
-app.component("app-header", createAppHeader("graphql-explorer"));
-app.component("log-stream", createLogStreamComponent());
-
-app.mount("#app");
+};

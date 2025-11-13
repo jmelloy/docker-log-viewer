@@ -159,6 +159,10 @@ body {
   width: 300px;
 }
 
+.sidebar .search-box {
+  width: 100%;
+}
+
 .search-box input {
   width: 100%;
   padding-right: 2rem;
@@ -2414,4 +2418,18 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+/* Loading container for SPA */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  padding: 2rem;
+}
+
+.loading-container .spinner-border {
+  width: 3rem;
+  height: 3rem;
 }

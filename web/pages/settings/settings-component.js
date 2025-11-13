@@ -1,12 +1,7 @@
-import { createAppHeader } from "../../static/js/shared/navigation.js";
 import { API } from "../../static/js/shared/api.js";
-import { loadTemplate } from "../../static/js/shared/template-loader.js";
 
-const template = await loadTemplate("template.html");
-
-const { createApp } = Vue;
-
-const app = createApp({
+// Export component definition (template will be provided by SPA loader)
+export default {
   data() {
     return {
       servers: [],
@@ -235,10 +230,4 @@ const app = createApp({
       return db ? db.name : "None";
     },
   },
-
-  template,
-});
-
-app.component("app-header", createAppHeader("settings"));
-
-app.mount("#app");
+};
