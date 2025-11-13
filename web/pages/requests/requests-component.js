@@ -1,13 +1,8 @@
-import { createAppHeader } from "/static/js/shared/navigation.js";
 import { API } from "/static/js/shared/api.js";
-import { formatSQL, escapeHtml } from "/static/js/utils.js";
-import { loadTemplate } from "/static/js/shared/template-loader.js";
+import { formatSQL } from "/static/js/utils.js";
 
-const template = await loadTemplate("template.html");
-
-const { createApp } = Vue;
-
-const app = createApp({
+// Export component definition (template will be provided by SPA loader)
+export default {
   data() {
     return {
       sampleQueries: [],
@@ -235,7 +230,9 @@ const app = createApp({
     },
 
     showRequestDetail(requestId) {
-      window.location.href = `/requests/detail/?id=${requestId}`;
+      // Use router push for SPA navigation
+      window.history.pushState({}, '', `/requests/${requestId}`);
+      window.dispatchEvent(new PopStateEvent('popstate'));
     },
 
     async compareSelectedRequests() {
@@ -427,7 +424,7 @@ const app = createApp({
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/requests/detail/?id=${result.executionId}`;
+            window.history.pushState({}, '', `/requests/${result.executionId}`); window.dispatchEvent(new PopStateEvent('popstate'));
           }
         } else {
           // No sample query - execute directly using /api/execute endpoint
@@ -453,7 +450,7 @@ const app = createApp({
 
           // Navigate to execution detail
           if (result.executionId) {
-            window.location.href = `/requests/detail/?id=${result.executionId}`;
+            window.history.pushState({}, '', `/requests/${result.executionId}`); window.dispatchEvent(new PopStateEvent('popstate'));
           }
         }
       } catch (error) {
@@ -572,10 +569,4 @@ const app = createApp({
       }
     },
   },
-
-  template,
-});
-
-app.component("app-header", createAppHeader("requests"));
-
-app.mount("#app");
+};

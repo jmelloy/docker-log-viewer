@@ -2283,8 +2283,34 @@ func (wa *WebApp) Run(addr string) error {
 	// Serve static assets at /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static"))))
 
-	// Serve pages from root
-	http.Handle("/", http.FileServer(http.Dir("./web/pages")))
+	// Serve SPA for all non-API and non-static routes
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// If it's an API route, let it 404 naturally
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+		
+		// Serve static files from /static/ (already handled by the /static/ handler above)
+		// This shouldn't be reached due to the earlier /static/ handler, but just in case
+		if strings.HasPrefix(r.URL.Path, "/static/") {
+			http.NotFound(w, r)
+			return
+		}
+		
+		// Serve .js and .html files from pages directory (for component modules and templates)
+		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".html") {
+			filePath := "./web/pages" + r.URL.Path
+			if _, err := os.Stat(filePath); err == nil {
+				http.ServeFile(w, r, filePath)
+				return
+			}
+		}
+		
+		// For SPA routes, serve index.html for all other paths
+		// This enables path-based routing (e.g., /requests, /graphql, /settings)
+		http.ServeFile(w, r, "./web/pages/index.html")
+	})
 
 	// Create HTTP server with graceful shutdown
 	server := &http.Server{

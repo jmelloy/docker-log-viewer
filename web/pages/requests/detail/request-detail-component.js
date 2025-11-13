@@ -1,23 +1,13 @@
-import { createAppHeader } from "/static/js/shared/navigation.js";
 import { API } from "/static/js/shared/api.js";
-import {
-  formatSQL,
-  convertAnsiToHtml,
-  formatFieldValue,
-  isJsonField,
-  formatJsonField,
-  normalizeQuery,
-} from "../../../static/js/utils.js";
-import { applySyntaxHighlighting, copyToClipboard } from "../../../static/js/shared/ui-utils.js";
-import { createLogStreamComponent } from "../../../static/js/shared/log-stream-component.js";
-import { loadTemplate } from "../../../static/js/shared/template-loader.js";
+import { formatSQL } from "/static/js/utils.js";
+import { createLogStreamComponent } from "/static/js/shared/log-stream-component.js";
 
-const pev2Template = await loadTemplate("pev2-template.html");
-const mainTemplate = await loadTemplate("template.html");
-
-const { createApp } = Vue;
-
-const app = createApp({
+// Export component definition (template will be provided by SPA loader)
+export default {
+  components: {
+    "log-stream": createLogStreamComponent(),
+    "pev2": pev2.Plan,
+  },
   data() {
     return {
       requestDetail: null,
@@ -210,7 +200,7 @@ const app = createApp({
         operation: q.operation || "SELECT",
         rows: q.rows || 0,
         variables: q.variables ? (typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables) : {},
-        normalized: normalizeQuery(q.query),
+        normalized: this.normalizeQuery(q.query),
       }));
 
       const totalQueries = queries.length;
@@ -271,8 +261,9 @@ const app = createApp({
   },
 
   async mounted() {
-    const params = new URLSearchParams(window.location.search);
-    const requestId = params.get("id");
+    // Extract ID from URL path: /requests/:id
+    const pathParts = window.location.pathname.split('/');
+    const requestId = pathParts[pathParts.length - 1];
 
     if (!requestId) {
       this.error = "No request ID provided";
@@ -331,7 +322,60 @@ const app = createApp({
 
   methods: {
     applySyntaxHighlighting() {
-      applySyntaxHighlighting();
+      // Only apply if hljs is available
+      if (typeof hljs === "undefined") return;
+
+      // Highlight JSON in request and response bodies
+      document.querySelectorAll(".json-display:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent.trim();
+          if (text.startsWith("{") || text.startsWith("[")) {
+            const highlighted = hljs.highlight(text, { language: "json" });
+            block.innerHTML = highlighted.value;
+            block.classList.add("hljs");
+          }
+        } catch (e) {
+          console.error("Error highlighting JSON:", e);
+          // If highlighting fails, leave as is
+        }
+      });
+
+      // Highlight GraphQL queries
+      document.querySelectorAll(".graphql-query:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent.trim();
+          const highlighted = hljs.highlight(text, { language: "graphql" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        } catch (e) {
+          console.error("Error highlighting GraphQL query:", e);
+          // If highlighting fails, leave as is
+        }
+      });
+
+      // Highlight SQL queries
+      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent;
+          const highlighted = hljs.highlight(text, { language: "sql" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        } catch (e) {
+          console.error("Error highlighting SQL query:", e);
+          // If highlighting fails, leave as is
+        }
+      });
+      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
+        try {
+          const text = block.textContent;
+          const highlighted = hljs.highlight(text, { language: "sql" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        } catch (e) {
+          console.error("Error highlighting SQL query:", e);
+          // If highlighting fails, leave as is
+        }
+      });
     },
     async loadRequestDetail(requestId) {
       try {
@@ -558,8 +602,29 @@ const app = createApp({
       return formatSQL(sql);
     },
 
-    copyToClipboard(text) {
-      return copyToClipboard(text);
+    normalizeQuery(query) {
+      return query
+        .replace(/\$\d+/g, "$N")
+        .replace(/'[^']*'/g, "'?'")
+        .replace(/\d+/g, "N")
+        .replace(/\s+/g, " ")
+        .trim();
+    },
+
+    async copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        // Show a brief notification
+        const notification = document.createElement("div");
+        notification.textContent = "Copied to clipboard!";
+        notification.style.cssText =
+          "position: fixed; top: 20px; right: 20px; background: #238636; color: white; padding: 0.75rem 1rem; border-radius: 4px; z-index: 10000; font-size: 0.875rem;";
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 2000);
+      } catch (err) {
+        console.error("Failed to copy:", err);
+        alert("Failed to copy to clipboard");
+      }
     },
 
     viewBigger(type) {
@@ -918,16 +983,32 @@ const app = createApp({
       return null;
     },
 
-    formatFieldValue(key, value) {
-      return formatFieldValue(key, value, { maxLength: 50 });
+    // Methods for displaying saved logs similar to regular log viewer
+    shouldShowField(key, value) {
+      // Always show error field
+      if (key === "error") return true;
+      // Show fields less than 40 characters
+      const s = String(value);
+      return s.length < 40;
+    },
+
+    formatFieldValue(value) {
+      const s = String(value);
+      return s.length > 50 ? s.substring(0, 50) + "..." : s;
     },
 
     isJsonField(value) {
-      return isJsonField(value);
+      const s = String(value);
+      return s.trim().startsWith("{") || s.trim().startsWith("[");
     },
 
     formatJsonField(value) {
-      return formatJsonField(value);
+      try {
+        const parsed = JSON.parse(value);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return value;
+      }
     },
 
     openLogDetails(log) {
@@ -945,15 +1026,70 @@ const app = createApp({
     },
 
     convertAnsiToHtml(text) {
-      return convertAnsiToHtml(text);
+      const ansiMap = {
+        0: "",
+        1: "ansi-bold",
+        30: "ansi-gray",
+        31: "ansi-red",
+        32: "ansi-green",
+        33: "ansi-yellow",
+        34: "ansi-blue",
+        35: "ansi-magenta",
+        36: "ansi-cyan",
+        37: "ansi-white",
+        90: "ansi-gray",
+        91: "ansi-bright-red",
+        92: "ansi-bright-green",
+        93: "ansi-bright-yellow",
+        94: "ansi-bright-blue",
+        95: "ansi-bright-magenta",
+        96: "ansi-bright-cyan",
+        97: "ansi-bright-white",
+      };
+
+      const parts = [];
+      const regex = /\x1b\[([0-9;]+)m/g;
+      let lastIndex = 0;
+      let currentClasses = [];
+      let match;
+
+      while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+          const content = text.substring(lastIndex, match.index);
+          if (currentClasses.length > 0) {
+            parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
+          } else {
+            parts.push(this.escapeHtml(content));
+          }
+        }
+
+        const codes = match[1].split(";");
+        currentClasses = [];
+        codes.forEach((code) => {
+          if (ansiMap[code]) {
+            currentClasses.push(ansiMap[code]);
+          }
+        });
+
+        lastIndex = regex.lastIndex;
+      }
+
+      if (lastIndex < text.length) {
+        const content = text.substring(lastIndex);
+        if (currentClasses.length > 0) {
+          parts.push(`<span class="${currentClasses.join(" ")}">${this.escapeHtml(content)}</span>`);
+        } else {
+          parts.push(this.escapeHtml(content));
+        }
+      }
+
+      return parts.join("");
+    },
+
+    escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
     },
   },
-
-  template: mainTemplate,
-});
-
-app.component("app-header", createAppHeader("request-detail"));
-app.component("pev2", pev2.Plan);
-app.component("log-stream", createLogStreamComponent());
-
-app.mount("#app");
+};

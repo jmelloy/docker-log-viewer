@@ -1,20 +1,8 @@
-import { createAppHeader } from "../../static/js/shared/navigation.js";
-import { API } from "../../static/js/shared/api.js";
-import { loadTemplate } from "../../static/js/shared/template-loader.js";
-import {
-  convertAnsiToHtml,
-  formatFieldValue,
-  isJsonField,
-  formatJsonField,
-  normalizeQuery,
-} from "../../static/js/utils.js";
-import { applySyntaxHighlighting } from "../../static/js/shared/ui-utils.js";
+import { API } from "/static/js/shared/api.js";
+import { applySyntaxHighlighting } from "/static/js/shared/ui-utils.js";
 
-const template = await loadTemplate("/logs/template.html");
-
-const { createApp } = Vue;
-
-const app = createApp({
+// Export component definition (template will be provided by SPA loader)
+export default {
   data() {
     // Load persisted container state from localStorage (by name, not ID)
     let selectedContainers = new Set();
@@ -1002,11 +990,4 @@ const app = createApp({
       }
     },
   },
-
-  template,
-});
-
-app.component("app-header", createAppHeader("viewer"));
-app.component("pev2", pev2.Plan);
-
-app.mount("#app");
+};
