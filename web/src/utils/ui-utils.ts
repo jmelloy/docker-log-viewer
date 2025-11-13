@@ -3,6 +3,14 @@
  * Shared utilities for UI interactions and DOM manipulation
  */
 
+import hljs from "highlight.js/lib/core";
+import json from "highlight.js/lib/languages/json";
+import sql from "highlight.js/lib/languages/sql";
+
+// Register languages
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("sql", sql);
+
 interface HighlightOptions {
   jsonSelector?: string;
   graphqlSelector?: string;
@@ -14,9 +22,6 @@ interface HighlightOptions {
  * @param options - Highlighting options
  */
 export function applySyntaxHighlighting(options: HighlightOptions = {}) {
-  // Only apply if hljs is available
-  if (typeof hljs === "undefined") return;
-
   const {
     jsonSelector = ".json-display",
     graphqlSelector = ".graphql-query",
@@ -29,7 +34,7 @@ export function applySyntaxHighlighting(options: HighlightOptions = {}) {
       try {
         const text = (block.textContent || "").trim();
         if (text.startsWith("{") || text.startsWith("[")) {
-          const highlighted = (hljs as any).highlight(text, { language: "json" });
+          const highlighted = hljs.highlight(text, { language: "json" });
           block.innerHTML = highlighted.value;
           block.classList.add("hljs");
         }
@@ -44,7 +49,7 @@ export function applySyntaxHighlighting(options: HighlightOptions = {}) {
     document.querySelectorAll(`${graphqlSelector}:not(.hljs)`).forEach((block) => {
       try {
         const text = (block.textContent || "").trim();
-        const highlighted = (hljs as any).highlight(text, { language: "graphql" });
+        const highlighted = hljs.highlight(text, { language: "graphql" });
         block.innerHTML = highlighted.value;
         block.classList.add("hljs");
       } catch (e) {
@@ -58,7 +63,7 @@ export function applySyntaxHighlighting(options: HighlightOptions = {}) {
     document.querySelectorAll(`${sqlSelector}:not(.hljs)`).forEach((block) => {
       try {
         const text = block.textContent || "";
-        const highlighted = (hljs as any).highlight(text, { language: "sql" });
+        const highlighted = hljs.highlight(text, { language: "sql" });
         block.innerHTML = highlighted.value;
         block.classList.add("hljs");
       } catch (e) {

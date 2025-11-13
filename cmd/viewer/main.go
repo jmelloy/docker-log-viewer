@@ -2289,13 +2289,21 @@ func (wa *WebApp) Run(addr string) error {
 		slog.Warn("dist directory not found. Run 'npm run build' in web directory.")
 		distDir = "./web"
 	}
-	
-	// Serve static files
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(distDir+"/static"))))
-	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(distDir+"/assets"))))
-	http.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir(distDir+"/js"))))
-	http.Handle("/css/", http.StripPrefix("/css/", http.FileServer(http.Dir(distDir+"/css"))))
-	http.Handle("/lib/", http.StripPrefix("/lib/", http.FileServer(http.Dir(distDir+"/lib"))))
+
+	// Serve static files with correct MIME types
+	serveFiles := func(prefix, dir string) {
+		fs := http.FileServer(http.Dir(dir))
+		http.Handle(prefix, http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Let http.FileServer handle MIME type detection
+			fs.ServeHTTP(w, r)
+		})))
+	}
+
+	serveFiles("/static/", distDir+"/static")
+	serveFiles("/assets/", distDir+"/assets")
+	serveFiles("/js/", distDir+"/js")
+	serveFiles("/css/", distDir+"/css")
+	serveFiles("/lib/", distDir+"/lib")
 
 	// Serve SPA for all non-API and non-static routes
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -2304,17 +2312,17 @@ func (wa *WebApp) Run(addr string) error {
 			http.NotFound(w, r)
 			return
 		}
-		
+
 		// Serve static files (handled by above handlers)
 		if strings.HasPrefix(r.URL.Path, "/static/") ||
-		   strings.HasPrefix(r.URL.Path, "/assets/") ||
-		   strings.HasPrefix(r.URL.Path, "/js/") ||
-		   strings.HasPrefix(r.URL.Path, "/css/") ||
-		   strings.HasPrefix(r.URL.Path, "/lib/") {
+			strings.HasPrefix(r.URL.Path, "/assets/") ||
+			strings.HasPrefix(r.URL.Path, "/js/") ||
+			strings.HasPrefix(r.URL.Path, "/css/") ||
+			strings.HasPrefix(r.URL.Path, "/lib/") {
 			http.NotFound(w, r)
 			return
 		}
-		
+
 		// For SPA routes, serve index.html from dist folder for all other paths
 		// This enables Vue Router client-side routing
 		indexPath := filepath.Join(distDir, "index.html")
