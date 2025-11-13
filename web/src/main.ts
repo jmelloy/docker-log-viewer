@@ -7,7 +7,6 @@ import AppHeader from "./components/AppHeader.vue";
 import "../static/css/styles.css";
 import "pev2/dist/pev2.css";
 import "highlight.js/styles/github-dark.css";
-import "../static/css/codemirror-graphql.css";
 
 // Declare global types for external libraries
 declare global {
