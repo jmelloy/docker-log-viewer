@@ -23,6 +23,53 @@ go build -o docker-log-viewer cmd/viewer/main.go
 
 Open [http://localhost:9000](http://localhost:9000)
 
+## Docker
+
+### Using Docker Compose (Recommended for Development)
+
+```bash
+# Start the application with hot reload
+docker-compose up
+
+# Build and start in detached mode
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# Stop the application
+docker-compose down
+```
+
+The Docker Compose setup:
+- Builds frontend automatically on startup
+- Enables hot reload with Air for Go backend
+- Mounts source code for development
+- Exposes port 9000
+- Connects to Docker socket for log monitoring
+
+### Using Docker (Production)
+
+```bash
+# Build production image
+docker build -t docker-log-viewer .
+
+# Run container
+docker run -d \
+  -p 9000:9000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --name docker-log-viewer \
+  docker-log-viewer
+
+# With PostgreSQL connection
+docker run -d \
+  -p 9000:9000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e DATABASE_URL="postgresql://user:pass@host:5432/db" \
+  --name docker-log-viewer \
+  docker-log-viewer
+```
+
 ## Development
 
 ### Frontend Development
