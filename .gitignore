@@ -47,6 +47,11 @@ node_modules/
 # Build artifacts
 dist/
 build/
+web/dist/
+
+# Vite/TypeScript
+.vite/
+*.tsbuildinfo
 
 # Test files (keep demo files)
 web/test-schema.html
