@@ -203,26 +203,24 @@ export function formatSQL(sql: string): string {
   let formatted = sql.replace(/\s+/g, " ").trim();
 
   const keywords = [
-    "SELECT",
-    "WHERE",
-    "GROUP BY",
-    "ORDER BY",
-    "HAVING",
-    "UNION",
-    "INSERT INTO",
-    "UPDATE",
-    "SET",
-    "VALUES",
+    `\\bSELECT\\b`,
+    `(?<!\\()\\bWHERE\\b`,
+    `\\bGROUP BY\\b`,
+    `\\bORDER BY\\b`,
+    `\\bHAVING\\b`,
+    `\\bUNION (ALL)?\\b`,
+    `\\bINSERT INTO\\b`,
+    `\\bUPDATE\\b`,
+    `\\bSET\\b`,
+    `\\bVALUES\\b`,
+    `\\b(?:LEFT|RIGHT|INNER|FULL)?\\s*JOIN\\b`,
+    `\\bDELETE FROM\\b`,
+    `\\bFROM\\b`,
   ];
 
-  formatted = formatted.replaceAll(new RegExp(`\\b(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)\\b`, "gi"), `\n$1`);
-
-  formatted = formatted.replaceAll(new RegExp(`\\b(DELETE FROM|FROM)\\b`, "gi"), `\n$1`);
-
   keywords.forEach((kw) => {
-    formatted = formatted.replace(new RegExp(`\\b${kw}\\b`, "gi"), `\n${kw.toUpperCase()}`);
+    formatted = formatted.replace(new RegExp(kw, "gi"), (match) => `\n${match.toUpperCase()}`);
   });
-
   const lines = formatted
     .split("\n")
     .map((l) => l.trim())
@@ -244,6 +242,7 @@ export function formatSQL(sql: string): string {
       let depth = 0;
       let result = "  ".repeat(indentStack.length);
       let i = 0;
+      const chunkPositions = [];
       while (i < line.length) {
         const char = line[i];
         if (char === "(") depth++;
@@ -260,16 +259,32 @@ export function formatSQL(sql: string): string {
             }
           }
 
-          if (result.length > 100 && char == ",") {
-            output.push(result + ",");
-            result = "  ".repeat(indentStack.length + 1);
-            i += 1;
-            continue;
+          if (char == ",") {
+            chunkPositions.push(i);
           }
         }
         result += char;
         i++;
       }
+
+      if (chunkPositions.length > 0 && result.length > 100) {
+        chunkPositions.push(line.length);
+
+        result = "  ".repeat(indentStack.length);
+        let previousChunkPosition = 0;
+        for (const position of chunkPositions) {
+          var chunk = line.substring(previousChunkPosition, position + 1);
+          if (result.length + chunk.length > 100) {
+            if (result.trim().length > 0) {
+              output.push(result);
+            }
+            result = "  ".repeat(indentStack.length + 1);
+          }
+          result += chunk;
+          previousChunkPosition = position + 1;
+        }
+      }
+
       output.push(result);
 
       if (netChange < 0) {
