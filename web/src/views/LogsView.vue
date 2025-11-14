@@ -1305,12 +1305,9 @@ export default defineComponent({
 
     formatMessage(message) {
       if (!message) return message;
-      if (message.includes("[sql]")) {
-        const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
-        if (sqlMatch) {
-          const sql = sqlMatch[1].trim();
-          return formatSQLUtil(sql);
-        }
+      const sqlIndex = message.indexOf("[sql]:");
+      if (sqlIndex >= 0) {
+        return formatSQLUtil(message.substring(sqlIndex + 6));
       }
       return message;
     },
