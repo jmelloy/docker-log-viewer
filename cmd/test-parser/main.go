@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,7 +43,7 @@ func main() {
 		fmt.Println("Options:")
 		fmt.Println("  -debug      Enable debug output")
 		fmt.Println("  -verbose    Enable verbose output")
-		fmt.Println("  -tail       Number of recent log lines to show (Docker only, default: 100)")
+		fmt.Println("  -skip       Number of recent log lines to skip (for Docker)")
 		fmt.Println("  -follow     Follow logs in real-time (Docker only)")
 		fmt.Println("  -level      Filter by log level (DBG, TRC, INF, WRN, ERR, FATAL)")
 		fmt.Println("  -search     Filter by text (searches in message and fields)")
@@ -64,7 +65,22 @@ func main() {
 	// Prepare CSV writer if export is requested
 	var csvWriter *csv.Writer
 	var csvFile *os.File
+	var csvEntries []*logs.LogEntry
+	var csvLineNumbers []int
 	if *csvExport != "" {
+		// When CSV export is requested, we collect entries first
+		csvEntries = make([]*logs.LogEntry, 0)
+		csvLineNumbers = make([]int, 0)
+	}
+
+	if *containerID != "" {
+		readFromDockerContainer(*containerID, *skip, *follow, *debug, *verbose, *filterLevel, *filterText, &csvEntries, &csvLineNumbers)
+	} else {
+		readFromLogFile(*logFile, *debug, *verbose, *filterLevel, *filterText, &csvEntries, &csvLineNumbers)
+	}
+
+	// Write CSV file if requested
+	if *csvExport != "" && len(csvEntries) > 0 {
 		var err error
 		csvFile, err = os.Create(*csvExport)
 		if err != nil {
@@ -75,22 +91,11 @@ func main() {
 		csvWriter = csv.NewWriter(csvFile)
 		defer csvWriter.Flush()
 
-		// Write CSV header
-		err = csvWriter.Write([]string{"Line", "Timestamp", "Level", "File", "Message", "Fields"})
-		if err != nil {
-			fmt.Printf("Error writing CSV header: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	if *containerID != "" {
-		readFromDockerContainer(*containerID, *skip, *follow, *debug, *verbose, *filterLevel, *filterText, csvWriter)
-	} else {
-		readFromLogFile(*logFile, *debug, *verbose, *filterLevel, *filterText, csvWriter)
+		writeCSVFile(csvWriter, csvEntries, csvLineNumbers)
 	}
 }
 
-func readFromDockerContainer(containerID string, skip int, follow bool, debug bool, verbose bool, filterLevel string, filterText string, csvWriter *csv.Writer) {
+func readFromDockerContainer(containerID string, skip int, follow bool, debug bool, verbose bool, filterLevel string, filterText string, csvEntries *[]*logs.LogEntry, csvLineNumbers *[]int) {
 	fmt.Printf("Reading logs from Docker container: %s\n", containerID)
 	if follow {
 		fmt.Println("Following logs in real-time...")
@@ -142,8 +147,9 @@ func readFromDockerContainer(containerID string, skip int, follow bool, debug bo
 			}
 			if shouldShowEntry(logMsg.Entry, filterLevel, filterText) {
 				printLogEntry(lineCount, logMsg.Entry, debug, verbose)
-				if csvWriter != nil {
-					writeCSVEntry(csvWriter, lineCount, logMsg.Entry)
+				if csvEntries != nil {
+					*csvEntries = append(*csvEntries, logMsg.Entry)
+					*csvLineNumbers = append(*csvLineNumbers, lineCount)
 				}
 			}
 
@@ -156,7 +162,7 @@ func readFromDockerContainer(containerID string, skip int, follow bool, debug bo
 	}
 }
 
-func readFromLogFile(filePath string, debug bool, verbose bool, filterLevel string, filterText string, csvWriter *csv.Writer) {
+func readFromLogFile(filePath string, debug bool, verbose bool, filterLevel string, filterText string, csvEntries *[]*logs.LogEntry, csvLineNumbers *[]int) {
 	fmt.Printf("Reading logs from file: %s\n", filePath)
 	fmt.Println(strings.Repeat("=", 80))
 
@@ -178,8 +184,9 @@ func readFromLogFile(filePath string, debug bool, verbose bool, filterLevel stri
 			entryCount++
 			if shouldShowEntry(bufferedEntry, filterLevel, filterText) {
 				printLogEntry(entryCount, bufferedEntry, debug, verbose)
-				if csvWriter != nil {
-					writeCSVEntry(csvWriter, entryCount, bufferedEntry)
+				if csvEntries != nil {
+					*csvEntries = append(*csvEntries, bufferedEntry)
+					*csvLineNumbers = append(*csvLineNumbers, entryCount)
 				}
 			}
 			bufferedEntry = nil
@@ -232,8 +239,9 @@ func readFromLogFile(filePath string, debug bool, verbose bool, filterLevel stri
 						entryCount++
 						if shouldShowEntry(entry, filterLevel, filterText) {
 							printLogEntry(entryCount, entry, debug, verbose)
-							if csvWriter != nil {
-								writeCSVEntry(csvWriter, entryCount, entry)
+							if csvEntries != nil {
+								*csvEntries = append(*csvEntries, entry)
+								*csvLineNumbers = append(*csvLineNumbers, entryCount)
 							}
 						}
 					}
@@ -292,30 +300,56 @@ func shouldShowEntry(entry *logs.LogEntry, filterLevel string, filterText string
 	return true
 }
 
-// writeCSVEntry writes a log entry to the CSV file
-func writeCSVEntry(writer *csv.Writer, lineNum int, entry *logs.LogEntry) {
-	// Build fields string
-	var fieldsStr strings.Builder
-	for k, v := range entry.Fields {
-		if fieldsStr.Len() > 0 {
-			fieldsStr.WriteString("; ")
+// writeCSVFile writes all log entries to CSV with dynamic headers for each unique field
+func writeCSVFile(writer *csv.Writer, entries []*logs.LogEntry, lineNumbers []int) {
+	// Collect all unique field names across all entries
+	fieldNamesMap := make(map[string]bool)
+	for _, entry := range entries {
+		for fieldName := range entry.Fields {
+			fieldNamesMap[fieldName] = true
 		}
-		fieldsStr.WriteString(k)
-		fieldsStr.WriteString("=")
-		fieldsStr.WriteString(v)
 	}
 
-	record := []string{
-		fmt.Sprintf("%d", lineNum),
-		entry.Timestamp,
-		entry.Level,
-		entry.File,
-		entry.Message,
-		fieldsStr.String(),
+	// Convert to sorted slice for consistent column order
+	fieldNames := make([]string, 0, len(fieldNamesMap))
+	for fieldName := range fieldNamesMap {
+		fieldNames = append(fieldNames, fieldName)
 	}
+	sort.Strings(fieldNames)
 
-	err := writer.Write(record)
+	// Build header row
+	header := []string{"Line", "Timestamp", "Level", "File", "Message"}
+	header = append(header, fieldNames...)
+
+	// Write header
+	err := writer.Write(header)
 	if err != nil {
-		fmt.Printf("Error writing CSV record: %v\n", err)
+		fmt.Printf("Error writing CSV header: %v\n", err)
+		return
+	}
+
+	// Write each entry
+	for i, entry := range entries {
+		record := []string{
+			fmt.Sprintf("%d", lineNumbers[i]),
+			entry.Timestamp,
+			entry.Level,
+			entry.File,
+			entry.Message,
+		}
+
+		// Add field values in the same order as headers
+		for _, fieldName := range fieldNames {
+			if value, ok := entry.Fields[fieldName]; ok {
+				record = append(record, value)
+			} else {
+				record = append(record, "")
+			}
+		}
+
+		err := writer.Write(record)
+		if err != nil {
+			fmt.Printf("Error writing CSV record: %v\n", err)
+		}
 	}
 }
