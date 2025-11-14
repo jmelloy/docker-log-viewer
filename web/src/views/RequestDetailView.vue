@@ -914,14 +914,10 @@ import { useRoute } from 'vue-router'
 import { API } from '@/utils/api'
 import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
 import type { 
-  Container, 
-  LogMessage, 
-  SQLAnalysis,
-  ExplainData,
-  RecentRequest,
-  RetentionSettings,
-  WebSocketMessage,
-  ContainerData
+  Server,
+  ExecutionDetail,
+  ExplainResponse,
+  ExecuteResponse
 } from '@/types'
 
 export default defineComponent({
@@ -931,9 +927,9 @@ export default defineComponent({
   },
   data() {
     return {
-      requestDetail: null,
+      requestDetail: null as ExecutionDetail | null,
       loading: true,
-      error: null,
+      error: null as string | null,
       explainPlanData: null,
       showExplainPlanPanel: false,
       pev2App: null,
@@ -946,9 +942,9 @@ export default defineComponent({
         tokenOverride: "",
         devIdOverride: "",
         requestDataOverride: "",
-        graphqlVariables: {},
+        graphqlVariables: {} as Record<string, any>,
       },
-      servers: [],
+      servers: [] as Server[],
       showLiveLogStream: false, // Toggle between saved logs and live stream
       refreshTimer: null, // Timer for auto-refreshing recent requests
       selectedOperationIndex: 0, // For GraphQL batch requests
@@ -1299,7 +1295,7 @@ export default defineComponent({
     async loadRequestDetail(requestId) {
       try {
         console.log(`Loading request detail for ID: ${requestId}`);
-        this.requestDetail = await API.get(`/api/executions/${requestId}`);
+        this.requestDetail = await API.get<ExecutionDetail>(`/api/executions/${requestId}`);
         this.loading = false;
         console.log('Request detail loaded successfully:', this.requestDetail);
 
@@ -1337,7 +1333,7 @@ export default defineComponent({
       this.refreshTimer = setTimeout(async () => {
         console.log("Auto-refreshing request details...");
         try {
-          this.requestDetail = await API.get(`/api/executions/${requestId}`);
+          this.requestDetail = await API.get<ExecutionDetail>(`/api/executions/${requestId}`);
 
           // Check if we should continue refreshing
           const ageMinutes = this.requestAgeMinutes;
@@ -1506,7 +1502,7 @@ export default defineComponent({
           connectionString: connectionString,
         };
 
-        const result = await API.post("/api/explain", payload);
+        const result = await API.post<ExplainResponse>("/api/explain", payload);
 
         if (result.error) {
           alert(`EXPLAIN Error: ${result.error}`);
@@ -1559,7 +1555,7 @@ export default defineComponent({
 
     async loadServers() {
       try {
-        this.servers = await API.get("/api/servers");
+        this.servers = await API.get<Server[]>("/api/servers");
       } catch (error) {
         console.error("Failed to load servers:", error);
       }
@@ -1715,7 +1711,7 @@ export default defineComponent({
           requestData: requestBody,
         };
 
-        const result = await API.post("/api/execute", payload);
+        const result = await API.post<ExecuteResponse>("/api/execute", payload);
 
         // Navigate to new execution detail
         if (result.executionId) {
@@ -1751,7 +1747,7 @@ export default defineComponent({
           devIdOverride: this.executeForm.devIdOverride || undefined,
         };
 
-        const result = await API.post("/api/execute", payload);
+        const result = await API.post<ExecuteResponse>("/api/execute", payload);
 
         // Close modal
         this.showExecuteModal = false;

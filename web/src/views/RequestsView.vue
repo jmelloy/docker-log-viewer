@@ -353,14 +353,12 @@ import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
 import { formatSQL as formatSQLUtil } from '@/utils/ui-utils'
 import type { 
-  Container, 
-  LogMessage, 
-  SQLAnalysis,
-  ExplainData,
-  RecentRequest,
-  RetentionSettings,
-  WebSocketMessage,
-  ContainerData
+  Server,
+  SampleQuery,
+  ExecutedRequest,
+  AllExecutionsResponse,
+  ExecuteResponse,
+  ExecutionDetail
 } from '@/types'
 
 
@@ -368,11 +366,11 @@ export default defineComponent(// Export component definition (template will be 
 {
   data() {
     return {
-      sampleQueries: [],
-      servers: [],
-      selectedSampleQuery: null,
-      requests: [],
-      allRequests: [],
+      sampleQueries: [] as SampleQuery[],
+      servers: [] as Server[],
+      selectedSampleQuery: null as SampleQuery | null,
+      requests: [] as ExecutedRequest[],
+      allRequests: [] as ExecutedRequest[],
       // Filtering and pagination
       searchQuery: "",
       currentPage: 1,
@@ -479,7 +477,7 @@ export default defineComponent(// Export component definition (template will be 
   methods: {
     async loadServers() {
       try {
-        this.servers = await API.get("/api/servers");
+        this.servers = await API.get<Server[]>("/api/servers");
       } catch (error) {
         console.error("Failed to load servers:", error);
         this.servers = [];
@@ -488,7 +486,7 @@ export default defineComponent(// Export component definition (template will be 
 
     async loadSampleQueries() {
       try {
-        this.sampleQueries = await API.get("/api/requests");
+        this.sampleQueries = await API.get<SampleQuery[]>("/api/requests");
       } catch (error) {
         console.error("Failed to load sample queries:", error);
       }
@@ -498,12 +496,12 @@ export default defineComponent(// Export component definition (template will be 
       try {
         const offset = (this.currentPage - 1) * this.pageSize;
         const params = new URLSearchParams({
-          limit: this.pageSize,
-          offset: offset,
+          limit: String(this.pageSize),
+          offset: String(offset),
           search: this.searchQuery,
         });
 
-        const response = await API.get(`/api/all-executions?${params}`);
+        const response = await API.get<AllExecutionsResponse>(`/api/all-executions?${params}`);
         this.allRequests = response.executions || [];
         this.totalRequests = response.total || 0;
       } catch (error) {
@@ -546,9 +544,9 @@ export default defineComponent(// Export component definition (template will be 
       await this.loadRequests(id);
     },
 
-    async loadRequests(sampleQueryId) {
+    async loadRequests(sampleQueryId: number) {
       try {
-        this.requests = await API.get(`/api/executions?request_id=${sampleQueryId}`);
+        this.requests = await API.get<ExecutedRequest[]>(`/api/executions?request_id=${sampleQueryId}`);
       } catch (error) {
         console.error("Failed to load requests for sample query:", error);
         this.requests = [];
@@ -604,7 +602,7 @@ export default defineComponent(// Export component definition (template will be 
       const ids = this.selectedRequestIds;
 
       // Fetch details for both requests
-      const [detail1, detail2] = await Promise.all(ids.map((id) => API.get(`/api/executions/${id}`)));
+      const [detail1, detail2] = await Promise.all(ids.map((id) => API.get<ExecutionDetail>(`/api/executions/${id}`)));
 
       this.comparisonData = { detail1, detail2 };
       this.showComparisonModal = true;
@@ -678,7 +676,14 @@ export default defineComponent(// Export component definition (template will be 
 
     async saveNewSampleQuery() {
       try {
-        const payload = {
+        const payload: { 
+          name: string; 
+          requestData: string; 
+          serverId?: number; 
+          url?: string; 
+          bearerToken?: string; 
+          devId?: string;
+        } = {
           name: this.newQueryForm.name,
           requestData: this.newQueryForm.requestData,
         };
@@ -693,7 +698,7 @@ export default defineComponent(// Export component definition (template will be 
           payload.devId = this.newQueryForm.devId;
         }
 
-        await API.post("/api/requests", payload);
+        await API.post<{ id: number }>("/api/requests", payload);
 
         // Reload sample queries
         await this.loadSampleQueries();
@@ -777,7 +782,7 @@ export default defineComponent(// Export component definition (template will be 
             requestDataOverride: requestData,
           };
 
-          const result = await API.post(`/api/requests/${this.selectedSampleQuery.id}/execute`, payload);
+          const result = await API.post<ExecuteResponse>(`/api/requests/${this.selectedSampleQuery.id}/execute`, payload);
 
           // Reload requests to show new execution
           await this.loadAllRequests();
@@ -803,7 +808,7 @@ export default defineComponent(// Export component definition (template will be 
             devIdOverride: this.executeForm.devIdOverride || undefined,
           };
 
-          const result = await API.post("/api/execute", payload);
+          const result = await API.post<ExecuteResponse>("/api/execute", payload);
 
           // Reload requests to show new execution
           await this.loadAllRequests();

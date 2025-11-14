@@ -588,14 +588,10 @@
 import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
 import type { 
-  Container, 
-  LogMessage, 
-  SQLAnalysis,
-  ExplainData,
-  RecentRequest,
-  RetentionSettings,
-  WebSocketMessage,
-  ContainerData
+  Server,
+  SampleQuery,
+  ExecuteResponse,
+  ExecutionDetail
 } from '@/types'
 
 import LogStream from '../components/LogStream.vue'
@@ -608,18 +604,18 @@ export default defineComponent(// Export component definition (template will be 
   },
   data() {
     return {
-      servers: [],
+      servers: [] as Server[],
       selectedServerId: "",
       query: "",
       operationName: "",
       variables: "{}",
       executing: false,
-      result: null,
-      error: null,
-      executionId: null,
-      requestIdHeader: null, // Request ID for log filtering
+      result: null as string | null,
+      error: null as string | null,
+      executionId: null as number | null,
+      requestIdHeader: null as string | null, // Request ID for log filtering
       showSampleQueries: false,
-      sampleQueries: [],
+      sampleQueries: [] as SampleQuery[],
       schema: null,
       loadingSchema: false,
       schemaError: null,
@@ -751,7 +747,7 @@ export default defineComponent(// Export component definition (template will be 
   methods: {
     async loadServers() {
       try {
-        this.servers = await API.get("/api/servers");
+        this.servers = await API.get<Server[]>("/api/servers");
         // Auto-select first server if available
         if (this.servers.length > 0 && !this.selectedServerId) {
           this.selectedServerId = String(this.servers[0].id);
@@ -764,7 +760,7 @@ export default defineComponent(// Export component definition (template will be 
 
     async loadSampleQueries() {
       try {
-        this.sampleQueries = await API.get("/api/requests");
+        this.sampleQueries = await API.get<SampleQuery[]>("/api/requests");
       } catch (error) {
         console.error("Failed to load sample queries:", error);
         this.sampleQueries = [];
@@ -788,7 +784,7 @@ export default defineComponent(// Export component definition (template will be 
 
       try {
         // Build request body
-        const requestData = {
+        const requestData: { query: string; operationName?: string; variables?: any } = {
           query: this.query,
         };
 
@@ -814,7 +810,7 @@ export default defineComponent(// Export component definition (template will be 
           sync: false,
         };
 
-        const response = await API.post("/api/execute", payload);
+        const response = await API.post<ExecuteResponse>("/api/execute", payload);
 
         if (response.executionId) {
           this.executionId = response.executionId;
@@ -832,10 +828,10 @@ export default defineComponent(// Export component definition (template will be 
       }
     },
 
-    async pollForResult(executionId, maxAttempts = 30, intervalMs = 1000) {
+    async pollForResult(executionId: number, maxAttempts = 30, intervalMs = 1000) {
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
-          const execution = await API.get(`/api/executions/${executionId}`);
+          const execution = await API.get<ExecutionDetail>(`/api/executions/${executionId}`);
 
           console.log("execution", execution);
 
