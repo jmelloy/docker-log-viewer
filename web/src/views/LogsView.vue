@@ -285,24 +285,65 @@
       <div class="modal-section">
         <h4>Parsed Fields</h4>
         <div>
-          <div v-if="selectedLog.entry?.timestamp" class="parsed-field">
-            <div class="parsed-field-key">Timestamp</div>
-            <div class="parsed-field-value">{{ selectedLog.entry.timestamp }}</div>
+          <!-- Timestamp and Level on same line -->
+          <div v-if="selectedLog.entry?.timestamp || selectedLog.entry?.level" class="parsed-field" style="display: flex; gap: 1rem; align-items: center;">
+            <div v-if="selectedLog.entry?.timestamp" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">Timestamp</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.timestamp }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.level" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">Level</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.level }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.fields?.request_id" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">request_id</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.fields.request_id }}</div>
+            </div>
           </div>
-          <div v-if="selectedLog.entry?.level" class="parsed-field">
-            <div class="parsed-field-key">Level</div>
-            <div class="parsed-field-value">{{ selectedLog.entry.level }}</div>
+          
+          <!-- request_id, trace_id, and gql.operationName on same line -->
+          <div v-if="selectedLog.entry?.fields?.['trace_id'] || selectedLog.entry?.fields?.['gql.operationName']" class="parsed-field" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <div v-if="selectedLog.entry?.fields?.['gql.operationName']" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">gql.operationName</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.fields['gql.operationName'] }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.fields?.['trace_id']" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">trace_id</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.fields['trace_id'] }}</div>
+            </div>
           </div>
+          <!-- Message on its own line -->
+          <div v-if="selectedLog.entry?.message" class="parsed-field">
+            <div class="parsed-field-key">Message</div>
+            <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
+              <pre style="white-space: pre-wrap; margin: 0;">{{ formatMessage(selectedLog.entry.message) }}</pre>
+            </div>
+            <div v-else class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+          </div>
+          <!-- File -->
           <div v-if="selectedLog.entry?.file" class="parsed-field">
             <div class="parsed-field-key">File</div>
             <div class="parsed-field-value">{{ selectedLog.entry.file }}</div>
           </div>
-          <div v-if="selectedLog.entry?.message" class="parsed-field">
-            <div class="parsed-field-key">Message</div>
-            <div class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+
+          <div v-if="selectedLog.entry?.fields?.['db.rows'] || selectedLog.entry?.fields?.['db.table'] || selectedLog.entry?.fields?.['duration']" class="parsed-field" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+            <div v-if="selectedLog.entry?.fields?.['db.rows']" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">db.rows</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.fields['db.rows'] }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.fields?.['db.table']" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">db.table</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.fields['db.table'] }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.fields?.['duration']" style="display: flex; gap: 0.5rem;">
+              <div class="parsed-field-key">duration</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.fields['duration'] }}</div>
+            </div>
           </div>
+
+          <!-- Rest of the fields -->
           <div
-            v-for="([key, value], idx) in Object.entries(selectedLog.entry?.fields || {})"
+            v-for="([key, value], idx) in getRemainingFields(selectedLog.entry?.fields)"
             :key="idx"
             class="parsed-field"
           >
@@ -441,7 +482,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
-import { convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
+import { convertAnsiToHtml as convertAnsiToHtmlUtil, formatSQL as formatSQLUtil } from '@/utils/ui-utils'
 import type { 
   Container, 
   LogMessage, 
@@ -1260,6 +1301,51 @@ export default defineComponent({
 
     convertAnsiToHtml(text) {
       return convertAnsiToHtmlUtil(text);
+    },
+
+    formatMessage(message) {
+      if (!message) return message;
+      if (message.includes("[sql]")) {
+        const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
+        if (sqlMatch) {
+          const sql = sqlMatch[1].trim();
+          return formatSQLUtil(sql);
+        }
+      }
+      return message;
+    },
+
+    formatAndHighlightSQL(message) {
+      if (!message) return message;
+      if (message.includes("[sql]")) {
+        const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
+        if (sqlMatch) {
+          const sql = sqlMatch[1].trim();
+          const formatted = formatSQLUtil(sql);
+          // Apply syntax highlighting if hljs is available
+          if (typeof hljs !== "undefined") {
+            try {
+              const highlighted = hljs.highlight(formatted, { language: "sql" });
+              return highlighted.value;
+            } catch (e) {
+              console.error("Error highlighting SQL:", e);
+              return formatted;
+            }
+          }
+          return formatted;
+        }
+      }
+      return message;
+    },
+
+    isSQLMessage(message) {
+      return message && message.includes("[sql]");
+    },
+
+    getRemainingFields(fields) {
+      if (!fields) return [];
+      const excluded = new Set(['request_id', 'trace_id', 'gql.operationName', 'db.rows', 'db.table', 'duration']);
+      return Object.entries(fields).filter(([key]) => !excluded.has(key));
     },
 
     getDatabaseConnectionString() {

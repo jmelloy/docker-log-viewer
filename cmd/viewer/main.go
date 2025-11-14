@@ -990,52 +990,11 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	for _, logMsg := range input.Logs {
 		if logMsg.Entry != nil && logMsg.Entry.Fields != nil {
 			// Check if this log has GraphQL query data
-			if query, ok := logMsg.Entry.Fields["query"]; ok {
-				// Found a query field - try to build GraphQL request body
-				var graphQLReq map[string]interface{}
-				if operationName, ok := logMsg.Entry.Fields["operationName"]; ok {
-					graphQLReq = map[string]interface{}{
-						"query":         query,
-						"operationName": operationName,
-					}
-					if variables, ok := logMsg.Entry.Fields["variables"]; ok {
-						var varsMap map[string]interface{}
-						if err := json.Unmarshal([]byte(variables), &varsMap); err == nil {
-							graphQLReq["variables"] = varsMap
-						} else {
-							graphQLReq["variables"] = variables
-						}
-					}
-					if bodyJSON, err := json.Marshal(graphQLReq); err == nil {
-						requestBody = string(bodyJSON)
-						break
-					}
-				} else {
-					// Just query field, create minimal request
-					graphQLReq = map[string]interface{}{"query": query}
-					if bodyJSON, err := json.Marshal(graphQLReq); err == nil {
-						requestBody = string(bodyJSON)
-						break
-					}
-				}
+			if query, ok := logMsg.Entry.Fields["Operations"]; ok {
+				requestBody = query
+				break
 			}
 		}
-		// Also check message field for JSON request body
-		if logMsg.Entry != nil && logMsg.Entry.Message != "" {
-			// Try to parse message as JSON (might be a GraphQL request)
-			var testJSON map[string]interface{}
-			if err := json.Unmarshal([]byte(logMsg.Entry.Message), &testJSON); err == nil {
-				if _, hasQuery := testJSON["query"]; hasQuery {
-					requestBody = logMsg.Entry.Message
-					break
-				}
-			}
-		}
-	}
-
-	// Fallback to metadata if no request body found
-	if requestBody == "" {
-		requestBody = fmt.Sprintf(`{"name":"%s","traceId":"%s","requestId":"%s"}`, input.Name, input.TraceID, input.RequestID)
 	}
 
 	// Calculate duration from logs
@@ -1051,7 +1010,7 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	exec := &store.ExecutedRequest{
 		RequestIDHeader: requestIDHeader,
 		RequestBody:     requestBody,
-		StatusCode:      200,
+		StatusCode:      200, // TODO: Set status code based on logs
 		DurationMS:      durationMS,
 		ExecutedAt:      time.Now(),
 	}
@@ -2239,7 +2198,7 @@ func (wa *WebApp) Run(addr string) error {
 
 	// Try to initialize database connection for EXPLAIN queries
 	if err := sqlexplain.Init(); err != nil {
-		slog.Warn("database connection not available (EXPLAIN feature disabled)", "error", err)
+		slog.Warn("DATABASE_URL not set, database connection not available (EXPLAIN feature disabled)", "error", err)
 	} else {
 		slog.Info("database connection established for EXPLAIN queries")
 	}
