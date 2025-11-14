@@ -479,8 +479,10 @@ func ParseLogLine(line string) *LogEntry {
 
 		if strings.HasSuffix(block.Text, "=") && i < len(blocks)-1 {
 			nextBlock = blocks[i+1]
-			entry.Fields[block.Text[:len(block.Text)-1]] = nextBlock.Text
-			linesToStrip = append(linesToStrip, block.Text+nextBlock.Text)
+			key := block.Text[:len(block.Text)-1]
+			value := strings.TrimSpace(nextBlock.Text)
+			entry.Fields[key] = value
+			linesToStrip = append(linesToStrip, block.Text+value)
 
 			continue
 		}
