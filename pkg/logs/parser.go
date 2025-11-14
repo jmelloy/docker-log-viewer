@@ -472,7 +472,8 @@ func ParseLogLine(line string) *LogEntry {
 
 	nextBlock := Block{}
 	for i, block := range blocks {
-		if block.Equals(nextBlock) || strings.TrimSpace(block.Text) == "" {
+		block.Text = strings.TrimSpace(block.Text)
+		if block.Equals(nextBlock) || block.Text == "" {
 			continue
 		}
 
@@ -707,7 +708,7 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 }
 
 func ParseLevel(levelStr string) (string, bool) {
-	switch strings.ToUpper(levelStr) {
+	switch strings.TrimSpace(strings.ToUpper(levelStr)) {
 	case "ERR", "ERROR", "FATAL":
 		return "ERR", true
 	case "WRN", "WARN", "WARNING":
