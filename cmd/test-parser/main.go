@@ -18,7 +18,7 @@ func main() {
 		logFile     = flag.String("file", "", "Log file path to read from")
 		debug       = flag.Bool("debug", false, "Enable debug output")
 		verbose     = flag.Bool("verbose", false, "Enable verbose output")
-		tail        = flag.Int("tail", 100, "Number of recent log lines to show (for Docker)")
+		skip        = flag.Int("skip", 0, "Number of recent log lines to skip (for Docker)")
 		follow      = flag.Bool("follow", false, "Follow logs in real-time (Docker only)")
 	)
 	flag.Parse()
@@ -54,13 +54,13 @@ func main() {
 	}
 
 	if *containerID != "" {
-		readFromDockerContainer(*containerID, *tail, *follow, *debug, *verbose)
+		readFromDockerContainer(*containerID, *skip, *follow, *debug, *verbose)
 	} else {
 		readFromLogFile(*logFile, *debug, *verbose)
 	}
 }
 
-func readFromDockerContainer(containerID string, tail int, follow bool, debug bool, verbose bool) {
+func readFromDockerContainer(containerID string, skip int, follow bool, debug bool, verbose bool) {
 	fmt.Printf("Reading logs from Docker container: %s\n", containerID)
 	if follow {
 		fmt.Println("Following logs in real-time...")
@@ -75,18 +75,19 @@ func readFromDockerContainer(containerID string, tail int, follow bool, debug bo
 	}
 	defer dockerClient.Close()
 
+	linesSkipped := 0
+
 	// List containers to help with debugging
-	if debug {
-		containers, err := dockerClient.ListRunningContainers(ctx)
-		if err != nil {
-			fmt.Printf("Error listing containers: %v\n", err)
-		} else {
-			fmt.Printf("Available containers:\n")
-			for _, c := range containers {
-				fmt.Printf("  %s (%s) - %s\n", c.ID, c.Name, c.Image)
-			}
-			fmt.Println()
+
+	containers, err := dockerClient.ListRunningContainers(ctx)
+	if err != nil {
+		fmt.Printf("Error listing containers: %v\n", err)
+	} else {
+		fmt.Printf("Available containers:\n")
+		for _, c := range containers {
+			fmt.Printf("  %s (%s) - %s\n", c.ID, c.Name, c.Image)
 		}
+		fmt.Println()
 	}
 
 	// Create log channel
@@ -105,12 +106,12 @@ func readFromDockerContainer(containerID string, tail int, follow bool, debug bo
 		select {
 		case logMsg := <-logChan:
 			lineCount++
+			if linesSkipped < skip {
+				linesSkipped++
+				continue
+			}
 			printLogEntry(lineCount, logMsg.Entry, debug, verbose)
 
-			if !follow && lineCount >= tail {
-				fmt.Printf("\nReached tail limit (%d lines). Use -follow to continue streaming.\n", tail)
-				return
-			}
 		case <-time.After(5 * time.Second):
 			if !follow {
 				fmt.Printf("\nNo more logs available after 5 seconds.\n")
