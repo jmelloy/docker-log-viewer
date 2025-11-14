@@ -648,12 +648,9 @@ export default defineComponent({
         this.searchQuery = queryParam;
       }
 
-      // Parse trace filter parameters (e.g., ?trace_request_id=abc123 or ?request_id=abc123)
-      const traceParamNames = ["request_id", "trace_id", "span_id"];
-      for (const paramName of traceParamNames) {
-        const value = params.get(paramName) || params.get(`trace_${paramName}`);
-        if (value) {
-          this.traceFilters.set(paramName, value);
+      for (const [key, value] of params.entries()) {
+        if (key !== "query") {
+          this.traceFilters.set(key, value);
         }
       }
     },
