@@ -149,3 +149,85 @@ export interface RetentionResponse {
   retentionType: "count" | "time";
   retentionValue: number;
 }
+
+export interface SampleQuery {
+  id: number;
+  name: string;
+  serverId?: number | null;
+  server?: Server | null;
+  requestData: string;
+  displayName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExecutedRequest {
+  id: number;
+  sampleId?: number | null;
+  serverId?: number | null;
+  server?: Server | null;
+  requestIdHeader: string;
+  requestBody?: string;
+  statusCode: number;
+  durationMs: number;
+  responseBody?: string;
+  responseHeaders?: string;
+  error?: string;
+  isSync: boolean;
+  displayName?: string;
+  executedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExecutionLog {
+  id: number;
+  executionId: number;
+  containerId: string;
+  timestamp: string;
+  level: string;
+  message: string;
+  rawLog: string;
+  fields: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExecutionSQLQuery {
+  id: number;
+  executionId: number;
+  query: string;
+  normalizedQuery: string;
+  queryHash?: string;
+  durationMs: number;
+  tableName: string;
+  operation: string;
+  rows: number;
+  variables?: string;
+  graphqlOperation?: string;
+  explainPlan?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExecutionDetail {
+  execution: ExecutedRequest;
+  request?: SampleQuery | null;
+  logs: ExecutionLog[];
+  sqlQueries: ExecutionSQLQuery[];
+  sqlAnalysis?: any;
+  indexAnalysis?: any;
+  server?: Server | null;
+  displayName: string;
+}
+
+export interface ExecuteResponse {
+  executionId: number;
+}
+
+export interface AllExecutionsResponse {
+  executions: ExecutedRequest[];
+  total: number;
+  limit: number;
+  offset: number;
+}

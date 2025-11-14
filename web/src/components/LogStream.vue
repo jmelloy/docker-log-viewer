@@ -297,7 +297,7 @@ function onLogClick(log: LogMessage) {
 function shouldShowField(key: string, value: any): boolean {
   if (key === 'error') return true
   const s = String(value)
-  return s.length < 40
+  return s.length < 50
 }
 
 function formatFieldValue(value: any): string {

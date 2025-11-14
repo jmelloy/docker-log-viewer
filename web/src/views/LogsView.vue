@@ -187,8 +187,8 @@
               <span
                 v-if="req.latency"
                 class="request-latency"
-                :class="{ 'latency-slow': parseFloat(req.latency) > 1000 }"
-                >{{ parseFloat(req.latency || '0').toFixed(0) }}ms</span
+                :class="{ 'latency-slow': req.latency && req.latency > 1000 }"
+                >{{ req.latency }}ms</span
               >
               <span
                 v-if="req.statusCode"
@@ -255,13 +255,11 @@
           <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
           <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
           <span v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})" :key="idx" class="log-field">
-            <template v-if="shouldShowField(key, value)">
               <span class="log-field-key">{{ key }}</span>=<span
                 :class="{ 'log-field-value': !isJsonField(value) }"
                 @click.stop="!isJsonField(value) && setTraceFilter(key, value, $event)"
                 >{{ formatFieldValue(key, value) }}</span
               >
-            </template>
           </span>
         </div>
       </div>
@@ -811,11 +809,11 @@ export default defineComponent({
       if (latency && Number.parseFloat(latency) < 5) return;
 
       // Check if request ID already exists
-      const existingIndex = this.recentRequests.findIndex((r) => r.requestId === requestId);
+      const existingIndex = this.recentRequests.findIndex((r) => r.requestId === requestId) ;
 
       if (existingIndex !== -1) {
         // Update existing request with new info
-        const existing = this.recentRequests[existingIndex];
+        const existing = this.recentRequests[existingIndex] as RecentRequest;
 
         // Add operation name if we have one and it's not already in the set
         if (operationName && !existing.operations.includes(operationName)) {
