@@ -793,7 +793,10 @@
           </div>
           <div v-if="selectedLog.entry?.message" class="parsed-field">
             <div class="parsed-field-key">Message</div>
-            <div class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+            <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
+              <pre class="sql-query-text" style="white-space: pre-wrap; margin: 0;" v-html="formatAndHighlightSQL(selectedLog.entry.message)"></pre>
+            </div>
+            <div v-else class="parsed-field-value">{{ selectedLog.entry.message }}</div>
           </div>
           <div
             v-for="([key, value], idx) in Object.entries(selectedLog.entry?.fields || {})"
@@ -919,6 +922,7 @@ import type {
   Server,
   ExecutionDetail,
   ExplainResponse,
+  ExplainData,
   ExecuteResponse,
   SQLQuery
 } from '@/types'
@@ -938,7 +942,7 @@ export default defineComponent({
       requestDetail: null as ExecutionDetail | null,
       loading: true,
       error: null as string | null,
-      explainPlanData: null as ExplainResponse | null,
+      explainPlanData: null as ExplainData | null,
       showExplainPlanPanel: false,
       showRequestModal: false,
       showResponseModal: false,
@@ -1914,10 +1918,41 @@ export default defineComponent({
       }
       this.selectedLog = { entry: parsedLog };
       this.showLogModal = true;
+      // Apply syntax highlighting after modal opens
+      this.$nextTick(() => {
+        this.applySyntaxHighlighting();
+      });
     },
 
     convertAnsiToHtml(text) {
       return convertAnsiToHtmlUtil(text);
+    },
+
+    isSQLMessage(message) {
+      return message && message.includes("[sql]");
+    },
+
+    formatAndHighlightSQL(message) {
+      if (!message) return message;
+      if (message.includes("[sql]")) {
+        const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
+        if (sqlMatch) {
+          const sql = sqlMatch[1].trim();
+          const formatted = formatSQLUtil(sql);
+          // Apply syntax highlighting if hljs is available
+          if (typeof hljs !== "undefined") {
+            try {
+              const highlighted = hljs.highlight(formatted, { language: "sql" });
+              return highlighted.value;
+            } catch (e) {
+              console.error("Error highlighting SQL:", e);
+              return formatted;
+            }
+          }
+          return formatted;
+        }
+      }
+      return message;
     },
   },
 })

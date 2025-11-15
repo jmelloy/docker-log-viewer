@@ -6,10 +6,12 @@
 import hljs from "highlight.js/lib/core";
 import json from "highlight.js/lib/languages/json";
 import sql from "highlight.js/lib/languages/sql";
+import graphql from "highlight.js/lib/languages/graphql";
 
 // Register languages
 hljs.registerLanguage("json", json);
 hljs.registerLanguage("sql", sql);
+hljs.registerLanguage("graphql", graphql);
 
 interface HighlightOptions {
   jsonSelector?: string;
