@@ -540,7 +540,7 @@
               <span v-if="log.message" class="log-message">{{ log.message }}</span>
               <template v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})" :key="fieldIdx">
                 <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
-                  >{{ formatFieldValue(key, value) }}</span
+                  >{{ formatFieldValue(value) }}</span
                 >
               </template>
             </div>
@@ -586,17 +586,17 @@
           </h4>
           <select
             v-model="selectedOperationIndex"
-            style="
-              width: 100%;
-              background: #161b22;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 0.75rem;
-              font-family: &quot;Monaco&quot;, &quot;Menlo&quot;, &quot;Ubuntu Mono&quot;, monospace;
-              font-size: 0.875rem;
-              color: #79c0ff;
-              cursor: pointer;
-            "
+            :style="{ 
+              width: '100%',
+              background: '#161b22',
+              border: '1px solid #30363d',
+              borderRadius: '4px',
+              padding: '0.75rem',
+              fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+              fontSize: '0.875rem',
+              color: '#79c0ff',
+              cursor: 'pointer',
+            }"
           >
             <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">{{ op.operationName }}</option>
           </select>
@@ -604,15 +604,15 @@
         <div v-else-if="graphqlOperationName" style="margin-bottom: 1rem">
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Operation:</h4>
           <div
-            style="
-              background: #161b22;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 0.75rem;
-              font-family: &quot;Monaco&quot;, &quot;Menlo&quot;, &quot;Ubuntu Mono&quot;, monospace;
-              font-size: 0.875rem;
-              color: #79c0ff;
-            "
+            :style="{
+              background: '#161b22',
+              border: '1px solid #30363d',
+              borderRadius: '4px',
+              padding: '0.75rem',
+              fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+              fontSize: '0.875rem',
+              color: '#79c0ff',
+            }"
           >
             {{ graphqlOperationName }}
           </div>
@@ -621,20 +621,20 @@
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Query:</h4>
           <pre
             class="graphql-query"
-            style="
-              background: #0d1117;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 1rem;
-              overflow: auto;
-              font-family: &quot;Monaco&quot;, &quot;Menlo&quot;, &quot;Ubuntu Mono&quot;, monospace;
-              font-size: 0.875rem;
-              line-height: 1.5;
-              color: #c9d1d9;
-              white-space: pre-wrap;
-              word-break: break-word;
-              max-height: 400px;
-            "
+            :style="{
+              background: '#0d1117',
+                border: '1px solid #30363d',
+              borderRadius: '4px',
+              padding: '1rem',
+              overflow: 'auto',
+                fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+              fontSize: '0.875rem',
+              lineHeight: '1.5',
+              color: '#c9d1d9',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              maxHeight: '400px',
+            }"
           >
 {{ graphqlQuery }}</pre
           >
@@ -642,20 +642,20 @@
         <div v-if="graphqlVariables">
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Variables:</h4>
           <pre
-            style="
-              background: #0d1117;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 1rem;
-              overflow: auto;
-              font-family: &quot;Monaco&quot;, &quot;Menlo&quot;, &quot;Ubuntu Mono&quot;, monospace;
-              font-size: 0.875rem;
-              line-height: 1.5;
-              color: #c9d1d9;
-              white-space: pre-wrap;
-              word-break: break-word;
-              max-height: 300px;
-            "
+            :style="{ 
+              background: '#0d1117',
+              border: '1px solid #30363d',
+              borderRadius: '4px',
+              padding: '1rem',
+              overflow: 'auto',
+              fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+              fontSize: '0.875rem',
+              lineHeight: '1.5',
+              color: '#c9d1d9',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              maxHeight: '300px',
+            }"
           >
 {{ graphqlVariables }}</pre
           >
@@ -665,19 +665,19 @@
       <!-- Standard Request Display -->
       <pre
         v-else
-        style="
-          background: #0d1117;
-          border: 1px solid #30363d;
-          border-radius: 4px;
-          padding: 1rem;
-          overflow: auto;
-          font-family: &quot;Monaco&quot;, &quot;Menlo&quot;, &quot;Ubuntu Mono&quot;, monospace;
-          font-size: 0.875rem;
-          line-height: 1.5;
-          color: #c9d1d9;
-          white-space: pre-wrap;
-          word-break: break-word;
-        "
+        :style="{ 
+          background: '#0d1117',
+          border: '1px solid #30363d',
+          borderRadius: '4px',
+          padding: '1rem',
+          overflow: 'auto',
+          fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+          fontSize: '0.875rem',
+          lineHeight: '1.5',
+          color: '#c9d1d9',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }"
       >
 {{ requestData }}</pre
       >
@@ -695,20 +695,20 @@
           type="text"
           v-model="responseFilter"
           placeholder="Filter (.data.users[0] or text)"
-          style="
-            flex: 1;
-            max-width: 300px;
-            padding: 0.5rem;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            color: #c9d1d9;
-            font-family: monospace;
-            font-size: 0.875rem;
-          "
+          :style="{ 
+            flex: 1,
+            maxWidth: '300px',
+            padding: '0.5rem',
+            background: '#161b22',
+            border: '1px solid #30363d',
+            borderRadius: '4px',
+            color: '#c9d1d9',
+            fontFamily: 'monospace',
+            fontSize: '0.875rem',
+          }"
           title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
         />
-        <button @click="copyToClipboard(filteredResponseBody)" class="btn-secondary" style="padding: 0.5rem 1rem">
+        <button @click="copyToClipboard(filteredResponseBody)" class="btn-secondary" :style="{ padding: '0.5rem 1rem' }">
           📋 Copy
         </button>
         <button @click="showResponseModal = false">✕</button>
@@ -717,19 +717,19 @@
     <div class="modal-body">
       <pre
         class="json-display"
-        style="
-          background: #0d1117;
-          border: 1px solid #30363d;
-          border-radius: 4px;
-          padding: 1rem;
-          overflow: auto;
-          font-family: &quot;Monaco&quot;, &quot;Menlo&quot;, &quot;Ubuntu Mono&quot;, monospace;
-          font-size: 0.875rem;
-          line-height: 1.5;
-          color: #c9d1d9;
-          white-space: pre-wrap;
-          word-break: break-word;
-        "
+        :style="{
+          background: '#0d1117',
+          border: '1px solid #30363d',
+          borderRadius: '4px',
+          padding: '1rem',
+          overflow: 'auto',
+          fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
+          fontSize: '0.875rem',
+          lineHeight: '1.5',
+          color: '#c9d1d9',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }"
       >
 {{ filteredResponseBody }}</pre
       >
@@ -755,7 +755,9 @@
       >
         {{ explainPlanData.error }}
       </div>
-      <div id="pev2ExplainApp" class="d-flex flex-column" style="height: 100%"></div>
+      <div v-if="explainPlanData && !explainPlanData.error" id="pev2ExplainApp" class="d-flex flex-column" style="height: 100%">
+        <pev2 :plan-source="explainPlanData.planSource" :plan-query="explainPlanData.planQuery"></pev2>
+      </div>
     </div>
   </div>
 </div>
@@ -858,19 +860,19 @@
             </div>
             <textarea
               :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
-              @input="updateGraphQLVariable(key, $event.target.value)"
-              style="
-                width: 100%;
-                background: #161b22;
-                border: 1px solid #30363d;
-                color: #c9d1d9;
-                padding: 0.5rem;
-                border-radius: 4px;
-                font-family: monospace;
-                font-size: 0.875rem;
-                min-height: 60px;
-                resize: vertical;
-              "
+              @input="updateGraphQLVariable(key, ($event.target as HTMLTextAreaElement).value)"
+              :style="{ 
+                width: '100%',
+                background: '#161b22',
+                border: '1px solid #30363d',
+                color: '#c9d1d9',
+                padding: '0.5rem',
+                borderRadius: '4px',
+                fontFamily: 'monospace',
+                fontSize: '0.875rem',
+                minHeight: '60px',
+                resize: 'vertical',
+              }"
               placeholder="Enter value (JSON if object/array)"
             ></textarea>
           </div>
@@ -917,10 +919,16 @@ import type {
   Server,
   ExecutionDetail,
   ExplainResponse,
-  ExecuteResponse
+  ExecuteResponse,
+  SQLQuery
 } from '@/types'
+import { Plan } from "pev2"
+import "pev2/dist/pev2.css";
 
 export default defineComponent({
+  components: {
+    pev2: Plan,
+  },
   setup() {
     const route = useRoute()
     return { route }
@@ -930,9 +938,8 @@ export default defineComponent({
       requestDetail: null as ExecutionDetail | null,
       loading: true,
       error: null as string | null,
-      explainPlanData: null,
+      explainPlanData: null as ExplainResponse | null,
       showExplainPlanPanel: false,
-      pev2App: null,
       showRequestModal: false,
       showResponseModal: false,
       showExecuteModal: false,
@@ -1102,7 +1109,7 @@ export default defineComponent({
       if (!this.requestDetail?.execution.executedAt) return Infinity;
       const executedAt = new Date(this.requestDetail.execution.executedAt);
       const now = new Date();
-      return (now - executedAt) / 1000 / 60; // Convert milliseconds to minutes
+      return (now.getTime() - executedAt.getTime()) / 1000 / 60; // Convert milliseconds to minutes
     },
 
     sqlAnalysisData() {
@@ -1124,7 +1131,7 @@ export default defineComponent({
       const totalDuration = queries.reduce((sum, q) => sum + q.duration, 0);
       const avgDuration = totalDuration / totalQueries;
 
-      const queryGroups = {};
+      const queryGroups: Record<string, { queries: SQLQuery[]; count: number }> = {};
       queries.forEach((q) => {
         if (!queryGroups[q.normalized]) {
           queryGroups[q.normalized] = {
@@ -1152,7 +1159,7 @@ export default defineComponent({
 
       const nPlusOne = frequentQueries.filter((item) => item.count > 5);
 
-      const tables = {};
+      const tables: Record<string, number> = {};
       queries.forEach((q) => {
         if (!tables[q.table]) {
           tables[q.table] = 0;
@@ -1372,54 +1379,20 @@ export default defineComponent({
     },
 
     displayExplainPlan(planData, query) {
+      // Convert planData to JSON string for PEV2 component
+      const planSource = typeof planData === 'string' ? planData : JSON.stringify(planData, null, 2);
+      
       this.explainPlanData = {
-        planData,
-        query,
+        planSource,
+        planQuery: query,
         error: null,
       };
 
       this.showExplainPlanPanel = true;
-
-      // Need to mount PEV2 after panel is visible
-      this.$nextTick(() => {
-        this.mountPEV2(planData, query);
-      });
-    },
-
-    mountPEV2(planData, query) {
-      const pev2Container = document.getElementById("pev2ExplainApp");
-      if (!pev2Container) return;
-
-      try {
-        // Unmount any existing Vue app
-        if (this.pev2App) {
-          this.pev2App.unmount();
-        }
-
-        // Create new Vue app with PEV2
-                this.pev2App = createApp({
-          data() {
-            return {
-              planSource: JSON.stringify(planData, null, 2),
-              planQuery: query,
-            };
-          },
-          template: pev2Template,
-        });
-
-        this.pev2App.component("pev2", pev2.Plan);
-        this.pev2App.mount(pev2Container);
-      } catch (err) {
-        this.explainPlanData.error = `Failed to display plan: ${err.message}`;
-      }
     },
 
     closeExplainPlanModal() {
       this.showExplainPlanPanel = false;
-      if (this.pev2App) {
-        this.pev2App.unmount();
-        this.pev2App = null;
-      }
     },
 
     async shareExplainPlan() {
@@ -1441,7 +1414,7 @@ export default defineComponent({
           }
 
           // Extract table name or operation from the query
-          const query = this.explainPlanData.query.toLowerCase();
+          const query = this.explainPlanData.planQuery.toLowerCase();
           if (query.includes("from")) {
             const match = query.match(/from\s+([a-z_][a-z0-9_]*)/i);
             if (match) {
@@ -1463,13 +1436,13 @@ export default defineComponent({
         const planInput = document.createElement("input");
         planInput.type = "hidden";
         planInput.name = "plan";
-        planInput.value = JSON.stringify(this.explainPlanData.planData, null, 2);
+        planInput.value = this.explainPlanData.planSource;
         form.appendChild(planInput);
 
         const queryInput = document.createElement("input");
         queryInput.type = "hidden";
         queryInput.name = "query";
-        queryInput.value = this.formatSQL(this.explainPlanData.query) || this.explainPlanData.query;
+        queryInput.value = this.formatSQL(this.explainPlanData.planQuery) || this.explainPlanData.planQuery;
         form.appendChild(queryInput);
 
         document.body.appendChild(form);
@@ -1507,11 +1480,11 @@ export default defineComponent({
         if (result.error) {
           alert(`EXPLAIN Error: ${result.error}`);
         } else {
-          const displayQuery = result.formattedQuery || result.query || query;
-          this.displayExplainPlan(result.queryPlan, displayQuery);
+          const displayQuery = result.query || query;
+          this.displayExplainPlan(result.queryPlan, this.formatSQL(displayQuery));
         }
-      } catch (error) {
-        alert(`Failed to run EXPLAIN: ${error.message}`);
+      } catch (error: Error|any) {
+        alert(`Failed to run EXPLAIN: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
 

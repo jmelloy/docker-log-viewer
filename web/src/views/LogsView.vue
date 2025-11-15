@@ -359,26 +359,32 @@
   </div>
 </div>
 
-<!-- EXPLAIN Modal -->
-<div v-if="showExplainModal" class="modal" @click="showExplainModal = false">
-  <div class="modal-content explain-modal-content" @click.stop>
-    <div class="modal-header">
-      <h3>SQL Query Explain Plan (PEV2)</h3>
+<!-- EXPLAIN Plan Side Panel -->
+<div v-if="showExplainModal" class="side-panel-overlay" @click="closeExplainPlanModal">
+  <div class="side-panel" @click.stop>
+    <div class="side-panel-header">
+      <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
       <div style="display: flex; gap: 0.5rem">
         <button
           v-if="!explainData.error"
           @click="shareExplainPlan"
-          class="btn-share"
-          title="Share on explain.dalibo.com"
+          class="btn-secondary"
+          style="padding: 0.5rem 1rem"
         >
-          🔗 Share
+          📋 Share
         </button>
-        <button @click="showExplainModal = false">✕</button>
+        <button @click="closeExplainPlanModal">✕</button>
       </div>
     </div>
-    <div class="modal-body">
-      <div v-if="explainData.error" class="alert alert-danger" style="margin: 1rem">{{ explainData.error }}</div>
-      <div v-else id="pev2App" class="d-flex flex-column">
+    <div class="side-panel-body">
+      <div
+        v-if="explainData.error"
+        class="alert alert-danger"
+        style="display: block; margin: 1rem"
+      >
+        {{ explainData.error }}
+      </div>
+      <div v-if="!explainData.error" id="pev2App" class="d-flex flex-column" style="height: 100%">
         <pev2 :plan-source="explainData.planSource" :plan-query="explainData.planQuery"></pev2>
       </div>
     </div>
@@ -483,6 +489,7 @@
 import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
 import { convertAnsiToHtml as convertAnsiToHtmlUtil, formatSQL as formatSQLUtil } from '@/utils/ui-utils'
+import { Plan } from "pev2"
 import type { 
   Container, 
   LogMessage, 
@@ -501,7 +508,7 @@ import type {
 
 export default defineComponent({
   components: {
-    pev2: (window as any).pev2?.Plan,
+    pev2: Plan,
   },
   data() {
     // Load persisted container state from localStorage (by name, not ID)
@@ -1408,6 +1415,10 @@ export default defineComponent({
       }
     },
 
+    closeExplainPlanModal() {
+      this.showExplainModal = false;
+    },
+
     openRetentionModal(containerName) {
       this.retentionContainer = containerName;
       const existing = this.retentions[containerName];
@@ -1578,3 +1589,4 @@ export default defineComponent({
   },
 })
 </script>
+
