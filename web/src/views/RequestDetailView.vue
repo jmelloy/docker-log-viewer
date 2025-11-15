@@ -586,17 +586,17 @@
           </h4>
           <select
             v-model="selectedOperationIndex"
-            :style="{ 
-              width: '100%',
-              background: '#161b22',
-              border: '1px solid #30363d',
-              borderRadius: '4px',
-              padding: '0.75rem',
-              fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-              fontSize: '0.875rem',
-              color: '#79c0ff',
-              cursor: 'pointer',
-            }"
+            style=" 
+              width: 100%;
+              background: #161b22;
+              border: 1px solid #30363d;
+              border-radius: 4px;
+              padding: 0.75rem;
+              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
+              font-size: 0.875rem;
+              color: #79c0ff;
+              cursor: pointer;
+            "
           >
             <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">{{ op.operationName }}</option>
           </select>
@@ -604,15 +604,15 @@
         <div v-else-if="graphqlOperationName" style="margin-bottom: 1rem">
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Operation:</h4>
           <div
-            :style="{
-              background: '#161b22',
-              border: '1px solid #30363d',
-              borderRadius: '4px',
-              padding: '0.75rem',
-              fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-              fontSize: '0.875rem',
-              color: '#79c0ff',
-            }"
+            style="
+              background: #161b22;
+              border: 1px solid #30363d;
+              border-radius: 4px;
+              padding: 0.75rem;
+              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
+              font-size: 0.875rem;
+              color: #79c0ff;
+            "
           >
             {{ graphqlOperationName }}
           </div>
@@ -621,20 +621,20 @@
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Query:</h4>
           <pre
             class="graphql-query"
-            :style="{
-              background: '#0d1117',
-                border: '1px solid #30363d',
-              borderRadius: '4px',
-              padding: '1rem',
-              overflow: 'auto',
-                fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-              fontSize: '0.875rem',
-              lineHeight: '1.5',
-              color: '#c9d1d9',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              maxHeight: '400px',
-            }"
+            style="
+              background: #0d1117;
+              border: 1px solid #30363d;
+              border-radius: 4px;
+              padding: 1rem;
+              overflow: auto;
+              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
+              font-size: 0.875rem;
+              line-height: 1.5;
+              color: #c9d1d9;
+              white-space: pre-wrap;
+              word-break: break-word;
+              max-height: 400px;
+            "
           >
 {{ graphqlQuery }}</pre
           >
@@ -642,20 +642,20 @@
         <div v-if="graphqlVariables">
           <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Variables:</h4>
           <pre
-            :style="{ 
-              background: '#0d1117',
-              border: '1px solid #30363d',
-              borderRadius: '4px',
-              padding: '1rem',
-              overflow: 'auto',
-              fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-              fontSize: '0.875rem',
-              lineHeight: '1.5',
-              color: '#c9d1d9',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              maxHeight: '300px',
-            }"
+            style="
+              background: #0d1117;
+              border: 1px solid #30363d;
+              border-radius: 4px;
+              padding: 1rem;
+              overflow: auto;
+              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
+              font-size: 0.875rem;
+              line-height: 1.5;
+              color: #c9d1d9;
+              white-space: pre-wrap;
+              word-break: break-word;
+              max-height: 300px;
+            "
           >
 {{ graphqlVariables }}</pre
           >
@@ -665,19 +665,19 @@
       <!-- Standard Request Display -->
       <pre
         v-else
-        :style="{ 
-          background: '#0d1117',
-          border: '1px solid #30363d',
-          borderRadius: '4px',
-          padding: '1rem',
-          overflow: 'auto',
-          fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-          fontSize: '0.875rem',
-          lineHeight: '1.5',
-          color: '#c9d1d9',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }"
+        style="
+          background: #0d1117;
+          border: 1px solid #30363d;
+          border-radius: 4px;
+          padding: 1rem;
+          overflow: auto;
+          font-family: Monaco, Menlo, Ubuntu Mono, monospace;
+          font-size: 0.875rem;
+          line-height: 1.5;
+          color: #c9d1d9;
+          white-space: pre-wrap;
+          word-break: break-word;
+        "
       >
 {{ requestData }}</pre
       >
@@ -695,20 +695,20 @@
           type="text"
           v-model="responseFilter"
           placeholder="Filter (.data.users[0] or text)"
-          :style="{ 
-            flex: 1,
-            maxWidth: '300px',
-            padding: '0.5rem',
-            background: '#161b22',
-            border: '1px solid #30363d',
-            borderRadius: '4px',
-            color: '#c9d1d9',
-            fontFamily: 'monospace',
-            fontSize: '0.875rem',
-          }"
+          style="
+            flex: 1;
+            max-width: 300px;
+            padding: 0.5rem;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #c9d1d9;
+            font-family: monospace;
+            font-size: 0.875rem;
+          "
           title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
         />
-        <button @click="copyToClipboard(filteredResponseBody)" class="btn-secondary" :style="{ padding: '0.5rem 1rem' }">
+        <button @click="copyToClipboard(filteredResponseBody)" class="btn-secondary" style="padding: 0.5rem 1rem">
           📋 Copy
         </button>
         <button @click="showResponseModal = false">✕</button>
@@ -717,19 +717,19 @@
     <div class="modal-body">
       <pre
         class="json-display"
-        :style="{
-          background: '#0d1117',
-          border: '1px solid #30363d',
-          borderRadius: '4px',
-          padding: '1rem',
-          overflow: 'auto',
-          fontFamily: 'Monaco, Menlo, Ubuntu Mono, monospace',
-          fontSize: '0.875rem',
-          lineHeight: '1.5',
-          color: '#c9d1d9',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }"
+          style="
+          background: #0d1117;
+          border: 1px solid #30363d;
+          border-radius: 4px;
+          padding: 1rem;
+          overflow: auto;
+          font-family: Monaco, Menlo, Ubuntu Mono, monospace;
+          font-size: 0.875rem;
+          line-height: 1.5;
+          color: #c9d1d9;
+          white-space: pre-wrap;
+          word-break: break-word;
+        "
       >
 {{ filteredResponseBody }}</pre
       >
@@ -861,18 +861,18 @@
             <textarea
               :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
               @input="updateGraphQLVariable(key, ($event.target as HTMLTextAreaElement).value)"
-              :style="{ 
-                width: '100%',
-                background: '#161b22',
-                border: '1px solid #30363d',
-                color: '#c9d1d9',
-                padding: '0.5rem',
-                borderRadius: '4px',
-                fontFamily: 'monospace',
-                fontSize: '0.875rem',
-                minHeight: '60px',
-                resize: 'vertical',
-              }"
+              style="
+                width: 100%;
+                background: #161b22;
+                border: 1px solid #30363d;
+                color: #c9d1d9;
+                padding: 0.5rem;
+                border-radius: 4px;
+                font-family: monospace;
+                font-size: 0.875rem;
+                min-height: 60px;
+                resize: vertical;
+              "
               placeholder="Enter value (JSON if object/array)"
             ></textarea>
           </div>
