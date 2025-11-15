@@ -6,7 +6,24 @@ import AppHeader from "./components/AppHeader.vue";
 // Import global styles
 import "../static/css/styles.css";
 import "pev2/dist/pev2.css";
+
 import "highlight.js/styles/github-dark.css";
+
+// Set up highlight.js globally
+import hljs from "highlight.js/lib/core";
+import json from "highlight.js/lib/languages/json";
+import sql from "highlight.js/lib/languages/sql";
+import graphql from "highlight.js/lib/languages/graphql";
+
+// Register languages
+hljs.registerLanguage("json", json);
+hljs.registerLanguage("sql", sql);
+hljs.registerLanguage("graphql", graphql);
+
+// Make hljs available globally
+if (typeof window !== "undefined") {
+  (window as any).hljs = hljs;
+}
 
 // Declare global types for external libraries
 declare global {

@@ -316,7 +316,7 @@
           <div v-if="selectedLog.entry?.message" class="parsed-field">
             <div class="parsed-field-key">Message</div>
             <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
-              <pre style="white-space: pre-wrap; margin: 0;">{{ formatMessage(selectedLog.entry.message) }}</pre>
+              <pre ref="sqlMessageRef" class="sql-query-text" style="white-space: pre-wrap; margin: 0;">{{ formatMessage(selectedLog.entry.message) }}</pre>
             </div>
             <div v-else class="parsed-field-value">{{ selectedLog.entry.message }}</div>
           </div>
@@ -645,6 +645,19 @@ export default defineComponent({
           block.classList.add("hljs");
         }
       });
+
+      // Highlight SQL in log detail modal
+      if (this.$refs.sqlMessageRef && !this.$refs.sqlMessageRef.classList.contains("hljs")) {
+        const block = this.$refs.sqlMessageRef;
+        const text = block.textContent;
+        try {
+          const highlighted = hljs.highlight(text, { language: "sql" });
+          block.innerHTML = highlighted.value;
+          block.classList.add("hljs");
+        } catch (e) {
+          console.error("Error highlighting SQL in log modal:", e);
+        }
+      }
     },
     parseURLParameters() {
       const params = new URLSearchParams(window.location.search);
@@ -1301,6 +1314,10 @@ export default defineComponent({
     openLogDetails(log) {
       this.selectedLog = log;
       this.showLogModal = true;
+      // Apply syntax highlighting after modal opens
+      this.$nextTick(() => {
+        this.applySyntaxHighlighting();
+      });
     },
 
     convertAnsiToHtml(text) {
