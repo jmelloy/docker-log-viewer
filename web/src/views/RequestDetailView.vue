@@ -986,7 +986,6 @@ import {
 } from "@/utils/ui-utils";
 import type { Server, ExecutionDetail, ExplainResponse, ExplainData, ExecuteResponse, SQLQuery } from "@/types";
 import { Plan } from "pev2";
-import "pev2/dist/pev2.css";
 
 export default defineComponent({
   components: {
