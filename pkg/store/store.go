@@ -859,8 +859,14 @@ func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, erro
 		return nil, nil
 	}
 
-	// Use the first query as the template
+	// Use the first query as the template, but prefer one with an explain plan
 	firstQuery := queries[0]
+	for _, q := range queries {
+		if q.ExplainPlan != "" {
+			firstQuery = q
+			break
+		}
+	}
 
 	// Calculate statistics
 	detail := &SQLQueryDetail{
