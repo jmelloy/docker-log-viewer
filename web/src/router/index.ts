@@ -1,8 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import LogsView from "@/views/LogsView.vue";
-import RequestsView from "@/views/RequestsView.vue";
+import RequestManagerView from "@/views/RequestManagerView.vue";
 import RequestDetailView from "@/views/RequestDetailView.vue";
-import GraphQLExplorerView from "@/views/GraphQLExplorerView.vue";
 import SettingsView from "@/views/SettingsView.vue";
 
 const router = createRouter({
@@ -20,7 +19,7 @@ const router = createRouter({
     {
       path: "/requests",
       name: "requests",
-      component: RequestsView,
+      component: RequestManagerView,
     },
     {
       path: "/requests/:id",
@@ -29,8 +28,7 @@ const router = createRouter({
     },
     {
       path: "/graphql-explorer",
-      name: "graphql-explorer",
-      component: GraphQLExplorerView,
+      redirect: "/requests?tab=graphql-explorer",
     },
     {
       path: "/settings",
