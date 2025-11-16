@@ -490,7 +490,6 @@ import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
 import { convertAnsiToHtml as convertAnsiToHtmlUtil, formatSQL as formatSQLUtil } from '@/utils/ui-utils'
 import { Plan } from "pev2"
-import "pev2/dist/pev2.css";
 import type { 
   Container, 
   LogMessage, 
