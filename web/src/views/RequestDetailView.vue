@@ -326,7 +326,11 @@
                     <div
                       class="query-text-compact"
                       :class="{ 'query-text-clickable': findQueryHash(item.example.query) }"
-                      @click="findQueryHash(item.example.query) ? navigateToSQLDetail(findQueryHash(item.example.query)) : null"
+                      @click="
+                        findQueryHash(item.example.query)
+                          ? navigateToSQLDetail(findQueryHash(item.example.query))
+                          : null
+                      "
                       :title="findQueryHash(item.example.query) ? 'Click to view SQL query details' : ''"
                     >
                       {{ item.example.query.substring(0, 100) }}{{ item.example.query.length > 100 ? "..." : "" }}
