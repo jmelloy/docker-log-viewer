@@ -2076,8 +2076,6 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 	return queries
 }
 
-
-
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		next(w, r)
