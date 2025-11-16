@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import LogsView from "@/views/LogsView.vue";
 import RequestsView from "@/views/RequestsView.vue";
 import RequestDetailView from "@/views/RequestDetailView.vue";
+import SqlDetailView from "@/views/SqlDetailView.vue";
 import GraphQLExplorerView from "@/views/GraphQLExplorerView.vue";
 import SettingsView from "@/views/SettingsView.vue";
 
@@ -26,6 +27,11 @@ const router = createRouter({
       path: "/requests/:id",
       name: "request-detail",
       component: RequestDetailView,
+    },
+    {
+      path: "/sql/:hash",
+      name: "sql-detail",
+      component: SqlDetailView,
     },
     {
       path: "/graphql-explorer",

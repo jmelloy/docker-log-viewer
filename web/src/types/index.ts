@@ -231,3 +231,28 @@ export interface AllExecutionsResponse {
   limit: number;
   offset: number;
 }
+
+export interface ExecutionReference {
+  id: number;
+  displayName: string;
+  requestIdHeader: string;
+  durationMs: number;
+  executedAt: string;
+  statusCode: number;
+}
+
+export interface SQLQueryDetail {
+  queryHash: string;
+  query: string;
+  normalizedQuery: string;
+  operation: string;
+  tableName: string;
+  totalExecutions: number;
+  avgDuration: number;
+  minDuration: number;
+  maxDuration: number;
+  explainPlan?: string;
+  variables?: string;
+  indexAnalysis?: any;
+  relatedExecutions: ExecutionReference[];
+}

@@ -183,6 +183,33 @@ type QueryGroupResult struct {
 	Example         string  `json:"example"`
 }
 
+// SQLQueryDetail represents detailed information about a specific SQL query
+type SQLQueryDetail struct {
+	QueryHash         string                    `json:"queryHash"`
+	Query             string                    `json:"query"`
+	NormalizedQuery   string                    `json:"normalizedQuery"`
+	Operation         string                    `json:"operation"`
+	TableName         string                    `json:"tableName"`
+	TotalExecutions   int                       `json:"totalExecutions"`
+	AvgDuration       float64                   `json:"avgDuration"`
+	MinDuration       float64                   `json:"minDuration"`
+	MaxDuration       float64                   `json:"maxDuration"`
+	ExplainPlan       string                    `json:"explainPlan,omitempty"`
+	Variables         string                    `json:"variables,omitempty"`
+	IndexAnalysis     *sqlexplain.IndexAnalysis `json:"indexAnalysis,omitempty"`
+	RelatedExecutions []ExecutionReference      `json:"relatedExecutions"`
+}
+
+// ExecutionReference represents a minimal reference to an execution
+type ExecutionReference struct {
+	ID              int64     `json:"id"`
+	DisplayName     string    `json:"displayName"`
+	RequestIDHeader string    `json:"requestIdHeader"`
+	DurationMS      float64   `json:"durationMs"`
+	ExecutedAt      time.Time `json:"executedAt"`
+	StatusCode      int       `json:"statusCode"`
+}
+
 // NewStore creates a new store and initializes the database
 func NewStore(dbPath string) (*Store, error) {
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
@@ -817,4 +844,108 @@ func extractOperationFromQuery(query string) string {
 		return matches[2]
 	}
 	return ""
+}
+
+// GetSQLQueryDetailByHash retrieves detailed information about a SQL query by its hash
+func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, error) {
+	// Get all instances of this query across executions
+	var queries []SQLQuery
+	result := s.db.Where("query_hash = ?", queryHash).Order("created_at DESC").Find(&queries)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to get SQL queries: %w", result.Error)
+	}
+
+	if len(queries) == 0 {
+		return nil, nil
+	}
+
+	// Use the first query as the template
+	firstQuery := queries[0]
+
+	// Calculate statistics
+	detail := &SQLQueryDetail{
+		QueryHash:       queryHash,
+		Query:           firstQuery.Query,
+		NormalizedQuery: firstQuery.NormalizedQuery,
+		Operation:       firstQuery.Operation,
+		TableName:       firstQuery.QueriedTable,
+		TotalExecutions: len(queries),
+		ExplainPlan:     firstQuery.ExplainPlan,
+		Variables:       firstQuery.Variables,
+	}
+
+	// Calculate duration stats
+	var totalDuration float64
+	detail.MinDuration = queries[0].DurationMS
+	detail.MaxDuration = queries[0].DurationMS
+
+	for _, q := range queries {
+		totalDuration += q.DurationMS
+		if q.DurationMS < detail.MinDuration {
+			detail.MinDuration = q.DurationMS
+		}
+		if q.DurationMS > detail.MaxDuration {
+			detail.MaxDuration = q.DurationMS
+		}
+	}
+	detail.AvgDuration = totalDuration / float64(len(queries))
+
+	// Get related executions
+	executionIDs := make([]uint, 0, len(queries))
+	for _, q := range queries {
+		executionIDs = append(executionIDs, q.ExecutionID)
+	}
+
+	// Fetch execution details
+	var executions []ExecutedRequest
+	if len(executionIDs) > 0 {
+		result = s.db.Where("id IN ?", executionIDs).Order("executed_at DESC").Find(&executions)
+		if result.Error != nil {
+			return nil, fmt.Errorf("failed to get executions: %w", result.Error)
+		}
+
+		// Convert to ExecutionReferences
+		detail.RelatedExecutions = make([]ExecutionReference, 0, len(executions))
+		for _, exec := range executions {
+			// Get sample query to compute display name
+			var displayName string
+			if exec.SampleID != nil {
+				req, err := s.GetRequest(int64(*exec.SampleID))
+				if err == nil && req != nil {
+					displayName = computeDisplayName(req.Name, req.RequestData)
+				}
+			}
+			if displayName == "" && exec.RequestBody != "" {
+				displayName = computeDisplayName("", exec.RequestBody)
+			}
+			if displayName == "" {
+				displayName = "Unknown"
+			}
+
+			// Find the duration for this specific query in this execution
+			var queryDuration float64
+			for _, q := range queries {
+				if q.ExecutionID == exec.ID {
+					queryDuration = q.DurationMS
+					break
+				}
+			}
+
+			detail.RelatedExecutions = append(detail.RelatedExecutions, ExecutionReference{
+				ID:              int64(exec.ID),
+				DisplayName:     displayName,
+				RequestIDHeader: exec.RequestIDHeader,
+				DurationMS:      queryDuration,
+				ExecutedAt:      exec.ExecutedAt,
+				StatusCode:      exec.StatusCode,
+			})
+		}
+	}
+
+	// Perform index analysis on all queries with this hash
+	if len(queries) > 0 {
+		detail.IndexAnalysis = s.analyzeIndexUsage(queries)
+	}
+
+	return detail, nil
 }
