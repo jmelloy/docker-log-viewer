@@ -9,19 +9,19 @@
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
-import AppNav from './AppNav.vue'
+import { defineComponent } from "vue";
+import AppNav from "./AppNav.vue";
 
 export default defineComponent({
-  name: 'AppHeader',
+  name: "AppHeader",
   components: {
     AppNav,
   },
   props: {
     activePage: {
       type: String,
-      default: 'viewer',
+      default: "viewer",
     },
   },
-})
+});
 </script>

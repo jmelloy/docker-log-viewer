@@ -1,940 +1,999 @@
 <template>
-<div class="app-container">
-  <app-header activePage="requests"></app-header>
+  <div class="app-container">
+    <app-header activePage="requests"></app-header>
 
-  <div class="main-layout">
-    <main class="content content-padded">
-      <div v-if="loading" class="text-center p-3">
-        <p>Loading request details...</p>
-      </div>
-
-      <div v-if="error" class="text-center p-3">
-        <div class="alert alert-danger">{{ error }}</div>
-        <button @click="goBack" class="btn-secondary">Go Back</button>
-      </div>
-
-      <div v-if="!loading && !error && requestDetail">
-        <div class="flex-between mb-1_5">
-          <div>
-            <button @click="goBack" class="btn-secondary mb-0_5">← Back to Requests</button>
-            <h2 class="m-0">{{ requestDetail.displayName || '(unnamed)' }}</h2>
-            <p class="text-muted mt-0_25">
-              {{ requestDetail.server?.name || requestDetail.execution.server?.name || 'N/A' }}
-            </p>
-          </div>
-          <div style="display: flex; gap: 0.5rem">
-            <button @click="executeAgain" class="btn-primary">▶ Execute Again</button>
-            <button @click="openExecuteModal" class="btn-secondary">⚙️ Re-execute with Options</button>
-          </div>
+    <div class="main-layout">
+      <main class="content content-padded">
+        <div v-if="loading" class="text-center p-3">
+          <p>Loading request details...</p>
         </div>
 
-        <div class="execution-overview">
-          <div class="stat-item">
-            <span class="stat-label">Status Code</span>
-            <span class="stat-value" :class="statusClass">{{ requestDetail.execution.statusCode || 'Executing' }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Duration</span>
-            <span class="stat-value">{{ requestDetail.execution.durationMs }}ms</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Request ID</span>
-            <span class="stat-value">{{ requestDetail.execution.requestIdHeader }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Executed At</span>
-            <span class="stat-value">{{ new Date(requestDetail.execution.executedAt).toLocaleString() }}</span>
-          </div>
-          <div class="stat-item" v-if="requestDetail.server?.devId || requestDetail.execution.server?.devId">
-            <span class="stat-label">Dev ID</span>
-            <span class="stat-value"
-              >{{ requestDetail.server?.devId || requestDetail.execution.server?.devId || 'N/A' }}</span
-            >
-          </div>
+        <div v-if="error" class="text-center p-3">
+          <div class="alert alert-danger">{{ error }}</div>
+          <button @click="goBack" class="btn-secondary">Go Back</button>
         </div>
 
-        <div class="modal-section">
-          <div style="display: flex; gap: 1rem; flex-wrap: wrap">
-            <div style="flex: 1; min-width: 300px">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-                <h4 style="margin: 0">
-                  Request Body<span
-                    v-if="isGraphQLRequest"
-                    style="color: #8b949e; font-size: 0.75rem; margin-left: 0.5rem"
-                    >GraphQL</span
-                  >
-                </h4>
-                <div style="display: flex; gap: 0.5rem">
-                  <button
-                    @click="copyToClipboard(requestData)"
-                    class="btn-secondary"
-                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
-                    title="Copy request"
-                  >
-                    📋 Copy
-                  </button>
-                  <button
-                    @click="viewBigger('request')"
-                    class="btn-secondary"
-                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
-                    title="View bigger"
-                  >
-                    🔍 View
-                  </button>
-                </div>
-              </div>
-
-              <!-- GraphQL Request Display -->
-              <div v-if="isGraphQLRequest">
-                <div v-if="isGraphQLBatchRequest" style="margin-bottom: 0.5rem">
-                  <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">
-                    Operations ({{ graphqlOperations.length }}):
-                  </div>
-                  <select
-                    v-model="selectedOperationIndex"
-                    style="
-                      width: 100%;
-                      background: #161b22;
-                      border: 1px solid #30363d;
-                      border-radius: 4px;
-                      padding: 0.5rem;
-                      font-family: monospace;
-                      font-size: 0.875rem;
-                      color: #79c0ff;
-                      cursor: pointer;
-                    "
-                  >
-                    <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">
-                      {{ op.operationName }}
-                    </option>
-                  </select>
-                </div>
-                <div v-else-if="graphqlOperationName" style="margin-bottom: 0.5rem">
-                  <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Operation:</div>
-                  <div
-                    style="
-                      background: #161b22;
-                      border: 1px solid #30363d;
-                      border-radius: 4px;
-                      padding: 0.5rem;
-                      font-family: monospace;
-                      font-size: 0.875rem;
-                      color: #79c0ff;
-                    "
-                  >
-                    {{ graphqlOperationName }}
-                  </div>
-                </div>
-                <div style="margin-bottom: 0.5rem">
-                  <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Query:</div>
-                  <pre class="graphql-query" style="max-height: 12em; white-space: pre-wrap">{{ graphqlQuery }}</pre>
-                </div>
-                <div v-if="graphqlVariables" style="margin-bottom: 0.5rem">
-                  <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Variables:</div>
-                  <pre class="json-display" style="max-height: 8em">{{ graphqlVariables }}</pre>
-                </div>
-              </div>
-
-              <!-- Standard Request Display -->
-              <pre v-else class="json-display" style="max-height: 20em">{{ requestData }}</pre>
+        <div v-if="!loading && !error && requestDetail">
+          <div class="flex-between mb-1_5">
+            <div>
+              <button @click="goBack" class="btn-secondary mb-0_5">← Back to Requests</button>
+              <h2 class="m-0">{{ requestDetail.displayName || "(unnamed)" }}</h2>
+              <p class="text-muted mt-0_25">
+                {{ requestDetail.server?.name || requestDetail.execution.server?.name || "N/A" }}
+              </p>
             </div>
-            <div style="flex: 1; min-width: 300px">
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  margin-bottom: 0.5rem;
-                  gap: 0.5rem;
-                "
-              >
-                <h4 style="margin: 0">Response</h4>
-                <input
-                  type="text"
-                  v-model="responseFilter"
-                  placeholder="Filter (.data.users[0] or text)"
-                  style="
-                    flex: 1;
-                    max-width: 250px;
-                    padding: 0.5rem;
-                    background: #161b22;
-                    border: 1px solid #30363d;
-                    border-radius: 4px;
-                    color: #c9d1d9;
-                    font-family: monospace;
-                    font-size: 0.75rem;
-                  "
-                  title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
-                />
-
-                <div style="display: flex; gap: 0.5rem">
-                  <button
-                    @click="copyToClipboard(filteredResponseBody)"
-                    class="btn-secondary"
-                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
-                    title="Copy response"
-                  >
-                    📋 Copy
-                  </button>
-                  <button
-                    @click="viewBigger('response')"
-                    class="btn-secondary"
-                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
-                    title="View bigger"
-                  >
-                    🔍 View
-                  </button>
-                </div>
-              </div>
-              <pre class="json-display" style="max-height: 28em">{{ filteredResponseBody }}</pre>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="requestDetail.execution.error" class="modal-section">
-          <h4>Error</h4>
-          <pre class="error-display">{{ requestDetail.execution.error }}</pre>
-        </div>
-
-        <div v-if="sqlAnalysisData" class="modal-section">
-          <h4>SQL Query Analyzer</h4>
-
-          <div class="analyzer-subsection" style="margin-bottom: 1.5rem">
-            <h5
-              style="
-                color: #8b949e;
-                font-size: 0.9rem;
-                margin-bottom: 0.5rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-              "
-            >
-              Overview
-            </h5>
-            <div class="stats-grid-compact">
-              <div class="stat-item">
-                <span class="stat-label">Total Queries</span>
-                <span class="stat-value">{{ sqlAnalysisData.totalQueries }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Unique</span>
-                <span class="stat-value">{{ sqlAnalysisData.uniqueQueries }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Avg Duration</span>
-                <span class="stat-value">{{ sqlAnalysisData.avgDuration.toFixed(2) }}ms</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Duration</span>
-                <span class="stat-value">{{ sqlAnalysisData.totalDuration.toFixed(2) }}ms</span>
-              </div>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem">
-            <div
-              v-if="sqlAnalysisData.slowestQueries.length > 0"
-              class="analyzer-subsection"
-              style="flex: 1; min-width: 280px"
-            >
-              <h5
-                style="
-                  color: #8b949e;
-                  font-size: 0.9rem;
-                  margin-bottom: 0.5rem;
-                  text-transform: uppercase;
-                  letter-spacing: 0.05em;
-                "
-              >
-                Slowest Queries
-              </h5>
-              <div class="query-list-compact">
-                <div
-                  v-for="(q, index) in sqlAnalysisData.slowestQueries.slice(0, 5)"
-                  :key="index"
-                  class="query-item-compact"
-                >
-                  <div class="query-header-compact">
-                    <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }"
-                      >{{ q.duration.toFixed(2) }}ms</span
-                    >
-                    <span class="query-meta-inline">{{ q.table }} · {{ q.operation }}</span>
-                  </div>
-                  <div class="query-text-compact">
-                    {{ q.query.substring(0, 100) }}{{ q.query.length > 100 ? '...' : '' }}
-                  </div>
-                  <button
-                    class="btn-explain-compact"
-                    @click="handleExplainClick(Math.max(0, requestDetail.sqlQueries.findIndex(sq => sq.query === q.query)))"
-                  >
-                    EXPLAIN
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-if="sqlAnalysisData.frequentQueries.length > 0"
-              class="analyzer-subsection"
-              style="flex: 1; min-width: 280px"
-            >
-              <h5
-                style="
-                  color: #8b949e;
-                  font-size: 0.9rem;
-                  margin-bottom: 0.5rem;
-                  text-transform: uppercase;
-                  letter-spacing: 0.05em;
-                "
-              >
-                Most Frequent
-              </h5>
-              <div class="query-list-compact">
-                <div
-                  v-for="(item, index) in sqlAnalysisData.frequentQueries.slice(0, 5)"
-                  :key="index"
-                  class="query-item-compact"
-                >
-                  <div class="query-header-compact">
-                    <span class="query-count">{{ item.count }}x</span>
-                    <span class="query-meta-inline"
-                      >{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span
-                    >
-                  </div>
-                  <div class="query-text-compact">
-                    {{ item.example.query.substring(0, 100) }}{{ item.example.query.length > 100 ? '...' : '' }}
-                  </div>
-                  <button
-                    class="btn-explain-compact"
-                    @click="handleExplainClick(Math.max(0, requestDetail.sqlQueries.findIndex(sq => sq.query === item.example.query)))"
-                  >
-                    EXPLAIN
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-if="requestDetail.indexAnalysis && requestDetail.indexAnalysis.recommendations && requestDetail.indexAnalysis.recommendations.length > 0"
-              class="analyzer-subsection"
-              style="flex: 1; min-width: 280px"
-            >
-              <h5
-                style="
-                  color: #8b949e;
-                  font-size: 0.9rem;
-                  margin-bottom: 0.5rem;
-                  text-transform: uppercase;
-                  letter-spacing: 0.05em;
-                "
-              >
-                Index Recommendations
-              </h5>
-              <div class="query-list-compact">
-                <div
-                  v-for="(rec, index) in requestDetail.indexAnalysis.recommendations.slice(0, 5)"
-                  :key="index"
-                  class="query-item-compact"
-                >
-                  <div class="query-header-compact">
-                    <span
-                      class="index-priority-badge"
-                      :class="'priority-' + rec.priority"
-                      style="font-size: 0.65rem; padding: 0.15rem 0.3rem"
-                      >{{ rec.priority.toUpperCase() }}</span
-                    >
-                    <span class="query-meta-inline">{{ rec.tableName }}</span>
-                  </div>
-                  <div style="font-size: 0.7rem; color: #c9d1d9; margin-bottom: 0.25rem">{{ rec.reason }}</div>
-                  <div style="font-size: 0.65rem; color: #8b949e; margin-bottom: 0.25rem">
-                    {{ rec.columns.join(', ') }}
-                  </div>
-                  <div style="font-size: 0.65rem; color: #7ee787">{{ rec.estimatedImpact }}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="sqlAnalysisData.tables.length > 0" class="analyzer-subsection" style="margin-bottom: 1.5rem">
-            <h5
-              style="
-                color: #8b949e;
-                font-size: 0.9rem;
-                margin-bottom: 0.5rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-              "
-            >
-              Tables
-            </h5>
-            <div class="table-list-compact">
-              <span v-for="(item, index) in sqlAnalysisData.tables" :key="index" class="table-badge-compact">
-                {{ item.table }}<span class="table-count">({{ item.count }})</span>
-              </span>
-            </div>
-          </div>
-
-          <div class="analyzer-subsection">
-            <h5
-              style="
-                color: #8b949e;
-                font-size: 0.9rem;
-                margin-bottom: 0.5rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-              "
-            >
-              All Queries
-            </h5>
-            <div class="sql-queries-list">
-              <div v-for="(q, idx) in requestDetail.sqlQueries" :key="idx" class="sql-query-item">
-                <div class="sql-query-header">
-                  <span>{{ q.tableName || 'unknown' }} - {{ q.operation || 'SELECT' }}</span>
-                  <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
-                </div>
-                <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
-                <div class="query-actions">
-                  <button
-                    v-if="!q.explainPlan || q.explainPlan.length === 0"
-                    class="btn-explain"
-                    @click="handleExplainClick(idx)"
-                  >
-                    Run EXPLAIN
-                  </button>
-                  <button
-                    v-if="q.explainPlan && q.explainPlan.length > 0"
-                    class="btn-explain btn-secondary"
-                    @click="handleExplainClick(idx)"
-                  >
-                    View Saved Plan
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          v-if="requestDetail.indexAnalysis && (requestDetail.indexAnalysis.sequentialScans?.length > 0 || requestDetail.indexAnalysis.recommendations?.length > 0)"
-          class="modal-section"
-        >
-          <h4>Index Analysis</h4>
-          <div class="stats-grid">
-            <div class="stat-item">
-              <span class="stat-label">Sequential Scans</span>
-              <span
-                class="stat-value"
-                :class="{ 'text-warning': requestDetail.indexAnalysis.summary.sequentialScans > 0 }"
-                >{{ requestDetail.indexAnalysis.summary.sequentialScans }}</span
-              >
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Index Scans</span>
-              <span class="stat-value">{{ requestDetail.indexAnalysis.summary.indexScans }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Recommendations</span>
-              <span
-                class="stat-value"
-                :class="{ 'text-warning': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }"
-                >{{ requestDetail.indexAnalysis.summary.totalRecommendations }}</span
-              >
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">High Priority</span>
-              <span
-                class="stat-value"
-                :class="{ 'text-danger': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }"
-                >{{ requestDetail.indexAnalysis.summary.highPriorityRecs }}</span
-              >
-            </div>
-          </div>
-
-          <div v-if="requestDetail.indexAnalysis.sequentialScans?.length > 0" style="margin-top: 1rem">
-            <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">Sequential Scan Issues</h5>
-            <div class="index-issues-list">
-              <div
-                v-for="(issue, idx) in requestDetail.indexAnalysis.sequentialScans.slice(0, 5)"
-                :key="idx"
-                class="index-issue-item"
-              >
-                <div class="index-issue-header">
-                  <span class="index-issue-table">{{ issue.tableName }}</span>
-                  <span class="index-issue-stats"
-                    >{{ issue.occurrences }}x · {{ issue.durationMs.toFixed(2) }}ms · cost: {{ issue.cost.toFixed(0)
-                    }}</span
-                  >
-                </div>
-                <div v-if="issue.filterCondition" class="index-issue-filter">Filter: {{ issue.filterCondition }}</div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="requestDetail.indexAnalysis.recommendations.length > 0" style="margin-top: 1rem">
-            <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">Index Recommendations</h5>
-            <div class="index-recommendations-list">
-              <div
-                v-for="(rec, idx) in requestDetail.indexAnalysis.recommendations.slice(0, 5)"
-                :key="idx"
-                class="index-recommendation-item"
-              >
-                <div class="index-recommendation-header">
-                  <span class="index-priority-badge" :class="'priority-' + rec.priority"
-                    >{{ rec.priority.toUpperCase() }}</span
-                  >
-                  <span class="index-recommendation-table">{{ rec.tableName }}</span>
-                </div>
-                <div class="index-recommendation-reason">{{ rec.reason }}</div>
-                <div class="index-recommendation-columns">Columns: {{ rec.columns.join(', ') }}</div>
-                <div class="index-recommendation-impact">Impact: {{ rec.estimatedImpact }}</div>
-                <div class="index-recommendation-sql">
-                  <code>{{ rec.sqlCommand }}</code>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-section">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-            <h4 style="margin: 0">
-              Logs
-              <span v-if="!showLiveLogStream"
-                >(<span>{{ filteredRequestLogs.length }}</span>)
-                <span
-                  v-if="requestDetail.logs.length > filteredRequestLogs.length"
-                  style="color: #8b949e; font-size: 0.85rem; font-weight: normal"
-                  >({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span
-                ></span
-              >
-              <span v-else style="color: #8b949e; font-size: 0.85rem; font-weight: normal">(Live Stream)</span>
-            </h4>
             <div style="display: flex; gap: 0.5rem">
-              <button
-                @click="toggleLogStream"
-                class="btn-secondary"
-                style="padding: 0.35rem 0.75rem; font-size: 0.85rem"
-              >
-                {{ showLiveLogStream ? '📋 Show Saved' : '📡 Show Live' }}
-              </button>
-              <a
-                v-if="requestViewerLink"
-                :href="requestViewerLink"
-                target="_blank"
-                class="btn-primary"
-                style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none"
-                >View in Log Viewer →</a
-              >
+              <button @click="executeAgain" class="btn-primary">▶ Execute Again</button>
+              <button @click="openExecuteModal" class="btn-secondary">⚙️ Re-execute with Options</button>
             </div>
           </div>
 
-          <!-- Saved Logs View -->
-          <div v-if="!showLiveLogStream" class="logs-list">
-            <p v-if="filteredRequestLogs.length === 0" style="color: #6c757d">
-              No logs captured (or all logs are TRACE level)
-            </p>
-            <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-line" @click="openLogDetails(log)">
-              <span v-if="log.timestamp" class="log-timestamp">{{ new Date(log.timestamp).toLocaleString() }}</span>
-              <span v-if="log.level" class="log-level" :class="log.level">{{ log.level }}</span>
-              <span v-if="log.file" class="log-file">{{ log.file }}</span>
-              <span v-if="log.message" class="log-message">{{ log.message }}</span>
-              <template v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})" :key="fieldIdx">
-                <span class="log-field-key">{{ key }}</span>=<span class="log-field-value"
-                  >{{ formatFieldValue(value) }}</span
+          <div class="execution-overview">
+            <div class="stat-item">
+              <span class="stat-label">Status Code</span>
+              <span class="stat-value" :class="statusClass">{{
+                requestDetail.execution.statusCode || "Executing"
+              }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Duration</span>
+              <span class="stat-value">{{ requestDetail.execution.durationMs }}ms</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Request ID</span>
+              <span class="stat-value">{{ requestDetail.execution.requestIdHeader }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Executed At</span>
+              <span class="stat-value">{{ new Date(requestDetail.execution.executedAt).toLocaleString() }}</span>
+            </div>
+            <div class="stat-item" v-if="requestDetail.server?.devId || requestDetail.execution.server?.devId">
+              <span class="stat-label">Dev ID</span>
+              <span class="stat-value">{{
+                requestDetail.server?.devId || requestDetail.execution.server?.devId || "N/A"
+              }}</span>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap">
+              <div style="flex: 1; min-width: 300px">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+                  <h4 style="margin: 0">
+                    Request Body<span
+                      v-if="isGraphQLRequest"
+                      style="color: #8b949e; font-size: 0.75rem; margin-left: 0.5rem"
+                      >GraphQL</span
+                    >
+                  </h4>
+                  <div style="display: flex; gap: 0.5rem">
+                    <button
+                      @click="copyToClipboard(requestData)"
+                      class="btn-secondary"
+                      style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+                      title="Copy request"
+                    >
+                      📋 Copy
+                    </button>
+                    <button
+                      @click="viewBigger('request')"
+                      class="btn-secondary"
+                      style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+                      title="View bigger"
+                    >
+                      🔍 View
+                    </button>
+                  </div>
+                </div>
+
+                <!-- GraphQL Request Display -->
+                <div v-if="isGraphQLRequest">
+                  <div v-if="isGraphQLBatchRequest" style="margin-bottom: 0.5rem">
+                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">
+                      Operations ({{ graphqlOperations.length }}):
+                    </div>
+                    <select
+                      v-model="selectedOperationIndex"
+                      style="
+                        width: 100%;
+                        background: #161b22;
+                        border: 1px solid #30363d;
+                        border-radius: 4px;
+                        padding: 0.5rem;
+                        font-family: monospace;
+                        font-size: 0.875rem;
+                        color: #79c0ff;
+                        cursor: pointer;
+                      "
+                    >
+                      <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">
+                        {{ op.operationName }}
+                      </option>
+                    </select>
+                  </div>
+                  <div v-else-if="graphqlOperationName" style="margin-bottom: 0.5rem">
+                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Operation:</div>
+                    <div
+                      style="
+                        background: #161b22;
+                        border: 1px solid #30363d;
+                        border-radius: 4px;
+                        padding: 0.5rem;
+                        font-family: monospace;
+                        font-size: 0.875rem;
+                        color: #79c0ff;
+                      "
+                    >
+                      {{ graphqlOperationName }}
+                    </div>
+                  </div>
+                  <div style="margin-bottom: 0.5rem">
+                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Query:</div>
+                    <pre class="graphql-query" style="max-height: 12em; white-space: pre-wrap">{{ graphqlQuery }}</pre>
+                  </div>
+                  <div v-if="graphqlVariables" style="margin-bottom: 0.5rem">
+                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Variables:</div>
+                    <pre class="json-display" style="max-height: 8em">{{ graphqlVariables }}</pre>
+                  </div>
+                </div>
+
+                <!-- Standard Request Display -->
+                <pre v-else class="json-display" style="max-height: 20em">{{ requestData }}</pre>
+              </div>
+              <div style="flex: 1; min-width: 300px">
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 0.5rem;
+                    gap: 0.5rem;
+                  "
                 >
-              </template>
+                  <h4 style="margin: 0">Response</h4>
+                  <input
+                    type="text"
+                    v-model="responseFilter"
+                    placeholder="Filter (.data.users[0] or text)"
+                    style="
+                      flex: 1;
+                      max-width: 250px;
+                      padding: 0.5rem;
+                      background: #161b22;
+                      border: 1px solid #30363d;
+                      border-radius: 4px;
+                      color: #c9d1d9;
+                      font-family: monospace;
+                      font-size: 0.75rem;
+                    "
+                    title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
+                  />
+
+                  <div style="display: flex; gap: 0.5rem">
+                    <button
+                      @click="copyToClipboard(filteredResponseBody)"
+                      class="btn-secondary"
+                      style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+                      title="Copy response"
+                    >
+                      📋 Copy
+                    </button>
+                    <button
+                      @click="viewBigger('response')"
+                      class="btn-secondary"
+                      style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+                      title="View bigger"
+                    >
+                      🔍 View
+                    </button>
+                  </div>
+                </div>
+                <pre class="json-display" style="max-height: 28em">{{ filteredResponseBody }}</pre>
+              </div>
             </div>
           </div>
 
-          <!-- Live Log Stream -->
-          <log-stream
-            v-else
-            :request-id-filter="requestDetail.execution.requestIdHeader"
-            :max-logs="1000"
-            :auto-scroll="true"
-            :compact="false"
-            :show-container="true"
-          />
-        </div>
-      </div>
-    </main>
-  </div>
-</div>
-
-<!-- Request Body Modal -->
-<div v-if="showRequestModal" class="modal" @click="showRequestModal = false">
-  <div class="modal-content" @click.stop style="max-width: 900px">
-    <div class="modal-header">
-      <h3>
-        Request Body<span v-if="isGraphQLRequest" style="color: #8b949e; font-size: 0.875rem; margin-left: 0.5rem"
-          >GraphQL</span
-        >
-      </h3>
-      <div style="display: flex; gap: 0.5rem">
-        <button @click="copyToClipboard(requestData)" class="btn-secondary" style="padding: 0.5rem 1rem">
-          📋 Copy
-        </button>
-        <button @click="showRequestModal = false">✕</button>
-      </div>
-    </div>
-    <div class="modal-body">
-      <!-- GraphQL Request Display -->
-      <div v-if="isGraphQLRequest">
-        <div v-if="isGraphQLBatchRequest" style="margin-bottom: 1rem">
-          <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">
-            Operations ({{ graphqlOperations.length }}):
-          </h4>
-          <select
-            v-model="selectedOperationIndex"
-            style=" 
-              width: 100%;
-              background: #161b22;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 0.75rem;
-              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
-              font-size: 0.875rem;
-              color: #79c0ff;
-              cursor: pointer;
-            "
-          >
-            <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">{{ op.operationName }}</option>
-          </select>
-        </div>
-        <div v-else-if="graphqlOperationName" style="margin-bottom: 1rem">
-          <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Operation:</h4>
-          <div
-            style="
-              background: #161b22;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 0.75rem;
-              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
-              font-size: 0.875rem;
-              color: #79c0ff;
-            "
-          >
-            {{ graphqlOperationName }}
+          <div v-if="requestDetail.execution.error" class="modal-section">
+            <h4>Error</h4>
+            <pre class="error-display">{{ requestDetail.execution.error }}</pre>
           </div>
-        </div>
-        <div style="margin-bottom: 1rem">
-          <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Query:</h4>
-          <pre
-            class="graphql-query"
-            style="
-              background: #0d1117;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 1rem;
-              overflow: auto;
-              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
-              font-size: 0.875rem;
-              line-height: 1.5;
-              color: #c9d1d9;
-              white-space: pre-wrap;
-              word-break: break-word;
-              max-height: 400px;
-            "
-          >
-{{ graphqlQuery }}</pre
-          >
-        </div>
-        <div v-if="graphqlVariables">
-          <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Variables:</h4>
-          <pre
-            style="
-              background: #0d1117;
-              border: 1px solid #30363d;
-              border-radius: 4px;
-              padding: 1rem;
-              overflow: auto;
-              font-family: Monaco, Menlo, Ubuntu Mono, monospace;
-              font-size: 0.875rem;
-              line-height: 1.5;
-              color: #c9d1d9;
-              white-space: pre-wrap;
-              word-break: break-word;
-              max-height: 300px;
-            "
-          >
-{{ graphqlVariables }}</pre
-          >
-        </div>
-      </div>
 
-      <!-- Standard Request Display -->
-      <pre
-        v-else
-        style="
-          background: #0d1117;
-          border: 1px solid #30363d;
-          border-radius: 4px;
-          padding: 1rem;
-          overflow: auto;
-          font-family: Monaco, Menlo, Ubuntu Mono, monospace;
-          font-size: 0.875rem;
-          line-height: 1.5;
-          color: #c9d1d9;
-          white-space: pre-wrap;
-          word-break: break-word;
-        "
-      >
-{{ requestData }}</pre
-      >
-    </div>
-  </div>
-</div>
+          <div v-if="sqlAnalysisData" class="modal-section">
+            <h4>SQL Query Analyzer</h4>
 
-<!-- Response Body Modal -->
-<div v-if="showResponseModal" class="modal" @click="showResponseModal = false">
-  <div class="modal-content" @click.stop style="max-width: 900px">
-    <div class="modal-header">
-      <h3>Response Body</h3>
-      <div style="display: flex; gap: 0.5rem; align-items: center">
-        <input
-          type="text"
-          v-model="responseFilter"
-          placeholder="Filter (.data.users[0] or text)"
-          style="
-            flex: 1;
-            max-width: 300px;
-            padding: 0.5rem;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            color: #c9d1d9;
-            font-family: monospace;
-            font-size: 0.875rem;
-          "
-          title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
-        />
-        <button @click="copyToClipboard(filteredResponseBody)" class="btn-secondary" style="padding: 0.5rem 1rem">
-          📋 Copy
-        </button>
-        <button @click="showResponseModal = false">✕</button>
-      </div>
-    </div>
-    <div class="modal-body">
-      <pre
-        class="json-display"
-          style="
-          background: #0d1117;
-          border: 1px solid #30363d;
-          border-radius: 4px;
-          padding: 1rem;
-          overflow: auto;
-          font-family: Monaco, Menlo, Ubuntu Mono, monospace;
-          font-size: 0.875rem;
-          line-height: 1.5;
-          color: #c9d1d9;
-          white-space: pre-wrap;
-          word-break: break-word;
-        "
-      >
-{{ filteredResponseBody }}</pre
-      >
-    </div>
-  </div>
-</div>
-
-<!-- EXPLAIN Plan Side Panel -->
-<div v-if="showExplainPlanPanel" class="side-panel-overlay" @click="closeExplainPlanModal">
-  <div class="side-panel" @click.stop>
-    <div class="side-panel-header">
-      <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
-      <div style="display: flex; gap: 0.5rem">
-        <button @click="shareExplainPlan" class="btn-secondary" style="padding: 0.5rem 1rem">📋 Share</button>
-        <button @click="closeExplainPlanModal">✕</button>
-      </div>
-    </div>
-    <div class="side-panel-body">
-      <div
-        v-if="explainPlanData && explainPlanData.error"
-        class="alert alert-danger"
-        style="display: block; margin: 1rem"
-      >
-        {{ explainPlanData.error }}
-      </div>
-      <div v-if="explainPlanData && !explainPlanData.error" id="pev2ExplainApp" class="d-flex flex-column" style="height: 100%">
-        <pev2 :plan-source="explainPlanData.planSource" :plan-query="explainPlanData.planQuery"></pev2>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Log Details Modal -->
-<div v-if="showLogModal" class="modal" @click="showLogModal = false">
-  <div class="modal-content" @click.stop>
-    <div class="modal-header">
-      <h3>Log Details</h3>
-      <button @click="showLogModal = false">✕</button>
-    </div>
-    <div v-if="selectedLog" class="modal-body">
-      <div class="modal-section">
-        <h4>Raw Log</h4>
-        <pre
-          v-html="convertAnsiToHtml(selectedLog.entry?.rawLog || selectedLog.entry?.raw || 'No raw log available')"
-        ></pre>
-      </div>
-      <div class="modal-section">
-        <h4>Parsed Fields</h4>
-        <div>
-          <div v-if="selectedLog.entry?.timestamp" class="parsed-field">
-            <div class="parsed-field-key">Timestamp</div>
-            <div class="parsed-field-value">{{ new Date(selectedLog.entry.timestamp).toLocaleString() }}</div>
-          </div>
-          <div v-if="selectedLog.entry?.level" class="parsed-field">
-            <div class="parsed-field-key">Level</div>
-            <div class="parsed-field-value">{{ selectedLog.entry.level }}</div>
-          </div>
-          <div v-if="selectedLog.entry?.file" class="parsed-field">
-            <div class="parsed-field-key">File</div>
-            <div class="parsed-field-value">{{ selectedLog.entry.file }}</div>
-          </div>
-          <div v-if="selectedLog.entry?.message" class="parsed-field">
-            <div class="parsed-field-key">Message</div>
-            <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
-              <pre class="sql-query-text" style="white-space: pre-wrap; margin: 0;" v-html="formatAndHighlightSQL(selectedLog.entry.message)"></pre>
-            </div>
-            <div v-else class="parsed-field-value">{{ selectedLog.entry.message }}</div>
-          </div>
-          <div
-            v-for="([key, value], idx) in Object.entries(selectedLog.entry?.fields || {})"
-            :key="idx"
-            class="parsed-field"
-          >
-            <div class="parsed-field-key">{{ key }}</div>
-            <div v-if="isJsonField(value)" class="parsed-field-value">
-              <pre>{{ formatJsonField(value) }}</pre>
-            </div>
-            <div v-else class="parsed-field-value">{{ value }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Execute Request Modal -->
-<div v-if="showExecuteModal" class="modal" @click="showExecuteModal = false">
-  <div class="modal-content" @click.stop style="max-width: 900px">
-    <div class="modal-header">
-      <h3>Re-execute Request</h3>
-      <button @click="showExecuteModal = false">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-group">
-        <label for="executeToken">Bearer Token Override (optional):</label>
-        <input type="text" id="executeToken" v-model="executeForm.tokenOverride" placeholder="Override token" />
-      </div>
-      <div class="form-group">
-        <label for="executeDevID">Dev ID Override (optional):</label>
-        <input type="text" id="executeDevID" v-model="executeForm.devIdOverride" placeholder="Override dev ID" />
-      </div>
-
-      <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-          <label style="margin: 0">GraphQL Variables:</label>
-          <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem">
-            + Add Variable
-          </button>
-        </div>
-        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem">
-          <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem">
-            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem">
-              <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem"
-                >{{ key }}:</label
-              >
-              <button
-                @click="removeGraphQLVariable(key)"
+            <div class="analyzer-subsection" style="margin-bottom: 1.5rem">
+              <h5
                 style="
-                  background: #da3633;
-                  color: white;
-                  border: none;
-                  padding: 0.25rem 0.5rem;
-                  border-radius: 4px;
-                  cursor: pointer;
-                  font-size: 0.75rem;
-                  margin-left: auto;
+                  color: #8b949e;
+                  font-size: 0.9rem;
+                  margin-bottom: 0.5rem;
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
                 "
               >
-                Remove
-              </button>
+                Overview
+              </h5>
+              <div class="stats-grid-compact">
+                <div class="stat-item">
+                  <span class="stat-label">Total Queries</span>
+                  <span class="stat-value">{{ sqlAnalysisData.totalQueries }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Unique</span>
+                  <span class="stat-value">{{ sqlAnalysisData.uniqueQueries }}</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Avg Duration</span>
+                  <span class="stat-value">{{ sqlAnalysisData.avgDuration.toFixed(2) }}ms</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">Total Duration</span>
+                  <span class="stat-value">{{ sqlAnalysisData.totalDuration.toFixed(2) }}ms</span>
+                </div>
+              </div>
             </div>
-            <textarea
-              :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
-              @input="updateGraphQLVariable(key, ($event.target as HTMLTextAreaElement).value)"
+
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem">
+              <div
+                v-if="sqlAnalysisData.slowestQueries.length > 0"
+                class="analyzer-subsection"
+                style="flex: 1; min-width: 280px"
+              >
+                <h5
+                  style="
+                    color: #8b949e;
+                    font-size: 0.9rem;
+                    margin-bottom: 0.5rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                  "
+                >
+                  Slowest Queries
+                </h5>
+                <div class="query-list-compact">
+                  <div
+                    v-for="(q, index) in sqlAnalysisData.slowestQueries.slice(0, 5)"
+                    :key="index"
+                    class="query-item-compact"
+                  >
+                    <div class="query-header-compact">
+                      <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }"
+                        >{{ q.duration.toFixed(2) }}ms</span
+                      >
+                      <span class="query-meta-inline">{{ q.table }} · {{ q.operation }}</span>
+                    </div>
+                    <div class="query-text-compact">
+                      {{ q.query.substring(0, 100) }}{{ q.query.length > 100 ? "..." : "" }}
+                    </div>
+                    <button
+                      class="btn-explain-compact"
+                      @click="
+                        handleExplainClick(
+                          Math.max(
+                            0,
+                            requestDetail.sqlQueries.findIndex((sq) => sq.query === q.query)
+                          )
+                        )
+                      "
+                    >
+                      EXPLAIN
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-if="sqlAnalysisData.frequentQueries.length > 0"
+                class="analyzer-subsection"
+                style="flex: 1; min-width: 280px"
+              >
+                <h5
+                  style="
+                    color: #8b949e;
+                    font-size: 0.9rem;
+                    margin-bottom: 0.5rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                  "
+                >
+                  Most Frequent
+                </h5>
+                <div class="query-list-compact">
+                  <div
+                    v-for="(item, index) in sqlAnalysisData.frequentQueries.slice(0, 5)"
+                    :key="index"
+                    class="query-item-compact"
+                  >
+                    <div class="query-header-compact">
+                      <span class="query-count">{{ item.count }}x</span>
+                      <span class="query-meta-inline"
+                        >{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span
+                      >
+                    </div>
+                    <div class="query-text-compact">
+                      {{ item.example.query.substring(0, 100) }}{{ item.example.query.length > 100 ? "..." : "" }}
+                    </div>
+                    <button
+                      class="btn-explain-compact"
+                      @click="
+                        handleExplainClick(
+                          Math.max(
+                            0,
+                            requestDetail.sqlQueries.findIndex((sq) => sq.query === item.example.query)
+                          )
+                        )
+                      "
+                    >
+                      EXPLAIN
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-if="
+                  requestDetail.indexAnalysis &&
+                  requestDetail.indexAnalysis.recommendations &&
+                  requestDetail.indexAnalysis.recommendations.length > 0
+                "
+                class="analyzer-subsection"
+                style="flex: 1; min-width: 280px"
+              >
+                <h5
+                  style="
+                    color: #8b949e;
+                    font-size: 0.9rem;
+                    margin-bottom: 0.5rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                  "
+                >
+                  Index Recommendations
+                </h5>
+                <div class="query-list-compact">
+                  <div
+                    v-for="(rec, index) in requestDetail.indexAnalysis.recommendations.slice(0, 5)"
+                    :key="index"
+                    class="query-item-compact"
+                  >
+                    <div class="query-header-compact">
+                      <span
+                        class="index-priority-badge"
+                        :class="'priority-' + rec.priority"
+                        style="font-size: 0.65rem; padding: 0.15rem 0.3rem"
+                        >{{ rec.priority.toUpperCase() }}</span
+                      >
+                      <span class="query-meta-inline">{{ rec.tableName }}</span>
+                    </div>
+                    <div style="font-size: 0.7rem; color: #c9d1d9; margin-bottom: 0.25rem">{{ rec.reason }}</div>
+                    <div style="font-size: 0.65rem; color: #8b949e; margin-bottom: 0.25rem">
+                      {{ rec.columns.join(", ") }}
+                    </div>
+                    <div style="font-size: 0.65rem; color: #7ee787">{{ rec.estimatedImpact }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="sqlAnalysisData.tables.length > 0" class="analyzer-subsection" style="margin-bottom: 1.5rem">
+              <h5
+                style="
+                  color: #8b949e;
+                  font-size: 0.9rem;
+                  margin-bottom: 0.5rem;
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                "
+              >
+                Tables
+              </h5>
+              <div class="table-list-compact">
+                <span v-for="(item, index) in sqlAnalysisData.tables" :key="index" class="table-badge-compact">
+                  {{ item.table }}<span class="table-count">({{ item.count }})</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="analyzer-subsection">
+              <h5
+                style="
+                  color: #8b949e;
+                  font-size: 0.9rem;
+                  margin-bottom: 0.5rem;
+                  text-transform: uppercase;
+                  letter-spacing: 0.05em;
+                "
+              >
+                All Queries
+              </h5>
+              <div class="sql-queries-list">
+                <div v-for="(q, idx) in requestDetail.sqlQueries" :key="idx" class="sql-query-item">
+                  <div class="sql-query-header">
+                    <span>{{ q.tableName || "unknown" }} - {{ q.operation || "SELECT" }}</span>
+                    <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
+                  </div>
+                  <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
+                  <div class="query-actions">
+                    <button
+                      v-if="!q.explainPlan || q.explainPlan.length === 0"
+                      class="btn-explain"
+                      @click="handleExplainClick(idx)"
+                    >
+                      Run EXPLAIN
+                    </button>
+                    <button
+                      v-if="q.explainPlan && q.explainPlan.length > 0"
+                      class="btn-explain btn-secondary"
+                      @click="handleExplainClick(idx)"
+                    >
+                      View Saved Plan
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="
+              requestDetail.indexAnalysis &&
+              (requestDetail.indexAnalysis.sequentialScans?.length > 0 ||
+                requestDetail.indexAnalysis.recommendations?.length > 0)
+            "
+            class="modal-section"
+          >
+            <h4>Index Analysis</h4>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">Sequential Scans</span>
+                <span
+                  class="stat-value"
+                  :class="{ 'text-warning': requestDetail.indexAnalysis.summary.sequentialScans > 0 }"
+                  >{{ requestDetail.indexAnalysis.summary.sequentialScans }}</span
+                >
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Index Scans</span>
+                <span class="stat-value">{{ requestDetail.indexAnalysis.summary.indexScans }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Recommendations</span>
+                <span
+                  class="stat-value"
+                  :class="{ 'text-warning': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }"
+                  >{{ requestDetail.indexAnalysis.summary.totalRecommendations }}</span
+                >
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">High Priority</span>
+                <span
+                  class="stat-value"
+                  :class="{ 'text-danger': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }"
+                  >{{ requestDetail.indexAnalysis.summary.highPriorityRecs }}</span
+                >
+              </div>
+            </div>
+
+            <div v-if="requestDetail.indexAnalysis.sequentialScans?.length > 0" style="margin-top: 1rem">
+              <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">Sequential Scan Issues</h5>
+              <div class="index-issues-list">
+                <div
+                  v-for="(issue, idx) in requestDetail.indexAnalysis.sequentialScans.slice(0, 5)"
+                  :key="idx"
+                  class="index-issue-item"
+                >
+                  <div class="index-issue-header">
+                    <span class="index-issue-table">{{ issue.tableName }}</span>
+                    <span class="index-issue-stats"
+                      >{{ issue.occurrences }}x · {{ issue.durationMs.toFixed(2) }}ms · cost:
+                      {{ issue.cost.toFixed(0) }}</span
+                    >
+                  </div>
+                  <div v-if="issue.filterCondition" class="index-issue-filter">Filter: {{ issue.filterCondition }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="requestDetail.indexAnalysis.recommendations.length > 0" style="margin-top: 1rem">
+              <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">Index Recommendations</h5>
+              <div class="index-recommendations-list">
+                <div
+                  v-for="(rec, idx) in requestDetail.indexAnalysis.recommendations.slice(0, 5)"
+                  :key="idx"
+                  class="index-recommendation-item"
+                >
+                  <div class="index-recommendation-header">
+                    <span class="index-priority-badge" :class="'priority-' + rec.priority">{{
+                      rec.priority.toUpperCase()
+                    }}</span>
+                    <span class="index-recommendation-table">{{ rec.tableName }}</span>
+                  </div>
+                  <div class="index-recommendation-reason">{{ rec.reason }}</div>
+                  <div class="index-recommendation-columns">Columns: {{ rec.columns.join(", ") }}</div>
+                  <div class="index-recommendation-impact">Impact: {{ rec.estimatedImpact }}</div>
+                  <div class="index-recommendation-sql">
+                    <code>{{ rec.sqlCommand }}</code>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+              <h4 style="margin: 0">
+                Logs
+                <span v-if="!showLiveLogStream"
+                  >(<span>{{ filteredRequestLogs.length }}</span
+                  >)
+                  <span
+                    v-if="requestDetail.logs.length > filteredRequestLogs.length"
+                    style="color: #8b949e; font-size: 0.85rem; font-weight: normal"
+                    >({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span
+                  ></span
+                >
+                <span v-else style="color: #8b949e; font-size: 0.85rem; font-weight: normal">(Live Stream)</span>
+              </h4>
+              <div style="display: flex; gap: 0.5rem">
+                <button
+                  @click="toggleLogStream"
+                  class="btn-secondary"
+                  style="padding: 0.35rem 0.75rem; font-size: 0.85rem"
+                >
+                  {{ showLiveLogStream ? "📋 Show Saved" : "📡 Show Live" }}
+                </button>
+                <a
+                  v-if="requestViewerLink"
+                  :href="requestViewerLink"
+                  target="_blank"
+                  class="btn-primary"
+                  style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none"
+                  >View in Log Viewer →</a
+                >
+              </div>
+            </div>
+
+            <!-- Saved Logs View -->
+            <div v-if="!showLiveLogStream" class="logs-list">
+              <p v-if="filteredRequestLogs.length === 0" style="color: #6c757d">
+                No logs captured (or all logs are TRACE level)
+              </p>
+              <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-line" @click="openLogDetails(log)">
+                <span v-if="log.timestamp" class="log-timestamp">{{ new Date(log.timestamp).toLocaleString() }}</span>
+                <span v-if="log.level" class="log-level" :class="log.level">{{ log.level }}</span>
+                <span v-if="log.file" class="log-file">{{ log.file }}</span>
+                <span v-if="log.message" class="log-message">{{ log.message }}</span>
+                <template v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})" :key="fieldIdx">
+                  <span class="log-field-key">{{ key }}</span
+                  >=<span class="log-field-value">{{ formatFieldValue(value) }}</span>
+                </template>
+              </div>
+            </div>
+
+            <!-- Live Log Stream -->
+            <log-stream
+              v-else
+              :request-id-filter="requestDetail.execution.requestIdHeader"
+              :max-logs="1000"
+              :auto-scroll="true"
+              :compact="false"
+              :show-container="true"
+            />
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Request Body Modal -->
+  <div v-if="showRequestModal" class="modal" @click="showRequestModal = false">
+    <div class="modal-content" @click.stop style="max-width: 900px">
+      <div class="modal-header">
+        <h3>
+          Request Body<span v-if="isGraphQLRequest" style="color: #8b949e; font-size: 0.875rem; margin-left: 0.5rem"
+            >GraphQL</span
+          >
+        </h3>
+        <div style="display: flex; gap: 0.5rem">
+          <button @click="copyToClipboard(requestData)" class="btn-secondary" style="padding: 0.5rem 1rem">
+            📋 Copy
+          </button>
+          <button @click="showRequestModal = false">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <!-- GraphQL Request Display -->
+        <div v-if="isGraphQLRequest">
+          <div v-if="isGraphQLBatchRequest" style="margin-bottom: 1rem">
+            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">
+              Operations ({{ graphqlOperations.length }}):
+            </h4>
+            <select
+              v-model="selectedOperationIndex"
               style="
                 width: 100%;
                 background: #161b22;
                 border: 1px solid #30363d;
-                color: #c9d1d9;
-                padding: 0.5rem;
                 border-radius: 4px;
-                font-family: monospace;
+                padding: 0.75rem;
+                font-family:
+                  Monaco,
+                  Menlo,
+                  Ubuntu Mono,
+                  monospace;
                 font-size: 0.875rem;
-                min-height: 60px;
-                resize: vertical;
+                color: #79c0ff;
+                cursor: pointer;
               "
-              placeholder="Enter value (JSON if object/array)"
-            ></textarea>
+            >
+              <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">{{ op.operationName }}</option>
+            </select>
+          </div>
+          <div v-else-if="graphqlOperationName" style="margin-bottom: 1rem">
+            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Operation:</h4>
+            <div
+              style="
+                background: #161b22;
+                border: 1px solid #30363d;
+                border-radius: 4px;
+                padding: 0.75rem;
+                font-family:
+                  Monaco,
+                  Menlo,
+                  Ubuntu Mono,
+                  monospace;
+                font-size: 0.875rem;
+                color: #79c0ff;
+              "
+            >
+              {{ graphqlOperationName }}
+            </div>
+          </div>
+          <div style="margin-bottom: 1rem">
+            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Query:</h4>
+            <pre
+              class="graphql-query"
+              style="
+                background: #0d1117;
+                border: 1px solid #30363d;
+                border-radius: 4px;
+                padding: 1rem;
+                overflow: auto;
+                font-family:
+                  Monaco,
+                  Menlo,
+                  Ubuntu Mono,
+                  monospace;
+                font-size: 0.875rem;
+                line-height: 1.5;
+                color: #c9d1d9;
+                white-space: pre-wrap;
+                word-break: break-word;
+                max-height: 400px;
+              "
+              >{{ graphqlQuery }}</pre
+            >
+          </div>
+          <div v-if="graphqlVariables">
+            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Variables:</h4>
+            <pre
+              style="
+                background: #0d1117;
+                border: 1px solid #30363d;
+                border-radius: 4px;
+                padding: 1rem;
+                overflow: auto;
+                font-family:
+                  Monaco,
+                  Menlo,
+                  Ubuntu Mono,
+                  monospace;
+                font-size: 0.875rem;
+                line-height: 1.5;
+                color: #c9d1d9;
+                white-space: pre-wrap;
+                word-break: break-word;
+                max-height: 300px;
+              "
+              >{{ graphqlVariables }}</pre
+            >
+          </div>
+        </div>
+
+        <!-- Standard Request Display -->
+        <pre
+          v-else
+          style="
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 1rem;
+            overflow: auto;
+            font-family:
+              Monaco,
+              Menlo,
+              Ubuntu Mono,
+              monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #c9d1d9;
+            white-space: pre-wrap;
+            word-break: break-word;
+          "
+          >{{ requestData }}</pre
+        >
+      </div>
+    </div>
+  </div>
+
+  <!-- Response Body Modal -->
+  <div v-if="showResponseModal" class="modal" @click="showResponseModal = false">
+    <div class="modal-content" @click.stop style="max-width: 900px">
+      <div class="modal-header">
+        <h3>Response Body</h3>
+        <div style="display: flex; gap: 0.5rem; align-items: center">
+          <input
+            type="text"
+            v-model="responseFilter"
+            placeholder="Filter (.data.users[0] or text)"
+            style="
+              flex: 1;
+              max-width: 300px;
+              padding: 0.5rem;
+              background: #161b22;
+              border: 1px solid #30363d;
+              border-radius: 4px;
+              color: #c9d1d9;
+              font-family: monospace;
+              font-size: 0.875rem;
+            "
+            title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
+          />
+          <button @click="copyToClipboard(filteredResponseBody)" class="btn-secondary" style="padding: 0.5rem 1rem">
+            📋 Copy
+          </button>
+          <button @click="showResponseModal = false">✕</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <pre
+          class="json-display"
+          style="
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 1rem;
+            overflow: auto;
+            font-family:
+              Monaco,
+              Menlo,
+              Ubuntu Mono,
+              monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #c9d1d9;
+            white-space: pre-wrap;
+            word-break: break-word;
+          "
+          >{{ filteredResponseBody }}</pre
+        >
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPLAIN Plan Side Panel -->
+  <div v-if="showExplainPlanPanel" class="side-panel-overlay" @click="closeExplainPlanModal">
+    <div class="side-panel" @click.stop>
+      <div class="side-panel-header">
+        <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
+        <div style="display: flex; gap: 0.5rem">
+          <button @click="shareExplainPlan" class="btn-secondary" style="padding: 0.5rem 1rem">📋 Share</button>
+          <button @click="closeExplainPlanModal">✕</button>
+        </div>
+      </div>
+      <div class="side-panel-body">
+        <div
+          v-if="explainPlanData && explainPlanData.error"
+          class="alert alert-danger"
+          style="display: block; margin: 1rem"
+        >
+          {{ explainPlanData.error }}
+        </div>
+        <div
+          v-if="explainPlanData && !explainPlanData.error"
+          id="pev2ExplainApp"
+          class="d-flex flex-column"
+          style="height: 100%"
+        >
+          <pev2 :plan-source="explainPlanData.planSource" :plan-query="explainPlanData.planQuery"></pev2>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Details Modal -->
+  <div v-if="showLogModal" class="modal" @click="showLogModal = false">
+    <div class="modal-content" @click.stop>
+      <div class="modal-header">
+        <h3>Log Details</h3>
+        <button @click="showLogModal = false">✕</button>
+      </div>
+      <div v-if="selectedLog" class="modal-body">
+        <div class="modal-section">
+          <h4>Raw Log</h4>
+          <pre
+            v-html="convertAnsiToHtml(selectedLog.entry?.rawLog || selectedLog.entry?.raw || 'No raw log available')"
+          ></pre>
+        </div>
+        <div class="modal-section">
+          <h4>Parsed Fields</h4>
+          <div>
+            <div v-if="selectedLog.entry?.timestamp" class="parsed-field">
+              <div class="parsed-field-key">Timestamp</div>
+              <div class="parsed-field-value">{{ new Date(selectedLog.entry.timestamp).toLocaleString() }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.level" class="parsed-field">
+              <div class="parsed-field-key">Level</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.level }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.file" class="parsed-field">
+              <div class="parsed-field-key">File</div>
+              <div class="parsed-field-value">{{ selectedLog.entry.file }}</div>
+            </div>
+            <div v-if="selectedLog.entry?.message" class="parsed-field">
+              <div class="parsed-field-key">Message</div>
+              <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
+                <pre
+                  class="sql-query-text"
+                  style="white-space: pre-wrap; margin: 0"
+                  v-html="formatAndHighlightSQL(selectedLog.entry.message)"
+                ></pre>
+              </div>
+              <div v-else class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+            </div>
+            <div
+              v-for="([key, value], idx) in Object.entries(selectedLog.entry?.fields || {})"
+              :key="idx"
+              class="parsed-field"
+            >
+              <div class="parsed-field-key">{{ key }}</div>
+              <div v-if="isJsonField(value)" class="parsed-field-value">
+                <pre>{{ formatJsonField(value) }}</pre>
+              </div>
+              <div v-else class="parsed-field-value">{{ value }}</div>
+            </div>
           </div>
         </div>
       </div>
-      <div v-else class="form-group" style="margin-top: 1.5rem">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-          <label style="margin: 0">GraphQL Variables:</label>
-          <button @click="addGraphQLVariable" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem">
-            + Add Variable
-          </button>
-        </div>
-        <p style="color: #8b949e; font-size: 0.875rem; margin: 0">
-          No variables found in request body. Click "Add Variable" to add one.
-        </p>
-      </div>
-
-      <div class="form-group" style="margin-top: 1.5rem">
-        <label for="executeRequestData">Request Data:</label>
-        <textarea
-          id="executeRequestData"
-          v-model="executeForm.requestDataOverride"
-          placeholder="Enter or edit request data (JSON)"
-          rows="12"
-          style="font-family: monospace; font-size: 0.875rem"
-        ></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button @click="executeRequest" class="btn-primary">Execute</button>
-      <button @click="showExecuteModal = false" class="btn-secondary">Cancel</button>
     </div>
   </div>
-</div>
 
+  <!-- Execute Request Modal -->
+  <div v-if="showExecuteModal" class="modal" @click="showExecuteModal = false">
+    <div class="modal-content" @click.stop style="max-width: 900px">
+      <div class="modal-header">
+        <h3>Re-execute Request</h3>
+        <button @click="showExecuteModal = false">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="executeToken">Bearer Token Override (optional):</label>
+          <input type="text" id="executeToken" v-model="executeForm.tokenOverride" placeholder="Override token" />
+        </div>
+        <div class="form-group">
+          <label for="executeDevID">Dev ID Override (optional):</label>
+          <input type="text" id="executeDevID" v-model="executeForm.devIdOverride" placeholder="Override dev ID" />
+        </div>
+
+        <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+            <label style="margin: 0">GraphQL Variables:</label>
+            <button
+              @click="addGraphQLVariable"
+              class="btn-secondary"
+              style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+            >
+              + Add Variable
+            </button>
+          </div>
+          <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem">
+            <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem">
+              <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem">
+                <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem"
+                  >{{ key }}:</label
+                >
+                <button
+                  @click="removeGraphQLVariable(key)"
+                  style="
+                    background: #da3633;
+                    color: white;
+                    border: none;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 0.75rem;
+                    margin-left: auto;
+                  "
+                >
+                  Remove
+                </button>
+              </div>
+              <textarea
+                :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
+                @input="updateGraphQLVariable(key, ($event.target as HTMLTextAreaElement).value)"
+                style="
+                  width: 100%;
+                  background: #161b22;
+                  border: 1px solid #30363d;
+                  color: #c9d1d9;
+                  padding: 0.5rem;
+                  border-radius: 4px;
+                  font-family: monospace;
+                  font-size: 0.875rem;
+                  min-height: 60px;
+                  resize: vertical;
+                "
+                placeholder="Enter value (JSON if object/array)"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+        <div v-else class="form-group" style="margin-top: 1.5rem">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+            <label style="margin: 0">GraphQL Variables:</label>
+            <button
+              @click="addGraphQLVariable"
+              class="btn-secondary"
+              style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+            >
+              + Add Variable
+            </button>
+          </div>
+          <p style="color: #8b949e; font-size: 0.875rem; margin: 0">
+            No variables found in request body. Click "Add Variable" to add one.
+          </p>
+        </div>
+
+        <div class="form-group" style="margin-top: 1.5rem">
+          <label for="executeRequestData">Request Data:</label>
+          <textarea
+            id="executeRequestData"
+            v-model="executeForm.requestDataOverride"
+            placeholder="Enter or edit request data (JSON)"
+            rows="12"
+            style="font-family: monospace; font-size: 0.875rem"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button @click="executeRequest" class="btn-primary">Execute</button>
+        <button @click="showExecuteModal = false" class="btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue'
-import { useRoute } from 'vue-router'
-import { API } from '@/utils/api'
-import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
-import type { 
-  Server,
-  ExecutionDetail,
-  ExplainResponse,
-  ExplainData,
-  ExecuteResponse,
-  SQLQuery
-} from '@/types'
-import { Plan } from "pev2"
+import { defineComponent } from "vue";
+import { useRoute } from "vue-router";
+import { API } from "@/utils/api";
+import {
+  formatSQL as formatSQLUtil,
+  convertAnsiToHtml as convertAnsiToHtmlUtil,
+  copyToClipboard,
+  normalizeQuery as normalizeQueryUtil,
+  applySyntaxHighlighting,
+} from "@/utils/ui-utils";
+import type { Server, ExecutionDetail, ExplainResponse, ExplainData, ExecuteResponse, SQLQuery } from "@/types";
+import { Plan } from "pev2";
 
 export default defineComponent({
   components: {
     pev2: Plan,
   },
   setup() {
-    const route = useRoute()
-    return { route }
+    const route = useRoute();
+    return { route };
   },
   data() {
     return {
@@ -1127,7 +1186,7 @@ export default defineComponent({
         operation: q.operation || "SELECT",
         rows: q.rows || 0,
         variables: q.variables ? (typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables) : {},
-        normalized: this.normalizeQuery(q.query),
+        normalized: normalizeQueryUtil(q.query),
       }));
 
       const totalQueries = queries.length;
@@ -1247,67 +1306,14 @@ export default defineComponent({
 
   methods: {
     applySyntaxHighlighting() {
-      // Only apply if hljs is available
-      if (typeof hljs === "undefined") return;
-
-      // Highlight JSON in request and response bodies
-      document.querySelectorAll(".json-display:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent.trim();
-          if (text.startsWith("{") || text.startsWith("[")) {
-            const highlighted = hljs.highlight(text, { language: "json" });
-            block.innerHTML = highlighted.value;
-            block.classList.add("hljs");
-          }
-        } catch (e) {
-          console.error("Error highlighting JSON:", e);
-          // If highlighting fails, leave as is
-        }
-      });
-
-      // Highlight GraphQL queries
-      document.querySelectorAll(".graphql-query:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent.trim();
-          const highlighted = hljs.highlight(text, { language: "graphql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        } catch (e) {
-          console.error("Error highlighting GraphQL query:", e);
-          // If highlighting fails, leave as is
-        }
-      });
-
-      // Highlight SQL queries
-      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: "sql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        } catch (e) {
-          console.error("Error highlighting SQL query:", e);
-          // If highlighting fails, leave as is
-        }
-      });
-      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: "sql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        } catch (e) {
-          console.error("Error highlighting SQL query:", e);
-          // If highlighting fails, leave as is
-        }
-      });
+      applySyntaxHighlighting();
     },
     async loadRequestDetail(requestId) {
       try {
         console.log(`Loading request detail for ID: ${requestId}`);
         this.requestDetail = await API.get<ExecutionDetail>(`/api/executions/${requestId}`);
         this.loading = false;
-        console.log('Request detail loaded successfully:', this.requestDetail);
+        console.log("Request detail loaded successfully:", this.requestDetail);
 
         // Auto-populate response filter for batch GraphQL requests
         if (this.isGraphQLBatchRequest && !this.responseFilter.trim()) {
@@ -1383,8 +1389,8 @@ export default defineComponent({
 
     displayExplainPlan(planData, query) {
       // Convert planData to JSON string for PEV2 component
-      const planSource = typeof planData === 'string' ? planData : JSON.stringify(planData, null, 2);
-      
+      const planSource = typeof planData === "string" ? planData : JSON.stringify(planData, null, 2);
+
       this.explainPlanData = {
         planSource,
         planQuery: query,
@@ -1445,7 +1451,7 @@ export default defineComponent({
         const queryInput = document.createElement("input");
         queryInput.type = "hidden";
         queryInput.name = "query";
-        queryInput.value = this.formatSQL(this.explainPlanData.planQuery) || this.explainPlanData.planQuery;
+        queryInput.value = formatSQLUtil(this.explainPlanData.planQuery) || this.explainPlanData.planQuery;
         form.appendChild(queryInput);
 
         document.body.appendChild(form);
@@ -1464,11 +1470,11 @@ export default defineComponent({
         if (Array.isArray(variables)) {
           for (let i = 0; i < variables.length; i++) {
             const value = variables[i];
-            vars[`${i + 1}`] = typeof value === 'string' ? value : JSON.stringify(value);
+            vars[`${i + 1}`] = typeof value === "string" ? value : JSON.stringify(value);
           }
         } else {
           for (const [key, value] of Object.entries(variables)) {
-            vars[key] = typeof value === 'string' ? value : JSON.stringify(value);
+            vars[key] = typeof value === "string" ? value : JSON.stringify(value);
           }
         }
 
@@ -1484,40 +1490,10 @@ export default defineComponent({
           alert(`EXPLAIN Error: ${result.error}`);
         } else {
           const displayQuery = result.query || query;
-          this.displayExplainPlan(result.queryPlan, this.formatSQL(displayQuery));
+          this.displayExplainPlan(result.queryPlan, formatSQLUtil(displayQuery));
         }
-      } catch (error: Error|any) {
+      } catch (error: Error | any) {
         alert(`Failed to run EXPLAIN: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    },
-
-    // SQL formatter
-    formatSQL(sql) {
-      return formatSQLUtil(sql);
-    },
-
-    normalizeQuery(query) {
-      return query
-        .replace(/\$\d+/g, "$N")
-        .replace(/'[^']*'/g, "'?'")
-        .replace(/\d+/g, "N")
-        .replace(/\s+/g, " ")
-        .trim();
-    },
-
-    async copyToClipboard(text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        // Show a brief notification
-        const notification = document.createElement("div");
-        notification.textContent = "Copied to clipboard!";
-        notification.style.cssText =
-          "position: fixed; top: 20px; right: 20px; background: #238636; color: white; padding: 0.75rem 1rem; border-radius: 4px; z-index: 10000; font-size: 0.875rem;";
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 2000);
-      } catch (err) {
-        console.error("Failed to copy:", err);
-        alert("Failed to copy to clipboard");
       }
     },
 
@@ -1923,9 +1899,10 @@ export default defineComponent({
       });
     },
 
-    convertAnsiToHtml(text) {
-      return convertAnsiToHtmlUtil(text);
-    },
+    // Wrapper methods for template usage (templates can't call imported functions directly)
+    formatSQL: formatSQLUtil,
+    copyToClipboard,
+    convertAnsiToHtml: convertAnsiToHtmlUtil,
 
     isSQLMessage(message) {
       return message && message.includes("[sql]");
@@ -1954,5 +1931,5 @@ export default defineComponent({
       return message;
     },
   },
-})
+});
 </script>
