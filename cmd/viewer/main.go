@@ -1497,6 +1497,36 @@ func (wa *WebApp) handleExecutionDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Check if request_id_header query param is provided
+	requestIDHeader := r.URL.Query().Get("request_id_header")
+	if requestIDHeader != "" {
+		// Get execution by request ID header
+		execution, err := wa.store.GetExecutionByRequestIDHeader(requestIDHeader)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if execution == nil {
+			http.Error(w, "Execution not found", http.StatusNotFound)
+			return
+		}
+
+		// Get full detail using the execution ID
+		detail, err := wa.store.GetExecutionDetail(int64(execution.ID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if detail == nil {
+			http.Error(w, "Execution not found", http.StatusNotFound)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(detail)
+		return
+	}
+
 	// Extract ID from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/executions/")
 	id, err := strconv.ParseInt(path, 10, 64)

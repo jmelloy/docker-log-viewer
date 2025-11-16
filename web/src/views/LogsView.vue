@@ -619,6 +619,7 @@ export default defineComponent({
         type: "count",
         value: 1000,
       },
+      executionDetail: null as import("@/types").ExecutionDetail | null, // Loaded execution detail for request_id filter
     };
   },
 
@@ -1134,6 +1135,7 @@ export default defineComponent({
       this.traceFilters.delete(type);
       this.sendFilterUpdate();
       this.updateURL();
+      this.executionDetail = null; // Clear execution detail when filter is removed
       if (this.traceFilters.size === 0) {
         this.showAnalyzer = false;
       } else {
@@ -1145,6 +1147,7 @@ export default defineComponent({
       this.traceFilters.clear();
       this.sendFilterUpdate();
       this.updateURL();
+      this.executionDetail = null; // Clear execution detail
       this.showAnalyzer = false;
     },
 
@@ -1191,12 +1194,60 @@ export default defineComponent({
       }
     },
 
-    analyzeTrace() {
+    async loadExecutionDetailByRequestID() {
+      const requestId = this.traceFilters.get("request_id");
+      if (!requestId) {
+        this.executionDetail = null;
+        return;
+      }
+
+      try {
+        console.log(`Loading execution detail for request_id: ${requestId}`);
+        const detail = await API.get<import("@/types").ExecutionDetail>(
+          `/api/executions/0?request_id_header=${encodeURIComponent(requestId)}`
+        );
+        this.executionDetail = detail;
+        console.log("Loaded execution detail:", detail);
+      } catch (error) {
+        console.error("Failed to load execution detail:", error);
+        this.executionDetail = null;
+      }
+    },
+
+    async analyzeTrace() {
       if (this.traceFilters.size === 0) {
         this.showAnalyzer = false;
         return;
       }
 
+      // Check if we have a request_id filter
+      const requestId = this.traceFilters.get("request_id");
+      if (requestId) {
+        // Load execution detail from database
+        await this.loadExecutionDetailByRequestID();
+
+        // Use SQL queries from execution detail if available
+        if (this.executionDetail && this.executionDetail.sqlQueries && this.executionDetail.sqlQueries.length > 0) {
+          console.log(`Using ${this.executionDetail.sqlQueries.length} saved SQL queries from execution detail`);
+          // Convert ExecutionSQLQuery to SQLQuery format
+          const sqlQueries = this.executionDetail.sqlQueries.map((q) => ({
+            query: q.query,
+            duration: q.durationMs,
+            table: q.tableName || "unknown",
+            operation: q.operation || "SELECT",
+            rows: q.rows || 0,
+            variables: q.variables ? (typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables) : {},
+            normalized: q.normalizedQuery || this.normalizeQuery(q.query),
+          }));
+
+          this.renderAnalysis(sqlQueries);
+          this.showAnalyzer = true;
+          return;
+        }
+      }
+
+      // Fall back to analyzing live logs
+      console.log("Analyzing live logs for trace filters");
       const traceLogs = this.logs.filter((log) => {
         const containerName = this.getContainerName(log.containerId);
         if (!this.selectedContainers.has(containerName)) {

@@ -408,6 +408,19 @@ func (s *Store) GetExecution(id int64) (*ExecutedRequest, error) {
 	return &exec, nil
 }
 
+// GetExecutionByRequestIDHeader retrieves the most recent execution by request ID header
+func (s *Store) GetExecutionByRequestIDHeader(requestIDHeader string) (*ExecutedRequest, error) {
+	var exec ExecutedRequest
+	result := s.db.Where("request_id_header = ?", requestIDHeader).Order("executed_at DESC").First(&exec)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get execution by request ID header: %w", result.Error)
+	}
+	return &exec, nil
+}
+
 // ListExecutions retrieves all executions for a request
 func (s *Store) ListExecutions(requestID int64) ([]ExecutedRequest, error) {
 	var executions []ExecutedRequest
