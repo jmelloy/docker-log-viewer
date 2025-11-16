@@ -25,6 +25,7 @@
 
 <script lang="ts">
 import { defineComponent } from "vue";
+import { useRoute } from "vue-router";
 import AppHeader from "@/components/AppHeader.vue";
 import RequestsViewInner from "./RequestsViewInner.vue";
 import GraphQLExplorerViewInner from "./GraphQLExplorerViewInner.vue";
@@ -48,15 +49,25 @@ export default defineComponent({
   },
   mounted() {
     // Check URL hash or query parameter to determine initial tab
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get("tab");
-    const hash = window.location.hash.replace("#", "");
-
-    if (tabParam === "graphql-explorer" || tabParam === "explorer" || hash === "graphql-explorer" || hash === "explorer") {
-      this.activeTab = "graphql-explorer";
-    }
+    this.updateTabFromURL();
+  },
+  watch: {
+    "$route.query"() {
+      this.updateTabFromURL();
+    },
   },
   methods: {
+    updateTabFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get("tab");
+      const hash = window.location.hash.replace("#", "");
+
+      if (tabParam === "graphql-explorer" || tabParam === "explorer" || hash === "graphql-explorer" || hash === "explorer") {
+        this.activeTab = "graphql-explorer";
+      } else {
+        this.activeTab = "requests";
+      }
+    },
     setActiveTab(tab: "requests" | "graphql-explorer") {
       this.activeTab = tab;
       // Update URL without reload
