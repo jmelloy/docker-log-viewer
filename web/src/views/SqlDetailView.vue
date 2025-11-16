@@ -81,15 +81,13 @@
           </div>
 
           <!-- EXPLAIN Plan -->
-          <div v-if="sqlDetail.explainPlan" class="modal-section">
+          <div class="modal-section">
             <h4>EXPLAIN Plan</h4>
-            <pre class="json-display" style="white-space: pre-wrap; max-height: 30em">{{
-              formatExplainPlan(sqlDetail.explainPlan)
-            }}</pre>
-          </div>
-          <div v-else class="modal-section">
-            <h4>EXPLAIN Plan</h4>
-            <p class="text-muted">No EXPLAIN plan available for this query.</p>
+            <explain-plan-formatter
+              :explain-plan="sqlDetail.explainPlan || ''"
+              :query="sqlDetail.query"
+              default-mode="visual"
+            />
           </div>
 
           <!-- Index Recommendations -->
@@ -180,12 +178,14 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
+import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
 import type { SQLQueryDetail } from "@/types";
 
 export default defineComponent({
   name: "SqlDetailView",
   components: {
     AppHeader,
+    ExplainPlanFormatter,
   },
   data() {
     return {
@@ -227,18 +227,6 @@ export default defineComponent({
           "\n$1 "
         )
         .trim();
-    },
-
-    formatExplainPlan(plan: string): string {
-      if (!plan) return "";
-      try {
-        // Try to parse as JSON and pretty-print
-        const parsed = JSON.parse(plan);
-        return JSON.stringify(parsed, null, 2);
-      } catch {
-        // If not JSON, return as-is
-        return plan;
-      }
     },
 
     copyToClipboard(text: string) {
