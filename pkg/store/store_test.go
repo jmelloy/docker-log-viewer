@@ -307,3 +307,123 @@ func TestDatabaseURL(t *testing.T) {
 		t.Errorf("Expected 0 database URLs after delete, got %d", len(dbURLs))
 	}
 }
+
+func TestGetExecutionByRequestIDHeader(t *testing.T) {
+	// Create temporary database
+	dbPath := "/tmp/test_get_execution_by_request_id_header.db"
+	defer os.Remove(dbPath)
+
+	store, err := NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	// Create a server
+	server := &Server{
+		Name:        "Test Server",
+		URL:         "https://api.example.com/graphql",
+		BearerToken: "test-token",
+	}
+
+	serverID, err := store.CreateServer(server)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Create executions with different request ID headers
+	serverIDUint := uint(serverID)
+	exec1 := &ExecutedRequest{
+		ServerID:        &serverIDUint,
+		RequestIDHeader: "req-id-123",
+		RequestBody:     `{"query": "{ test1 }"}`,
+		StatusCode:      200,
+		DurationMS:      100,
+		ResponseBody:    `{"data": {"test": "1"}}`,
+		ExecutedAt:      time.Now().Add(-2 * time.Hour),
+	}
+
+	execID1, err := store.CreateExecution(exec1)
+	if err != nil {
+		t.Fatalf("Failed to create execution 1: %v", err)
+	}
+
+	// Create another execution with the same request ID header but more recent
+	exec2 := &ExecutedRequest{
+		ServerID:        &serverIDUint,
+		RequestIDHeader: "req-id-123",
+		RequestBody:     `{"query": "{ test2 }"}`,
+		StatusCode:      200,
+		DurationMS:      150,
+		ResponseBody:    `{"data": {"test": "2"}}`,
+		ExecutedAt:      time.Now().Add(-1 * time.Hour),
+	}
+
+	execID2, err := store.CreateExecution(exec2)
+	if err != nil {
+		t.Fatalf("Failed to create execution 2: %v", err)
+	}
+
+	// Create execution with different request ID header
+	exec3 := &ExecutedRequest{
+		ServerID:        &serverIDUint,
+		RequestIDHeader: "req-id-456",
+		RequestBody:     `{"query": "{ test3 }"}`,
+		StatusCode:      200,
+		DurationMS:      120,
+		ResponseBody:    `{"data": {"test": "3"}}`,
+		ExecutedAt:      time.Now(),
+	}
+
+	execID3, err := store.CreateExecution(exec3)
+	if err != nil {
+		t.Fatalf("Failed to create execution 3: %v", err)
+	}
+
+	// Test getting execution by request ID header
+	retrievedExec, err := store.GetExecutionByRequestIDHeader("req-id-123")
+	if err != nil {
+		t.Fatalf("Failed to get execution by request ID header: %v", err)
+	}
+	if retrievedExec == nil {
+		t.Fatal("Expected to find execution with request ID header 'req-id-123'")
+	}
+
+	// Should return the most recent execution (exec2)
+	if retrievedExec.ID != uint(execID2) {
+		t.Errorf("Expected execution ID %d (most recent), got %d", execID2, retrievedExec.ID)
+	}
+	if retrievedExec.DurationMS != 150 {
+		t.Errorf("Expected duration 150ms, got %d", retrievedExec.DurationMS)
+	}
+
+	// Test getting execution by different request ID header
+	retrievedExec3, err := store.GetExecutionByRequestIDHeader("req-id-456")
+	if err != nil {
+		t.Fatalf("Failed to get execution by request ID header: %v", err)
+	}
+	if retrievedExec3 == nil {
+		t.Fatal("Expected to find execution with request ID header 'req-id-456'")
+	}
+	if retrievedExec3.ID != uint(execID3) {
+		t.Errorf("Expected execution ID %d, got %d", execID3, retrievedExec3.ID)
+	}
+
+	// Test with non-existent request ID header
+	nonExistent, err := store.GetExecutionByRequestIDHeader("non-existent")
+	if err != nil {
+		t.Fatalf("Failed to get execution by non-existent request ID header: %v", err)
+	}
+	if nonExistent != nil {
+		t.Error("Expected nil for non-existent request ID header")
+	}
+
+	// Verify we didn't affect exec1 which should still exist
+	stillExists, err := store.GetExecution(execID1)
+	if err != nil {
+		t.Fatalf("Failed to get execution 1: %v", err)
+	}
+	if stillExists == nil {
+		t.Error("Expected execution 1 to still exist")
+	}
+}
