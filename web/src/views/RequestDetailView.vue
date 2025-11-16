@@ -262,9 +262,22 @@
                       >
                       <span class="query-meta-inline">{{ q.table }} · {{ q.operation }}</span>
                     </div>
-                    <div class="query-text-compact">
+                    <div
+                      class="query-text-compact"
+                      :class="{ 'query-text-clickable': findQueryHash(q.query) }"
+                      @click="findQueryHash(q.query) ? navigateToSQLDetail(findQueryHash(q.query)) : null"
+                      :title="findQueryHash(q.query) ? 'Click to view SQL query details' : ''"
+                    >
                       {{ q.query.substring(0, 100) }}{{ q.query.length > 100 ? "..." : "" }}
                     </div>
+                    <button
+                      v-if="findQueryHash(q.query)"
+                      class="btn-explain-compact"
+                      @click="navigateToSQLDetail(findQueryHash(q.query))"
+                      style="margin-right: 0.25rem"
+                    >
+                      Details
+                    </button>
                     <button
                       class="btn-explain-compact"
                       @click="
@@ -310,9 +323,26 @@
                         >{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span
                       >
                     </div>
-                    <div class="query-text-compact">
+                    <div
+                      class="query-text-compact"
+                      :class="{ 'query-text-clickable': findQueryHash(item.example.query) }"
+                      @click="
+                        findQueryHash(item.example.query)
+                          ? navigateToSQLDetail(findQueryHash(item.example.query))
+                          : null
+                      "
+                      :title="findQueryHash(item.example.query) ? 'Click to view SQL query details' : ''"
+                    >
                       {{ item.example.query.substring(0, 100) }}{{ item.example.query.length > 100 ? "..." : "" }}
                     </div>
+                    <button
+                      v-if="findQueryHash(item.example.query)"
+                      class="btn-explain-compact"
+                      @click="navigateToSQLDetail(findQueryHash(item.example.query))"
+                      style="margin-right: 0.25rem"
+                    >
+                      Details
+                    </button>
                     <button
                       class="btn-explain-compact"
                       @click="
@@ -412,8 +442,23 @@
                     <span>{{ q.tableName || "unknown" }} - {{ q.operation || "SELECT" }}</span>
                     <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
                   </div>
-                  <div class="sql-query-text">{{ formatSQL(q.query) }}</div>
+                  <div
+                    class="sql-query-text"
+                    :class="{ 'sql-query-text-clickable': q.queryHash }"
+                    @click="q.queryHash ? navigateToSQLDetail(q.queryHash) : null"
+                    :title="q.queryHash ? 'Click to view SQL query details' : ''"
+                  >
+                    {{ formatSQL(q.query) }}
+                  </div>
                   <div class="query-actions">
+                    <button
+                      v-if="q.queryHash"
+                      class="btn-explain"
+                      @click="navigateToSQLDetail(q.queryHash)"
+                      style="margin-right: 0.5rem"
+                    >
+                      View Details
+                    </button>
                     <button
                       v-if="!q.explainPlan || q.explainPlan.length === 0"
                       class="btn-explain"
@@ -1369,6 +1414,16 @@ export default defineComponent({
       window.history.back();
     },
 
+    navigateToSQLDetail(queryHash: string) {
+      this.$router.push(`/sql/${queryHash}`);
+    },
+
+    findQueryHash(query: string): string | null {
+      if (!this.requestDetail?.sqlQueries) return null;
+      const sqlQuery = this.requestDetail.sqlQueries.find((q) => q.query === query);
+      return sqlQuery?.queryHash || null;
+    },
+
     handleExplainClick(queryIdx) {
       const query = this.requestDetail.sqlQueries[queryIdx];
 
@@ -1933,3 +1988,17 @@ export default defineComponent({
   },
 });
 </script>
+
+<style scoped>
+.sql-query-text-clickable,
+.query-text-clickable {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.sql-query-text-clickable:hover,
+.query-text-clickable:hover {
+  background-color: rgba(110, 118, 129, 0.15);
+  border-radius: 4px;
+}
+</style>
