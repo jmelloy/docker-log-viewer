@@ -917,7 +917,7 @@
 import { defineComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { API } from '@/utils/api'
-import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil, copyToClipboard, normalizeQuery as normalizeQueryUtil } from '@/utils/ui-utils'
+import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil, copyToClipboard, normalizeQuery as normalizeQueryUtil, applySyntaxHighlighting } from '@/utils/ui-utils'
 import type { 
   Server,
   ExecutionDetail,
@@ -1248,60 +1248,7 @@ export default defineComponent({
 
   methods: {
     applySyntaxHighlighting() {
-      // Only apply if hljs is available
-      if (typeof hljs === "undefined") return;
-
-      // Highlight JSON in request and response bodies
-      document.querySelectorAll(".json-display:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent.trim();
-          if (text.startsWith("{") || text.startsWith("[")) {
-            const highlighted = hljs.highlight(text, { language: "json" });
-            block.innerHTML = highlighted.value;
-            block.classList.add("hljs");
-          }
-        } catch (e) {
-          console.error("Error highlighting JSON:", e);
-          // If highlighting fails, leave as is
-        }
-      });
-
-      // Highlight GraphQL queries
-      document.querySelectorAll(".graphql-query:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent.trim();
-          const highlighted = hljs.highlight(text, { language: "graphql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        } catch (e) {
-          console.error("Error highlighting GraphQL query:", e);
-          // If highlighting fails, leave as is
-        }
-      });
-
-      // Highlight SQL queries
-      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: "sql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        } catch (e) {
-          console.error("Error highlighting SQL query:", e);
-          // If highlighting fails, leave as is
-        }
-      });
-      document.querySelectorAll(".sql-query-text:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: "sql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        } catch (e) {
-          console.error("Error highlighting SQL query:", e);
-          // If highlighting fails, leave as is
-        }
-      });
+      applySyntaxHighlighting();
     },
     async loadRequestDetail(requestId) {
       try {

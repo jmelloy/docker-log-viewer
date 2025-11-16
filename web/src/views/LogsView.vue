@@ -488,7 +488,7 @@
 <script lang="ts">
 import { defineComponent } from 'vue'
 import { API } from '@/utils/api'
-import { convertAnsiToHtml as convertAnsiToHtmlUtil, formatSQL as formatSQLUtil } from '@/utils/ui-utils'
+import { convertAnsiToHtml as convertAnsiToHtmlUtil, formatSQL as formatSQLUtil, applySyntaxHighlighting } from '@/utils/ui-utils'
 import { Plan } from "pev2"
 import type { 
   Container, 
@@ -633,31 +633,7 @@ export default defineComponent({
 
   methods: {
     applySyntaxHighlighting() {
-      // Only apply if hljs is available
-      if (typeof hljs === "undefined") return;
-
-      // Highlight SQL queries in analyzer
-      document.querySelectorAll(".query-text-compact").forEach((block) => {
-        if (!block.classList.contains("hljs")) {
-          const text = block.textContent;
-          const highlighted = hljs.highlight(text, { language: "sql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        }
-      });
-
-      // Highlight SQL in log detail modal
-      if (this.$refs.sqlMessageRef && !this.$refs.sqlMessageRef.classList.contains("hljs")) {
-        const block = this.$refs.sqlMessageRef;
-        const text = block.textContent;
-        try {
-          const highlighted = hljs.highlight(text, { language: "sql" });
-          block.innerHTML = highlighted.value;
-          block.classList.add("hljs");
-        } catch (e) {
-          console.error("Error highlighting SQL in log modal:", e);
-        }
-      }
+      applySyntaxHighlighting({ sqlSelector: ".query-text-compact, .sql-query-text" });
     },
     parseURLParameters() {
       const params = new URLSearchParams(window.location.search);
