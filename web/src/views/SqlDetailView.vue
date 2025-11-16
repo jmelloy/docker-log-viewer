@@ -67,19 +67,25 @@
                 📋 Copy
               </button>
             </div>
-            <pre class="json-display" style="white-space: pre-wrap; max-height: 20em">{{ formatSQL(sqlDetail.query) }}</pre>
+            <pre class="json-display" style="white-space: pre-wrap; max-height: 20em">{{
+              formatSQL(sqlDetail.query)
+            }}</pre>
           </div>
 
           <!-- Normalized Query -->
           <div class="modal-section">
             <h4>Normalized Query</h4>
-            <pre class="json-display" style="white-space: pre-wrap; max-height: 15em">{{ formatSQL(sqlDetail.normalizedQuery) }}</pre>
+            <pre class="json-display" style="white-space: pre-wrap; max-height: 15em">{{
+              formatSQL(sqlDetail.normalizedQuery)
+            }}</pre>
           </div>
 
           <!-- EXPLAIN Plan -->
           <div v-if="sqlDetail.explainPlan" class="modal-section">
             <h4>EXPLAIN Plan</h4>
-            <pre class="json-display" style="white-space: pre-wrap; max-height: 30em">{{ formatExplainPlan(sqlDetail.explainPlan) }}</pre>
+            <pre class="json-display" style="white-space: pre-wrap; max-height: 30em">{{
+              formatExplainPlan(sqlDetail.explainPlan)
+            }}</pre>
           </div>
           <div v-else class="modal-section">
             <h4>EXPLAIN Plan</h4>
@@ -88,7 +94,11 @@
 
           <!-- Index Recommendations -->
           <div
-            v-if="sqlDetail.indexAnalysis && sqlDetail.indexAnalysis.recommendations && sqlDetail.indexAnalysis.recommendations.length > 0"
+            v-if="
+              sqlDetail.indexAnalysis &&
+              sqlDetail.indexAnalysis.recommendations &&
+              sqlDetail.indexAnalysis.recommendations.length > 0
+            "
             class="modal-section"
           >
             <h4>Index Recommendations</h4>
@@ -105,9 +115,7 @@
                   <span class="index-rec-table">{{ rec.tableName }}</span>
                 </div>
                 <div class="index-rec-reason">{{ rec.reason }}</div>
-                <div class="index-rec-columns">
-                  <strong>Columns:</strong> {{ rec.columns.join(", ") }}
-                </div>
+                <div class="index-rec-columns"><strong>Columns:</strong> {{ rec.columns.join(", ") }}</div>
                 <div class="index-rec-impact">{{ rec.estimatedImpact }}</div>
                 <div v-if="rec.sql" class="index-rec-sql">
                   <strong>SQL:</strong>
@@ -119,32 +127,34 @@
 
           <!-- Sequential Scans -->
           <div
-            v-if="sqlDetail.indexAnalysis && sqlDetail.indexAnalysis.sequentialScans && sqlDetail.indexAnalysis.sequentialScans.length > 0"
+            v-if="
+              sqlDetail.indexAnalysis &&
+              sqlDetail.indexAnalysis.sequentialScans &&
+              sqlDetail.indexAnalysis.sequentialScans.length > 0
+            "
             class="modal-section"
           >
             <h4>Sequential Scan Issues</h4>
             <div class="index-issues-list">
-              <div
-                v-for="(issue, idx) in sqlDetail.indexAnalysis.sequentialScans"
-                :key="idx"
-                class="index-issue-item"
-              >
+              <div v-for="(issue, idx) in sqlDetail.indexAnalysis.sequentialScans" :key="idx" class="index-issue-item">
                 <div class="index-issue-header">
                   <span class="index-issue-table">{{ issue.tableName }}</span>
                   <span class="index-issue-stats">
                     {{ issue.occurrences }}x · {{ issue.durationMs.toFixed(2) }}ms · cost: {{ issue.cost.toFixed(0) }}
                   </span>
                 </div>
-                <div v-if="issue.filterCondition" class="index-issue-filter">
-                  Filter: {{ issue.filterCondition }}
-                </div>
+                <div v-if="issue.filterCondition" class="index-issue-filter">Filter: {{ issue.filterCondition }}</div>
               </div>
             </div>
           </div>
 
           <!-- Related Executions -->
           <div class="modal-section">
-            <h4>Appears in {{ sqlDetail.relatedExecutions.length }} Request{{ sqlDetail.relatedExecutions.length !== 1 ? 's' : '' }}</h4>
+            <h4>
+              Appears in {{ sqlDetail.relatedExecutions.length }} Request{{
+                sqlDetail.relatedExecutions.length !== 1 ? "s" : ""
+              }}
+            </h4>
             <div class="executions-list">
               <div
                 v-for="exec in sqlDetail.relatedExecutions"
@@ -212,7 +222,10 @@ export default defineComponent({
       if (!sql) return "";
       // Basic SQL formatting - add newlines before major keywords
       return sql
-        .replace(/\s+(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|ORDER BY|GROUP BY|HAVING|LIMIT|OFFSET)\s+/gi, "\n$1 ")
+        .replace(
+          /\s+(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|ORDER BY|GROUP BY|HAVING|LIMIT|OFFSET)\s+/gi,
+          "\n$1 "
+        )
         .trim();
     },
 
