@@ -512,5 +512,3 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 
 	return queries
 }
-
-

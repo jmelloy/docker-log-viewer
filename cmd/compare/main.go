@@ -473,8 +473,6 @@ func getField(fields map[string]string, key, defaultVal string) string {
 	return defaultVal
 }
 
-
-
 func analyzeMultiRunQueries(runs []*RequestResult) *MultiRunQueryAnalysis {
 	if len(runs) == 0 {
 		return &MultiRunQueryAnalysis{}
