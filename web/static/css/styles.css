@@ -211,18 +211,6 @@ body {
   color: #fff;
 }
 
-#filterType {
-  color: #f0883e;
-  font-weight: bold;
-}
-
-#filterValue {
-  color: #c9d1d9;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .filter-info {
   display: flex;
@@ -578,24 +566,6 @@ button:disabled {
   right: 0.5rem;
 }
 
-#clearFilter {
-  background: #da3633;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-}
-
-#clearFilter:hover:not(:disabled) {
-  background: #f85149;
-}
-
-#clearLogs {
-  width: 100%;
-  background: #6e7681;
-}
-
-#clearLogs:hover {
-  background: #8b949e;
-}
 
 .btn-primary {
   background: #238636;
@@ -758,14 +728,6 @@ button:disabled {
   font-size: 0.85rem;
 }
 
-#status {
-  color: #7ee787;
-}
-
-#logCount {
-  color: #8b949e;
-}
-
 /* Modals */
 .modal {
   position: fixed;
@@ -795,22 +757,6 @@ button:disabled {
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-}
-
-.execution-modal-content {
-  max-width: 900px;
-}
-
-.explain-modal-content {
-  max-width: 1400px;
-  max-height: 90vh;
-}
-
-.explain-modal-content #pev2App {
-  min-height: 400px;
-  max-height: calc(90vh - 60px);
-  /* position: relative; */
-  contain: layout style paint;
 }
 
 .modal-header {
@@ -945,22 +891,6 @@ button:disabled {
 }
 
 /* Data Display */
-#rawLogContent,
-.query-display,
-#explainQuery {
-  margin: 0;
-  padding: 1rem;
-  background: #0d1117;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  color: #c9d1d9;
-  font-family: "Monaco", "Menlo", "Courier New", monospace;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
-}
 
 .json-display,
 .graphql-query {
@@ -1024,12 +954,6 @@ button:disabled {
   color: #f85149;
   font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
   font-size: 0.875rem;
-}
-
-#parsedFields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
 }
 
 .parsed-field {
@@ -1113,54 +1037,7 @@ button:disabled {
   font-weight: bold;
 }
 
-/* EXPLAIN Plan */
-.explain-plan {
-  background: #0d1117;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  padding: 1rem;
-  font-family: "Monaco", "Menlo", "Courier New", monospace;
-  font-size: 0.85rem;
-  overflow-x: auto;
-}
 
-.explain-node {
-  margin-left: 1.5rem;
-  padding: 0.5rem;
-  border-left: 2px solid #30363d;
-  margin-bottom: 0.5rem;
-}
-
-.explain-node-type {
-  color: #58a6ff;
-  font-weight: bold;
-}
-
-.explain-cost {
-  color: #f0883e;
-  font-size: 0.8rem;
-  margin-left: 0.5rem;
-}
-
-.explain-rows {
-  color: #7ee787;
-  font-size: 0.8rem;
-  margin-left: 0.5rem;
-}
-
-.explain-details {
-  color: #8b949e;
-  font-size: 0.75rem;
-  margin-top: 0.25rem;
-}
-
-.explain-error {
-  color: #f85149;
-  background: #1f1214;
-  border: 1px solid #da3633;
-  border-radius: 4px;
-  padding: 1rem;
-}
 
 .query-actions {
   display: flex;
@@ -1312,65 +1189,6 @@ button:disabled {
   gap: 1rem;
   max-height: calc(100vh - 250px);
   overflow-y: auto;
-}
-
-.execution-item {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  gap: 1rem;
-  padding: 1rem;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  align-items: center;
-  background: #161b22;
-}
-
-.execution-item:hover {
-  border-color: #58a6ff;
-  box-shadow: 0 2px 8px rgba(88, 166, 255, 0.2);
-}
-
-.execution-status {
-  width: 60px;
-  text-align: center;
-  font-weight: 600;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-}
-
-.execution-status.success {
-  background: #1f6f42;
-  color: #7ee787;
-}
-
-.execution-status.error {
-  background: #5a1e1e;
-  color: #f85149;
-}
-
-.execution-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.execution-time {
-  font-size: 0.875rem;
-  color: #8b949e;
-}
-
-.execution-stats {
-  display: flex;
-  gap: 1rem;
-  font-size: 0.875rem;
-  color: #c9d1d9;
-}
-
-.execution-duration {
-  font-weight: 500;
-  color: #58a6ff;
 }
 
 .execution-item-compact {
@@ -1577,40 +1395,6 @@ button:disabled {
   overflow-y: auto;
 }
 
-.log-entry {
-  padding: 0.75rem;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
-  background: #0d1117;
-  font-size: 0.875rem;
-}
-
-.log-message {
-  max-height: 4.5em; /* ~3 lines at 1.5 line-height */
-  overflow: auto;
-  line-height: 1.5;
-}
-
-.log-entry-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-/* SQL Syntax Highlighting */
-.sql-keyword {
-  color: #ff7b72;
-  font-weight: bold;
-}
-
-.sql-string {
-  color: #a5d6ff;
-}
-
-.sql-number {
-  color: #79c0ff;
-}
 
 /* Request Comparison */
 .comparison-grid {
