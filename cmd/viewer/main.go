@@ -2001,7 +2001,7 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 				sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
 				if len(sqlMatch) > 1 {
 					sqlText = sqlMatch[1]
-					normalizedQuery = normalizeQuery(sqlText)
+					normalizedQuery = utils.NormalizeQuery(sqlText)
 					query = store.SQLQuery{
 						Query:           sqlText,
 						NormalizedQuery: normalizedQuery,
@@ -2013,7 +2013,7 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 			} else if msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query" {
 				// Handle [query] format - message is the SQL query
 				sqlText = message
-				normalizedQuery = normalizeQuery(sqlText)
+				normalizedQuery = utils.NormalizeQuery(sqlText)
 				query = store.SQLQuery{
 					Query:           sqlText,
 					NormalizedQuery: normalizedQuery,
@@ -2074,18 +2074,6 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 	}
 
 	return queries
-}
-
-func normalizeQuery(query string) string {
-	// Replace numbers with ?
-	normalized := regexp.MustCompile(`\b\d+\b`).ReplaceAllString(query, "?")
-	// Replace $1, $2, etc. with ?
-	normalized = regexp.MustCompile(`\$\d+`).ReplaceAllString(normalized, "?")
-	// Replace quoted strings with ?
-	normalized = regexp.MustCompile(`'[^']*'`).ReplaceAllString(normalized, "?")
-	// Collapse whitespace
-	normalized = regexp.MustCompile(`\s+`).ReplaceAllString(normalized, " ")
-	return strings.TrimSpace(normalized)
 }
 
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {

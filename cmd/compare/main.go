@@ -454,7 +454,7 @@ func extractSQLQueries(logs []logs.LogMessage) []SQLQuery {
 					fmt.Sscanf(rowsStr, "%d", &query.Rows)
 				}
 
-				query.Normalized = normalizeQuery(query.Query)
+				query.Normalized = utils.NormalizeQuery(query.Query)
 				queries = append(queries, query)
 			}
 		}
@@ -471,18 +471,6 @@ func getField(fields map[string]string, key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
-}
-
-func normalizeQuery(query string) string {
-	// Replace parameter placeholders
-	normalized := regexp.MustCompile(`\$\d+`).ReplaceAllString(query, "$N")
-	// Replace quoted strings
-	normalized = regexp.MustCompile(`'[^']*'`).ReplaceAllString(normalized, "'?'")
-	// Replace numbers
-	normalized = regexp.MustCompile(`\d+`).ReplaceAllString(normalized, "N")
-	// Normalize whitespace
-	normalized = regexp.MustCompile(`\s+`).ReplaceAllString(normalized, " ")
-	return strings.TrimSpace(normalized)
 }
 
 func analyzeMultiRunQueries(runs []*RequestResult) *MultiRunQueryAnalysis {

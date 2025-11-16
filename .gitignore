@@ -56,3 +56,11 @@ web/dist/
 # Test files (keep demo files)
 web/test-schema.html
 web/js/test-inject-schema.js
+
+# Built binaries in root
+/docker-log-viewer
+/viewer
+/compare
+/graphql-tester
+/analyze
+/test-parser

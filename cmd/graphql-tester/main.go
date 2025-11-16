@@ -477,7 +477,7 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 		if strings.Contains(message, "[sql]") {
 			sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
 			if len(sqlMatch) > 1 {
-				normalizedQuery := normalizeQuery(sqlMatch[1])
+				normalizedQuery := utils.NormalizeQuery(sqlMatch[1])
 				query := store.SQLQuery{
 					Query:           sqlMatch[1],
 					NormalizedQuery: normalizedQuery,
@@ -511,16 +511,4 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 	}
 
 	return queries
-}
-
-func normalizeQuery(query string) string {
-	// Replace numbers with ?
-	normalized := regexp.MustCompile(`\b\d+\b`).ReplaceAllString(query, "?")
-	// Replace $1, $2, etc. with ?
-	normalized = regexp.MustCompile(`\$\d+`).ReplaceAllString(normalized, "?")
-	// Replace quoted strings with ?
-	normalized = regexp.MustCompile(`'[^']*'`).ReplaceAllString(normalized, "?")
-	// Collapse whitespace
-	normalized = regexp.MustCompile(`\s+`).ReplaceAllString(normalized, " ")
-	return strings.TrimSpace(normalized)
 }
