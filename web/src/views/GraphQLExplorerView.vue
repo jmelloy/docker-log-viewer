@@ -596,6 +596,7 @@ import type {
 
 import LogStream from '../components/LogStream.vue'
 import { GraphQLEditorManager } from "@/utils/graphql-editor-manager";
+import { copyToClipboard } from '@/utils/ui-utils'
 
 export default defineComponent(// Export component definition (template will be provided by SPA loader)
 {
@@ -1051,20 +1052,7 @@ export default defineComponent(// Export component definition (template will be 
       }
     },
 
-    async copyToClipboard(text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        const notification = document.createElement("div");
-        notification.textContent = "Copied to clipboard!";
-        notification.style.cssText =
-          "position: fixed; top: 20px; right: 20px; background: #238636; color: white; padding: 0.75rem 1rem; border-radius: 4px; z-index: 10000; font-size: 0.875rem;";
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 2000);
-      } catch (err) {
-        console.error("Failed to copy:", err);
-        alert("Failed to copy to clipboard");
-      }
-    },
+
 
     initializeEditors() {
       const queryContainer = this.$refs.queryEditorContainer;

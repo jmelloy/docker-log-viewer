@@ -917,7 +917,7 @@
 import { defineComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { API } from '@/utils/api'
-import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil } from '@/utils/ui-utils'
+import { formatSQL as formatSQLUtil, convertAnsiToHtml as convertAnsiToHtmlUtil, copyToClipboard, normalizeQuery as normalizeQueryUtil } from '@/utils/ui-utils'
 import type { 
   Server,
   ExecutionDetail,
@@ -1128,7 +1128,7 @@ export default defineComponent({
         operation: q.operation || "SELECT",
         rows: q.rows || 0,
         variables: q.variables ? (typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables) : {},
-        normalized: this.normalizeQuery(q.query),
+        normalized: normalizeQueryUtil(q.query),
       }));
 
       const totalQueries = queries.length;
@@ -1446,7 +1446,7 @@ export default defineComponent({
         const queryInput = document.createElement("input");
         queryInput.type = "hidden";
         queryInput.name = "query";
-        queryInput.value = this.formatSQL(this.explainPlanData.planQuery) || this.explainPlanData.planQuery;
+        queryInput.value = formatSQLUtil(this.explainPlanData.planQuery) || this.explainPlanData.planQuery;
         form.appendChild(queryInput);
 
         document.body.appendChild(form);
@@ -1485,42 +1485,14 @@ export default defineComponent({
           alert(`EXPLAIN Error: ${result.error}`);
         } else {
           const displayQuery = result.query || query;
-          this.displayExplainPlan(result.queryPlan, this.formatSQL(displayQuery));
+          this.displayExplainPlan(result.queryPlan, formatSQLUtil(displayQuery));
         }
       } catch (error: Error|any) {
         alert(`Failed to run EXPLAIN: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
 
-    // SQL formatter
-    formatSQL(sql) {
-      return formatSQLUtil(sql);
-    },
 
-    normalizeQuery(query) {
-      return query
-        .replace(/\$\d+/g, "$N")
-        .replace(/'[^']*'/g, "'?'")
-        .replace(/\d+/g, "N")
-        .replace(/\s+/g, " ")
-        .trim();
-    },
-
-    async copyToClipboard(text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        // Show a brief notification
-        const notification = document.createElement("div");
-        notification.textContent = "Copied to clipboard!";
-        notification.style.cssText =
-          "position: fixed; top: 20px; right: 20px; background: #238636; color: white; padding: 0.75rem 1rem; border-radius: 4px; z-index: 10000; font-size: 0.875rem;";
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 2000);
-      } catch (err) {
-        console.error("Failed to copy:", err);
-        alert("Failed to copy to clipboard");
-      }
-    },
 
     viewBigger(type) {
       if (type === "request") {
@@ -1924,9 +1896,10 @@ export default defineComponent({
       });
     },
 
-    convertAnsiToHtml(text) {
-      return convertAnsiToHtmlUtil(text);
-    },
+    // Wrapper methods for template usage (templates can't call imported functions directly)
+    formatSQL: formatSQLUtil,
+    copyToClipboard,
+    convertAnsiToHtml: convertAnsiToHtmlUtil,
 
     isSQLMessage(message) {
       return message && message.includes("[sql]");

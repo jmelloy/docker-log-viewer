@@ -625,10 +625,8 @@ export default defineComponent(// Export component definition (template will be 
       return this.getComparisonTimeDiff() > 0 ? "diff-slower" : "diff-faster";
     },
 
-    // SQL formatter
-    formatSQL(sql) {
-      return formatSQLUtil(sql);
-    },
+    // Wrapper method for template usage (templates can't call imported functions directly)
+    formatSQL: formatSQLUtil,
 
     openNewSampleQueryModal() {
       // Reset form

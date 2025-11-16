@@ -1320,9 +1320,8 @@ export default defineComponent({
       });
     },
 
-    convertAnsiToHtml(text) {
-      return convertAnsiToHtmlUtil(text);
-    },
+    // Wrapper method for template usage (templates can't call imported functions directly)
+    convertAnsiToHtml: convertAnsiToHtmlUtil,
 
     formatMessage(message) {
       if (!message) return message;
