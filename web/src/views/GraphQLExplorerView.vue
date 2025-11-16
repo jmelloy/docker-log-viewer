@@ -596,7 +596,7 @@ import type {
 
 import LogStream from '../components/LogStream.vue'
 import { GraphQLEditorManager } from "@/utils/graphql-editor-manager";
-import { copyToClipboard } from '@/utils/ui-utils'
+import { copyToClipboard, applySyntaxHighlighting } from '@/utils/ui-utils'
 
 export default defineComponent(// Export component definition (template will be provided by SPA loader)
 {
@@ -1372,23 +1372,7 @@ export default defineComponent(// Export component definition (template will be 
     },
 
     applySyntaxHighlighting() {
-      // Only apply if hljs is available
-      if (typeof hljs === "undefined") return;
-
-      // Highlight JSON in response
-      document.querySelectorAll(".json-display:not(.hljs)").forEach((block) => {
-        try {
-          const text = block.textContent.trim();
-          if (text.startsWith("{") || text.startsWith("[")) {
-            const highlighted = hljs.highlight(text, { language: "json" });
-            block.innerHTML = highlighted.value;
-            block.classList.add("hljs");
-          }
-        } catch (e) {
-          console.error("Error applying syntax highlighting:", e);
-          // If highlighting fails, leave as is
-        }
-      });
+      applySyntaxHighlighting();
     },
   },
 
