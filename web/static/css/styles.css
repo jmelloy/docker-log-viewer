@@ -211,7 +211,6 @@ body {
   color: #fff;
 }
 
-
 .filter-info {
   display: flex;
   gap: 0.5rem;
@@ -565,7 +564,6 @@ button:disabled {
   position: absolute;
   right: 0.5rem;
 }
-
 
 .btn-primary {
   background: #238636;
@@ -1037,8 +1035,6 @@ button:disabled {
   font-weight: bold;
 }
 
-
-
 .query-actions {
   display: flex;
   gap: 0.5rem;
@@ -1394,7 +1390,6 @@ button:disabled {
   max-height: 400px;
   overflow-y: auto;
 }
-
 
 /* Request Comparison */
 .comparison-grid {

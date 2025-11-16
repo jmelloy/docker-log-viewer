@@ -1519,6 +1519,34 @@ func (wa *WebApp) handleExecutionDetail(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(detail)
 }
 
+func (wa *WebApp) handleSQLDetail(w http.ResponseWriter, r *http.Request) {
+	if wa.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract query hash from path
+	path := strings.TrimPrefix(r.URL.Path, "/api/sql/")
+	queryHash := strings.TrimSpace(path)
+	if queryHash == "" {
+		http.Error(w, "Invalid query hash", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := wa.store.GetSQLQueryDetailByHash(queryHash)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if detail == nil {
+		http.Error(w, "SQL query not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(detail)
+}
+
 func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
@@ -2225,6 +2253,7 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/executions", loggingMiddleware(wa.handleExecutions))
 	http.HandleFunc("/api/all-executions", loggingMiddleware(wa.handleAllExecutions))
 	http.HandleFunc("/api/executions/", loggingMiddleware(wa.handleExecutionDetail))
+	http.HandleFunc("/api/sql/", loggingMiddleware(wa.handleSQLDetail))
 	http.HandleFunc("/api/retention", loggingMiddleware(wa.handleRetention))
 	http.HandleFunc("/api/retention/", loggingMiddleware(wa.handleRetentionDetail))
 
