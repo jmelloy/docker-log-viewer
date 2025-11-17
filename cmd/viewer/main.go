@@ -437,6 +437,98 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 	client.conn.WriteJSON(wsMsg)
 }
 
+// parseSearchQuery parses a search query, extracting quoted phrases and individual words.
+// Quoted strings (both single and double quotes) are treated as exact phrase matches.
+// Unquoted words are treated as individual search terms.
+// Example: `error "database connection" failed` returns ["error", "database connection", "failed"]
+func parseSearchQuery(query string) []string {
+	if query == "" {
+		return nil
+	}
+
+	var terms []string
+	var current strings.Builder
+	inDoubleQuote := false
+	inSingleQuote := false
+	i := 0
+
+	for i < len(query) {
+		char := query[i]
+
+		if char == '"' && !inSingleQuote {
+			// Handle double quote
+			if inDoubleQuote {
+				// End of double-quoted phrase
+				if current.Len() > 0 {
+					terms = append(terms, current.String())
+					current.Reset()
+				}
+				inDoubleQuote = false
+			} else {
+				// Start of double-quoted phrase
+				if current.Len() > 0 {
+					// Save any unquoted text before this
+					terms = append(terms, strings.Fields(current.String())...)
+					current.Reset()
+				}
+				inDoubleQuote = true
+			}
+			i++
+		} else if char == '\'' && !inDoubleQuote {
+			// Handle single quote
+			if inSingleQuote {
+				// End of single-quoted phrase
+				if current.Len() > 0 {
+					terms = append(terms, current.String())
+					current.Reset()
+				}
+				inSingleQuote = false
+			} else {
+				// Start of single-quoted phrase
+				if current.Len() > 0 {
+					// Save any unquoted text before this
+					terms = append(terms, strings.Fields(current.String())...)
+					current.Reset()
+				}
+				inSingleQuote = true
+			}
+			i++
+		} else if (char == ' ' || char == '\t') && !inDoubleQuote && !inSingleQuote {
+			// Whitespace outside quotes - end of current term
+			if current.Len() > 0 {
+				terms = append(terms, current.String())
+				current.Reset()
+			}
+			i++
+		} else {
+			// Regular character
+			current.WriteByte(char)
+			i++
+		}
+	}
+
+	// Add any remaining text
+	if current.Len() > 0 {
+		if inDoubleQuote || inSingleQuote {
+			// Unclosed quote - treat as phrase anyway
+			terms = append(terms, current.String())
+		} else {
+			// Unquoted text - split by whitespace
+			terms = append(terms, strings.Fields(current.String())...)
+		}
+	}
+
+	// Filter out empty terms
+	result := make([]string, 0, len(terms))
+	for _, term := range terms {
+		if strings.TrimSpace(term) != "" {
+			result = append(result, strings.TrimSpace(term))
+		}
+	}
+
+	return result
+}
+
 // clientFilterToLogStoreFilter converts a ClientFilter to logstore.FilterOptions
 func (wa *WebApp) clientFilterToLogStoreFilter(filter ClientFilter) logstore.FilterOptions {
 	opts := logstore.FilterOptions{}
@@ -459,9 +551,9 @@ func (wa *WebApp) clientFilterToLogStoreFilter(filter ClientFilter) logstore.Fil
 		opts.Levels = filter.SelectedLevels
 	}
 
-	// Set search terms (split by whitespace for AND logic)
+	// Set search terms (parse quoted strings and individual words)
 	if filter.SearchQuery != "" {
-		opts.SearchTerms = strings.Fields(filter.SearchQuery)
+		opts.SearchTerms = parseSearchQuery(filter.SearchQuery)
 	}
 
 	// Set trace filters as field filters
@@ -515,7 +607,7 @@ func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
 
 	// Search query filter - AND multiple terms together
 	if filter.SearchQuery != "" {
-		terms := strings.Fields(filter.SearchQuery) // Split on whitespace
+		terms := parseSearchQuery(filter.SearchQuery)
 
 		if msg.Entry != nil {
 			for _, term := range terms {

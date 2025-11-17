@@ -23,7 +23,12 @@
         <!-- Search Box -->
         <div class="section">
           <div class="search-box">
-            <input type="text" v-model="searchQuery" placeholder="Search logs..." />
+            <input
+              type="text"
+              v-model="searchQuery"
+              placeholder="Search logs... (use quotes for exact phrases)"
+              title="Search logs. Use quotes for exact phrase matching, e.g., error &quot;database connection&quot; failed"
+            />
             <button
               @click="
                 searchQuery = '';
