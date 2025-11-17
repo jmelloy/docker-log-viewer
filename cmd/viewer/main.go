@@ -721,7 +721,7 @@ func (wa *WebApp) loadContainers() error {
 			wa.activeStreamsMutex.Lock()
 			delete(wa.activeStreams, containerID)
 			wa.activeStreamsMutex.Unlock()
-			slog.Info("stream ended, removed from active streams", "container_id", containerID[:12])
+			slog.Debug("stream ended, removed from active streams", "container_id", containerID[:12])
 		}
 		wa.activeStreamsMutex.Lock()
 		wa.activeStreams[c.ID] = true
@@ -788,7 +788,7 @@ func (wa *WebApp) monitorContainers() {
 						wa.activeStreamsMutex.Lock()
 						delete(wa.activeStreams, containerID)
 						wa.activeStreamsMutex.Unlock()
-						slog.Info("stream ended, removed from active streams", "container_id", containerID[:12])
+						slog.Debug("stream ended, removed from active streams", "container_id", containerID[:12])
 					}
 					wa.activeStreamsMutex.Lock()
 					wa.activeStreams[c.ID] = true
