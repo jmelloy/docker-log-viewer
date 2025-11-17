@@ -26,7 +26,7 @@ type LogEntry struct {
 var (
 	timestampRegex = regexp.MustCompile(`(\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+(?:\.\d+)?|\[\d{2}:\d{2}:\d{2}\.\d+\]|\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d+[-/]\d+[-/]\d+\s+\d+:\d+:\d+(?:\.\d+)?|\b\d{10,13}\b)`)
 	levelRegex     = regexp.MustCompile(`\b(FATAL|DEBUG|INFO|ERROR|DBG|TRC|INF|WARNING|WARN|WRN|ERR)\b`)
-	fileRegex      = regexp.MustCompile(`([\w/]+\.go:\d+)`)
+	fileRegex      = regexp.MustCompile(`\s+([\w/]+\.go:\d+)\s+`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
 	ansiStartRegex = regexp.MustCompile(`^\x1b\[`)
 )
@@ -501,7 +501,7 @@ func ParseLogLine(line string) *LogEntry {
 
 		if file, ok := ParseFile(block.Text); ok {
 			entry.File = file
-			linesToStrip = append(linesToStrip, block.Text)
+			linesToStrip = append(linesToStrip, file)
 			continue
 		}
 	}

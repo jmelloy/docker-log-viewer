@@ -274,6 +274,7 @@
             <span :style="{ color: statusColor }">{{ statusText }}</span>
             <span>{{ logCountText }}</span>
           </div>
+          <button @click="clearLogs" class="clear-logs-btn" title="Clear all logs">Clear Logs</button>
         </div>
       </aside>
 
@@ -1630,6 +1631,11 @@ export default defineComponent({
       } catch (e) {
         console.warn("Failed to save container state:", e);
       }
+    },
+
+    clearLogs() {
+      this.logs = [];
+      this.recentRequests = [];
     },
   },
 });
