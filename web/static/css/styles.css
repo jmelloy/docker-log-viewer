@@ -129,6 +129,27 @@ body {
   margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid #30363d;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.clear-logs-btn {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.clear-logs-btn:hover {
+  background: #30363d;
+  color: #f85149;
 }
 
 .section {
