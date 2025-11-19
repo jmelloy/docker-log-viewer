@@ -9,7 +9,6 @@ declare module "*.vue" {
 // Declare global libraries loaded via script tags
 declare global {
   const Vue: any;
-  const pev2: any;
   const hljs: any;
 }
 
