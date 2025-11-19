@@ -2424,6 +2424,16 @@ button:disabled {
 /* Visual view styling */
 .visual-view {
   background: transparent;
+  color: var(--text-primary);
+}
+
+.visual-view :deep(.node) {
+  color: var(--text-primary);
+}
+
+.visual-view :deep(.card) {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
 }
 
 
