@@ -3,9 +3,7 @@
     <div v-if="error" class="alert alert-danger">
       {{ error }}
     </div>
-    <div v-else-if="!explainPlan" class="text-muted">
-      No EXPLAIN plan available.
-    </div>
+    <div v-else-if="!explainPlan" class="text-muted">No EXPLAIN plan available.</div>
     <div v-else class="explain-plan-content">
       <!-- Display mode tabs -->
       <div class="display-mode-tabs">
@@ -16,16 +14,10 @@
         >
           📊 Visual
         </button>
-        <button
-          :class="['tab-button', { active: displayMode === 'json' }]"
-          @click="displayMode = 'json'"
-        >
+        <button :class="['tab-button', { active: displayMode === 'json' }]" @click="displayMode = 'json'">
           📄 JSON
         </button>
-        <button
-          :class="['tab-button', { active: displayMode === 'text' }]"
-          @click="displayMode = 'text'"
-        >
+        <button :class="['tab-button', { active: displayMode === 'text' }]" @click="displayMode = 'text'">
           📝 Text
         </button>
       </div>
@@ -38,9 +30,7 @@
       <!-- JSON view -->
       <div v-if="displayMode === 'json'" class="json-view">
         <div class="view-header">
-          <button @click="copyToClipboard(formattedPlan)" class="btn-copy" title="Copy to clipboard">
-            📋 Copy
-          </button>
+          <button @click="copyToClipboard(formattedPlan)" class="btn-copy" title="Copy to clipboard">📋 Copy</button>
         </div>
         <pre class="json-display">{{ formattedPlan }}</pre>
       </div>
@@ -48,9 +38,7 @@
       <!-- Text view (plain) -->
       <div v-if="displayMode === 'text'" class="text-view">
         <div class="view-header">
-          <button @click="copyToClipboard(explainPlan)" class="btn-copy" title="Copy to clipboard">
-            📋 Copy
-          </button>
+          <button @click="copyToClipboard(explainPlan)" class="btn-copy" title="Copy to clipboard">📋 Copy</button>
         </div>
         <pre class="text-display">{{ explainPlan }}</pre>
       </div>
@@ -140,4 +128,3 @@ export default defineComponent({
   },
 });
 </script>
-
