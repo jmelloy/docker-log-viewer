@@ -28,7 +28,6 @@ export default [
         prompt: "readonly",
         confirm: "readonly",
         hljs: "readonly",
-        pev2: "readonly",
         customElements: "readonly",
         matchMedia: "readonly",
         IntersectionObserver: "readonly",

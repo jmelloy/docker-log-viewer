@@ -30,9 +30,9 @@
         </button>
       </div>
 
-      <!-- Visual view using PEV2 -->
+      <!-- Visual view using simple query plan viewer -->
       <div v-if="displayMode === 'visual' && hasValidPlan" class="visual-view">
-        <pev2 :plan-source="formattedPlan" :plan-query="query || ''"></pev2>
+        <SimpleQueryPlanViewer :plan-source="formattedPlan" />
       </div>
 
       <!-- JSON view -->
@@ -60,12 +60,12 @@
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import { Plan } from "pev2";
+import SimpleQueryPlanViewer from "./SimpleQueryPlanViewer.vue";
 
 export default defineComponent({
   name: "ExplainPlanFormatter",
   components: {
-    pev2: Plan,
+    SimpleQueryPlanViewer,
   },
   props: {
     explainPlan: {
@@ -255,18 +255,8 @@ export default defineComponent({
   text-align: center;
 }
 
-/* Ensure PEV2 content has proper styling */
-.visual-view :deep(.pev2-container) {
+/* Visual view styling */
+.visual-view {
   background: transparent;
-  color: #c9d1d9;
-}
-
-.visual-view :deep(.node) {
-  color: #c9d1d9;
-}
-
-.visual-view :deep(.card) {
-  background: #0d1117;
-  border: 1px solid #30363d;
 }
 </style>
