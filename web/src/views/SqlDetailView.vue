@@ -20,6 +20,14 @@
               <h2 class="m-0">SQL Query Details</h2>
               <p class="text-muted mt-0_25">{{ sqlDetail.operation }} on {{ sqlDetail.tableName }}</p>
             </div>
+            <div style="display: flex; gap: 0.5rem">
+              <button @click="exportAsMarkdown" class="btn-secondary" title="Export as Markdown">
+                📄 Export Markdown
+              </button>
+              <button @click="exportToNotion" class="btn-secondary" title="Export to Notion">
+                📘 Export to Notion
+              </button>
+            </div>
           </div>
 
           <!-- Statistics Overview -->
@@ -258,7 +266,190 @@ export default defineComponent({
     goBack() {
       this.$router.back();
     },
+
+    generateMarkdown(): string {
+      if (!this.sqlDetail) return "";
+
+      const now = new Date();
+      const formattedDate = now.toLocaleString();
+
+      let markdown = `# SQL Query Analysis Report\n\n`;
+      markdown += `**Generated:** ${formattedDate}\n\n`;
+
+      // Add request IDs if available
+      if (this.sqlDetail.relatedExecutions && this.sqlDetail.relatedExecutions.length > 0) {
+        const firstExec = this.sqlDetail.relatedExecutions[0];
+        markdown += `**Request ID:** ${firstExec.requestIdHeader}\n`;
+        markdown += `**Execution Date:** ${new Date(firstExec.executedAt).toLocaleString()}\n\n`;
+      }
+
+      // Query metadata
+      markdown += `## Query Information\n\n`;
+      markdown += `- **Operation:** ${this.sqlDetail.operation}\n`;
+      markdown += `- **Table:** ${this.sqlDetail.tableName}\n`;
+      markdown += `- **Total Executions:** ${this.sqlDetail.totalExecutions}\n`;
+      markdown += `- **Average Duration:** ${this.sqlDetail.avgDuration.toFixed(2)}ms\n`;
+      markdown += `- **Min Duration:** ${this.sqlDetail.minDuration.toFixed(2)}ms\n`;
+      markdown += `- **Max Duration:** ${this.sqlDetail.maxDuration.toFixed(2)}ms\n\n`;
+
+      // SQL Query
+      markdown += `## SQL Query\n\n`;
+      markdown += `\`\`\`sql\n${this.formatSQL(this.sqlDetail.query)}\n\`\`\`\n\n`;
+
+      // Normalized Query
+      markdown += `## Normalized Query\n\n`;
+      markdown += `\`\`\`sql\n${this.formatSQL(this.sqlDetail.normalizedQuery)}\n\`\`\`\n\n`;
+
+      // EXPLAIN Plan (text version)
+      if (this.sqlDetail.explainPlan) {
+        markdown += `## EXPLAIN Plan\n\n`;
+        try {
+          // Try to format as text if it's JSON
+          const parsed = JSON.parse(this.sqlDetail.explainPlan);
+          markdown += `\`\`\`\n${this.formatExplainPlanAsText(parsed)}\n\`\`\`\n\n`;
+        } catch {
+          // If not JSON, use as-is
+          markdown += `\`\`\`\n${this.sqlDetail.explainPlan}\n\`\`\`\n\n`;
+        }
+      }
+
+      // Index recommendations
+      if (this.sqlDetail.indexAnalysis?.recommendations && this.sqlDetail.indexAnalysis.recommendations.length > 0) {
+        markdown += `## Index Recommendations\n\n`;
+        this.sqlDetail.indexAnalysis.recommendations.forEach((rec: any, index: number) => {
+          markdown += `### ${index + 1}. ${rec.tableName} (${rec.priority.toUpperCase()})\n\n`;
+          markdown += `- **Reason:** ${rec.reason}\n`;
+          markdown += `- **Columns:** ${rec.columns.join(", ")}\n`;
+          markdown += `- **Impact:** ${rec.estimatedImpact}\n`;
+          if (rec.sql) {
+            markdown += `- **SQL:**\n  \`\`\`sql\n  ${rec.sql}\n  \`\`\`\n`;
+          }
+          markdown += `\n`;
+        });
+      }
+
+      // Related executions
+      if (this.sqlDetail.relatedExecutions && this.sqlDetail.relatedExecutions.length > 0) {
+        markdown += `## Related Executions\n\n`;
+        markdown += `| Request ID | Display Name | Status | Duration | Executed At |\n`;
+        markdown += `|------------|--------------|--------|----------|-------------|\n`;
+        this.sqlDetail.relatedExecutions.forEach((exec: any) => {
+          markdown += `| ${exec.requestIdHeader} | ${exec.displayName} | ${exec.statusCode} | ${exec.durationMs.toFixed(2)}ms | ${new Date(exec.executedAt).toLocaleString()} |\n`;
+        });
+      }
+
+      return markdown;
+    },
+
+    formatExplainPlanAsText(plan: any, indent: number = 0): string {
+      // Convert JSON explain plan to human-readable text format
+      const indentStr = "  ".repeat(indent);
+      let text = "";
+
+      if (Array.isArray(plan)) {
+        plan.forEach((item) => {
+          text += this.formatExplainPlanAsText(item, indent);
+        });
+      } else if (typeof plan === "object" && plan !== null) {
+        if (plan.Plan) {
+          // PostgreSQL EXPLAIN format
+          text += `${indentStr}${plan.Plan["Node Type"] || "Unknown"}`;
+          if (plan.Plan["Relation Name"]) {
+            text += ` on ${plan.Plan["Relation Name"]}`;
+          }
+          if (plan.Plan["Alias"]) {
+            text += ` (${plan.Plan["Alias"]})`;
+          }
+          text += `\n`;
+          text += `${indentStr}  Cost: ${plan.Plan["Startup Cost"]?.toFixed(2) || 0}..${plan.Plan["Total Cost"]?.toFixed(2) || 0}`;
+          text += ` Rows: ${plan.Plan["Plan Rows"] || 0}`;
+          if (plan.Plan["Actual Rows"] !== undefined) {
+            text += ` Actual: ${plan.Plan["Actual Rows"]}`;
+          }
+          text += `\n`;
+
+          if (plan.Plan["Filter"]) {
+            text += `${indentStr}  Filter: ${plan.Plan["Filter"]}\n`;
+          }
+          if (plan.Plan["Index Cond"]) {
+            text += `${indentStr}  Index Cond: ${plan.Plan["Index Cond"]}\n`;
+          }
+
+          if (plan.Plan["Plans"]) {
+            plan.Plan["Plans"].forEach((subPlan: any) => {
+              text += this.formatExplainPlanAsText({ Plan: subPlan }, indent + 1);
+            });
+          }
+
+          if (plan["Planning Time"]) {
+            text += `\nPlanning Time: ${plan["Planning Time"].toFixed(3)}ms\n`;
+          }
+          if (plan["Execution Time"]) {
+            text += `Execution Time: ${plan["Execution Time"].toFixed(3)}ms\n`;
+          }
+        } else {
+          // Simple object format
+          Object.entries(plan).forEach(([key, value]) => {
+            if (typeof value === "object" && value !== null) {
+              text += `${indentStr}${key}:\n`;
+              text += this.formatExplainPlanAsText(value, indent + 1);
+            } else {
+              text += `${indentStr}${key}: ${value}\n`;
+            }
+          });
+        }
+      } else {
+        text += `${indentStr}${plan}\n`;
+      }
+
+      return text;
+    },
+
+    exportAsMarkdown() {
+      if (!this.sqlDetail) return;
+
+      const markdown = this.generateMarkdown();
+      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const filename = `sql-query-${this.sqlDetail.queryHash}-${Date.now()}.md`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    },
+
+    async exportToNotion() {
+      if (!this.sqlDetail) return;
+
+      try {
+        const response = await fetch(`/api/sql/${this.queryHash}/export-notion`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error || "Failed to export to Notion");
+        }
+
+        const result = await response.json();
+        if (result.url) {
+          alert(`Successfully exported to Notion!\nPage URL: ${result.url}`);
+          // Optionally open the page
+          window.open(result.url, "_blank");
+        } else {
+          alert("Successfully exported to Notion!");
+        }
+      } catch (err: any) {
+        console.error("Error exporting to Notion:", err);
+        alert(`Failed to export to Notion: ${err.message}`);
+      }
+    },
   },
 });
 </script>
-
