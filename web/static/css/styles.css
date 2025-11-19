@@ -539,10 +539,6 @@ body {
   overflow: hidden;
 }
 
-.container-id {
-  font-weight: bold;
-  color: var(--color-blue);
-}
 
 .log-count-badge {
   background: var(--bg-tertiary);
@@ -570,11 +566,17 @@ body {
   font-size: 0.85rem;
 }
 
-.container-name {
+.container-id {
   color: var(--text-secondary);
   font-size: 0.8rem;
+  margin-left: 0.5rem;
 }
 
+.container-name {
+  margin-left: 0.5rem;
+  font-weight: bold;
+  color: var(--color-blue);
+}
 /* Inputs & Buttons */
 input[type="text"] {
   width: 100%;
@@ -799,6 +801,7 @@ button:disabled {
 .log-field-key {
   color: var(--color-blue-light);
   font-size: 0.85rem;
+  margin-left: 0.5rem;
 }
 
 .log-field-value {
@@ -2433,6 +2436,48 @@ button:disabled {
 .visual-view :deep(.card) {
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
+}
+
+/* Query section styling */
+.query-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.query-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.query-header h4 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sql-query-display {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.sql-query-display code {
+  display: block;
+  color: var(--text-primary);
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
 }
 
 /* ========================================

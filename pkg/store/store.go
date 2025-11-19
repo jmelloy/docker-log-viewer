@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"docker-log-parser/pkg/logs"
@@ -86,6 +87,7 @@ type ExecutedRequest struct {
 	ResponseHeaders string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
 	Error           string         `json:"error,omitempty"`
 	IsSync          bool           `gorm:"column:is_sync;index;default:false" json:"isSync"`
+	Name            string         `gorm:"column:name" json:"name"`
 	DisplayName     string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
 	ExecutedAt      time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
 	CreatedAt       time.Time      `json:"createdAt"`
@@ -147,6 +149,7 @@ type SQLQuery struct {
 	CreatedAt        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updatedAt"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
+	ContainerID      string         `gorm:"-" json:"containerId"`
 }
 
 func (SQLQuery) TableName() string {
@@ -485,18 +488,15 @@ func (s *Store) ListAllExecutions(limit, offset int, search string, showAll bool
 
 	// Compute displayName for each execution
 	for i := range executions {
-		displayName := "Unknown"
+		displayName := computeDisplayName(executions[i].Name, executions[i].RequestBody)
 		// If execution has a sample query, use its name
-		if executions[i].SampleID != nil {
+		if displayName == "Unknown" && executions[i].SampleID != nil {
 			sampleQuery, err := s.GetRequest(int64(*executions[i].SampleID))
 			if err == nil && sampleQuery != nil {
 				displayName = computeDisplayName(sampleQuery.Name, sampleQuery.RequestData)
 			}
 		}
-		// If no sample query or couldn't fetch it, extract from requestBody
-		if displayName == "Unknown" && executions[i].RequestBody != "" {
-			displayName = computeDisplayName("", executions[i].RequestBody)
-		}
+
 		executions[i].DisplayName = displayName
 	}
 
@@ -816,19 +816,22 @@ func computeDisplayName(name string, requestData string) string {
 				}
 			}
 		} else {
+			ouptput := []string{}
 			// Try parsing as array of requests
 			var dataArr []map[string]interface{}
 			if err := json.Unmarshal([]byte(requestData), &dataArr); err == nil && len(dataArr) > 0 {
-				// Use first operation
-				if opName, ok := dataArr[0]["operationName"].(string); ok && opName != "" {
-					return opName
-				}
-				if query, ok := dataArr[0]["query"].(string); ok && query != "" {
-					if extractedName := extractOperationFromQuery(query); extractedName != "" {
-						return extractedName
+				for _, data := range dataArr {
+					if opName, ok := data["operationName"].(string); ok && opName != "" {
+						ouptput = append(ouptput, opName)
+					}
+					if query, ok := data["query"].(string); ok && query != "" {
+						if extractedName := extractOperationFromQuery(query); extractedName != "" {
+							ouptput = append(ouptput, extractedName)
+						}
 					}
 				}
 			}
+			return strings.Join(ouptput, ", ")
 		}
 	}
 

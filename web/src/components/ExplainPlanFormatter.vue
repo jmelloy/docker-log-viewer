@@ -24,11 +24,25 @@
 
       <!-- Visual view using simple query plan viewer -->
       <div v-if="displayMode === 'visual' && hasValidPlan" class="visual-view">
+        <div v-if="formattedQuery" class="query-section">
+          <div class="query-header">
+            <h4>Query</h4>
+            <button @click="copyToClipboard(query)" class="btn-copy" title="Copy query to clipboard">📋 Copy</button>
+          </div>
+          <pre class="sql-query-display"><code class="language-sql">{{ formattedQuery }}</code></pre>
+        </div>
         <SimpleQueryPlanViewer :plan-source="formattedPlan" />
       </div>
 
       <!-- JSON view -->
       <div v-if="displayMode === 'json'" class="json-view">
+        <div v-if="formattedQuery" class="query-section">
+          <div class="query-header">
+            <h4>Query</h4>
+            <button @click="copyToClipboard(query)" class="btn-copy" title="Copy query to clipboard">📋 Copy</button>
+          </div>
+          <pre class="sql-query-display"><code class="language-sql">{{ formattedQuery }}</code></pre>
+        </div>
         <div class="view-header">
           <button @click="copyToClipboard(formattedPlan)" class="btn-copy" title="Copy to clipboard">📋 Copy</button>
         </div>
@@ -37,6 +51,13 @@
 
       <!-- Text view (plain) -->
       <div v-if="displayMode === 'text'" class="text-view">
+        <div v-if="formattedQuery" class="query-section">
+          <div class="query-header">
+            <h4>Query</h4>
+            <button @click="copyToClipboard(query)" class="btn-copy" title="Copy query to clipboard">📋 Copy</button>
+          </div>
+          <pre class="sql-query-display"><code class="language-sql">{{ formattedQuery }}</code></pre>
+        </div>
         <div class="view-header">
           <button @click="copyToClipboard(explainPlan)" class="btn-copy" title="Copy to clipboard">📋 Copy</button>
         </div>
@@ -49,7 +70,7 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import SimpleQueryPlanViewer from "./SimpleQueryPlanViewer.vue";
-import { formatExplainPlanAsText } from "@/utils/ui-utils";
+import { formatExplainPlanAsText, formatSQL, applySyntaxHighlighting } from "@/utils/ui-utils";
 
 export default defineComponent({
   name: "ExplainPlanFormatter",
@@ -109,6 +130,11 @@ export default defineComponent({
         return false;
       }
     },
+
+    formattedQuery(): string {
+      if (!this.query) return "";
+      return formatSQL(this.query);
+    },
   },
   watch: {
     // Reset to default mode when plan changes
@@ -117,12 +143,34 @@ export default defineComponent({
         this.displayMode = "json";
       }
     },
+    // Re-apply syntax highlighting when switching tabs
+    displayMode() {
+      this.$nextTick(() => {
+        applySyntaxHighlighting({ sqlSelector: ".sql-query-display code" });
+      });
+    },
+    // Re-apply syntax highlighting when query changes
+    formattedQuery() {
+      this.$nextTick(() => {
+        applySyntaxHighlighting({ sqlSelector: ".sql-query-display code" });
+      });
+    },
   },
   mounted() {
     // If visual mode is selected but plan is not valid, switch to JSON
     if (this.displayMode === "visual" && !this.hasValidPlan) {
       this.displayMode = "json";
     }
+    // Apply syntax highlighting to SQL queries
+    this.$nextTick(() => {
+      applySyntaxHighlighting({ sqlSelector: ".sql-query-display code" });
+    });
+  },
+  updated() {
+    // Re-apply syntax highlighting when content changes
+    this.$nextTick(() => {
+      applySyntaxHighlighting({ sqlSelector: ".sql-query-display code" });
+    });
   },
   methods: {
     copyToClipboard(text: string) {

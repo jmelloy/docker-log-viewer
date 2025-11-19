@@ -7,6 +7,7 @@ import hljs from "highlight.js/lib/core";
 import json from "highlight.js/lib/languages/json";
 import sql from "highlight.js/lib/languages/sql";
 import graphql from "highlight.js/lib/languages/graphql";
+import type { Plan, PlanNodeType } from "@/types";
 
 // Register languages
 hljs.registerLanguage("json", json);
@@ -319,11 +320,44 @@ export function formatSQL(sql: string): string {
   return output.join("\n");
 }
 
-export function formatExplainPlanAsText(planJson: any): string {
+export function explainPlanLine(node: PlanNodeType): string {
+  let line = "";
+  if (node["Index Name"]) {
+    line += ` using ${node["Index Name"]}`;
+  }
+
+  if (node["Relation Name"]) {
+    line += ` on ${node["Relation Name"]}`;
+    if (node["Alias"] && node["Alias"] !== node["Relation Name"]) {
+      line += ` ${node["Alias"]}`;
+    }
+  }
+
+  // Cost and rows
+  const costStart = node["Startup Cost"] !== undefined ? node["Startup Cost"].toFixed(2) : "0.00";
+  const costEnd = node["Total Cost"] !== undefined ? node["Total Cost"].toFixed(2) : "0.00";
+  const rows = node["Plan Rows"] !== undefined ? node["Plan Rows"] : 0;
+  const width = node["Plan Width"] !== undefined ? node["Plan Width"] : 0;
+
+  line += `  (cost=${costStart}..${costEnd} rows=${rows} width=${width})`;
+
+  // Actual time if available
+  if (node["Actual Startup Time"] !== undefined && node["Actual Total Time"] !== undefined) {
+    const actualStart = node["Actual Startup Time"].toFixed(3);
+    const actualEnd = node["Actual Total Time"].toFixed(3);
+    const actualRows = node["Actual Rows"] !== undefined ? node["Actual Rows"] : 0;
+    const loops = node["Actual Loops"] !== undefined ? node["Actual Loops"] : 1;
+    line += ` (actual time=${actualStart}..${actualEnd} rows=${actualRows} loops=${loops})`;
+  }
+  return line;
+}
+export function formatExplainPlanAsText(planJson: Plan | Plan[]): string {
   let output = [];
 
-  const formatNode = (node, indent = 0, isLast = true, prefix = "") => {
-    const spaces = "  ".repeat(indent);
+  const formatNode = (node: PlanNodeType, level = 0, isLast = true, prefix = "") => {
+    let indent = level;
+
+    let spaces = "  ".repeat(indent);
     let line = spaces;
 
     // Add tree structure characters
@@ -331,31 +365,13 @@ export function formatExplainPlanAsText(planJson: any): string {
       line = prefix + (isLast ? "└─ " : "├─ ");
     }
 
+    if (node["Subplan Name"] !== undefined) {
+      output.push(`${spaces}${node["Subplan Name"]}`);
+    }
+
     // Node type and relation
     line += node["Node Type"];
-    if (node["Relation Name"]) {
-      line += ` on ${node["Relation Name"]}`;
-      if (node["Alias"] && node["Alias"] !== node["Relation Name"]) {
-        line += ` ${node["Alias"]}`;
-      }
-    }
-
-    // Cost and rows
-    const costStart = node["Startup Cost"] !== undefined ? node["Startup Cost"].toFixed(2) : "0.00";
-    const costEnd = node["Total Cost"] !== undefined ? node["Total Cost"].toFixed(2) : "0.00";
-    const rows = node["Plan Rows"] !== undefined ? node["Plan Rows"] : 0;
-    const width = node["Plan Width"] !== undefined ? node["Plan Width"] : 0;
-
-    line += `  (cost=${costStart}..${costEnd} rows=${rows} width=${width})`;
-
-    // Actual time if available
-    if (node["Actual Startup Time"] !== undefined && node["Actual Total Time"] !== undefined) {
-      const actualStart = node["Actual Startup Time"].toFixed(3);
-      const actualEnd = node["Actual Total Time"].toFixed(3);
-      const actualRows = node["Actual Rows"] !== undefined ? node["Actual Rows"] : 0;
-      const loops = node["Actual Loops"] !== undefined ? node["Actual Loops"] : 1;
-      line += ` (actual time=${actualStart}..${actualEnd} rows=${actualRows} loops=${loops})`;
-    }
+    line += explainPlanLine(node);
 
     output.push(line);
 
@@ -414,6 +430,7 @@ export function formatExplainPlanAsText(planJson: any): string {
       if (plan["Execution Time"] !== undefined) {
         output.push(`Execution Time: ${plan["Execution Time"].toFixed(3)} ms`);
       }
+      output.push("");
     });
   }
   // Format the main plan
@@ -428,6 +445,5 @@ export function formatExplainPlanAsText(planJson: any): string {
       output.push(`Execution Time: ${planJson["Execution Time"].toFixed(3)} ms`);
     }
   }
-  console.log(output.join("\n"));
   return output.join("\n");
 }

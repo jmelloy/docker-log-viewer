@@ -250,3 +250,134 @@ func Close() {
 		db.Close()
 	}
 }
+
+type PlanNode struct {
+	NodeType            string      `json:"Node Type"`
+	RelationName        string      `json:"Relation Name,omitempty"`
+	Alias               string      `json:"Alias,omitempty"`
+	StartupCost         float64     `json:"Startup Cost,omitempty"`
+	TotalCost           float64     `json:"Total Cost,omitempty"`
+	PlanRows            int         `json:"Plan Rows,omitempty"`
+	PlanWidth           int         `json:"Plan Width,omitempty"`
+	ActualStartupTime   float64     `json:"Actual Startup Time,omitempty"`
+	ActualTotalTime     float64     `json:"Actual Total Time,omitempty"`
+	ActualRows          int         `json:"Actual Rows,omitempty"`
+	ActualLoops         int         `json:"Actual Loops,omitempty"`
+	Filter              string      `json:"Filter,omitempty"`
+	RowsRemovedByFilter int         `json:"Rows Removed by Filter,omitempty"`
+	IndexCond           string      `json:"Index Cond,omitempty"`
+	HashCond            string      `json:"Hash Cond,omitempty"`
+	JoinFilter          string      `json:"Join Filter,omitempty"`
+	SortKey             interface{} `json:"Sort Key,omitempty"` // string or []string
+	Plans               []PlanNode  `json:"Plans,omitempty"`
+}
+
+type Plan struct {
+	Plan          PlanNode `json:"Plan"`
+	PlanningTime  float64  `json:"Planning Time,omitempty"`
+	ExecutionTime float64  `json:"Execution Time,omitempty"`
+}
+
+func FormatExplainPlanAsText(planJSON any) (string, error) {
+	var output []string
+
+	var formatNode func(node PlanNode, indent int, isLast bool, prefix string)
+	formatNode = func(node PlanNode, indent int, isLast bool, prefix string) {
+		line := ""
+
+		if indent > 0 {
+			if isLast {
+				line = prefix + "└─ "
+			} else {
+				line = prefix + "├─ "
+			}
+		} else {
+			line = strings.Repeat("  ", indent)
+		}
+
+		line += node.NodeType
+		if node.RelationName != "" {
+			line += fmt.Sprintf(" on %s", node.RelationName)
+			if node.Alias != "" && node.Alias != node.RelationName {
+				line += fmt.Sprintf(" %s", node.Alias)
+			}
+		}
+
+		line += fmt.Sprintf("  (cost=%.2f..%.2f rows=%d width=%d)",
+			node.StartupCost, node.TotalCost, node.PlanRows, node.PlanWidth)
+
+		if node.ActualStartupTime > 0 || node.ActualTotalTime > 0 {
+			loops := node.ActualLoops
+			if loops == 0 {
+				loops = 1
+			}
+			line += fmt.Sprintf(" (actual time=%.3f..%.3f rows=%d loops=%d)",
+				node.ActualStartupTime, node.ActualTotalTime, node.ActualRows, loops)
+		}
+
+		output = append(output, line)
+
+		childPrefix := prefix
+		if isLast {
+			childPrefix += "   "
+		} else {
+			childPrefix += "│  "
+		}
+
+		if node.Filter != "" {
+			output = append(output, childPrefix+fmt.Sprintf("Filter: %s", node.Filter))
+			if node.RowsRemovedByFilter > 0 {
+				output = append(output, childPrefix+fmt.Sprintf("Rows Removed by Filter: %d", node.RowsRemovedByFilter))
+			}
+		}
+		if node.IndexCond != "" {
+			output = append(output, childPrefix+fmt.Sprintf("Index Cond: %s", node.IndexCond))
+		}
+		if node.HashCond != "" {
+			output = append(output, childPrefix+fmt.Sprintf("Hash Cond: %s", node.HashCond))
+		}
+		if node.JoinFilter != "" {
+			output = append(output, childPrefix+fmt.Sprintf("Join Filter: %s", node.JoinFilter))
+		}
+		if node.SortKey != nil {
+			sortKeys := ""
+			switch v := node.SortKey.(type) {
+			case []string:
+				sortKeys = strings.Join(v, ", ")
+			case string:
+				sortKeys = v
+			}
+			output = append(output, childPrefix+fmt.Sprintf("Sort Key: %s", sortKeys))
+		}
+
+		for i, child := range node.Plans {
+			formatNode(child, indent+1, i == len(node.Plans)-1, childPrefix)
+		}
+	}
+
+	switch p := planJSON.(type) {
+	case []Plan:
+		for _, plan := range p {
+			formatNode(plan.Plan, 0, true, "")
+			if plan.PlanningTime > 0 {
+				output = append(output, fmt.Sprintf("Planning Time: %.3f ms", plan.PlanningTime))
+			}
+			if plan.ExecutionTime > 0 {
+				output = append(output, fmt.Sprintf("Execution Time: %.3f ms", plan.ExecutionTime))
+			}
+			output = append(output, "")
+		}
+	case Plan:
+		formatNode(p.Plan, 0, true, "")
+		if p.PlanningTime > 0 {
+			output = append(output, fmt.Sprintf("Planning Time: %.3f ms", p.PlanningTime))
+		}
+		if p.ExecutionTime > 0 {
+			output = append(output, fmt.Sprintf("Execution Time: %.3f ms", p.ExecutionTime))
+		}
+	default:
+		return "", fmt.Errorf("unsupported plan type: %T", planJSON)
+	}
+
+	return strings.Join(output, "\n"), nil
+}

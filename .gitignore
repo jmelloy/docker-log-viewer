@@ -64,3 +64,4 @@ web/js/test-inject-schema.js
 /graphql-tester
 /analyze
 /test-parser
+.env
