@@ -40,7 +40,7 @@
         <div class="view-header">
           <button @click="copyToClipboard(explainPlan)" class="btn-copy" title="Copy to clipboard">📋 Copy</button>
         </div>
-        <pre class="text-display" style="max-height: 75vh">{{ explainPlan }}</pre>
+        <pre class="text-display" style="max-height: 75vh">{{ textPlan }}</pre>
       </div>
     </div>
   </div>
@@ -49,6 +49,7 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import SimpleQueryPlanViewer from "./SimpleQueryPlanViewer.vue";
+import { formatExplainPlanAsText } from "@/utils/ui-utils";
 
 export default defineComponent({
   name: "ExplainPlanFormatter",
@@ -84,6 +85,16 @@ export default defineComponent({
         return JSON.stringify(parsed, null, 2);
       } catch (e) {
         // If not valid JSON, return as-is
+        return this.explainPlan;
+      }
+    },
+
+    textPlan(): string {
+      if (!this.explainPlan) return "";
+      try {
+        const parsed = JSON.parse(this.explainPlan);
+        return formatExplainPlanAsText(parsed);
+      } catch (e) {
         return this.explainPlan;
       }
     },

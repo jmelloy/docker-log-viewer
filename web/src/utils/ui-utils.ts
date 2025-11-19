@@ -318,3 +318,116 @@ export function formatSQL(sql: string): string {
 
   return output.join("\n");
 }
+
+export function formatExplainPlanAsText(planJson: any): string {
+  let output = [];
+
+  const formatNode = (node, indent = 0, isLast = true, prefix = "") => {
+    const spaces = "  ".repeat(indent);
+    let line = spaces;
+
+    // Add tree structure characters
+    if (indent > 0) {
+      line = prefix + (isLast ? "└─ " : "├─ ");
+    }
+
+    // Node type and relation
+    line += node["Node Type"];
+    if (node["Relation Name"]) {
+      line += ` on ${node["Relation Name"]}`;
+      if (node["Alias"] && node["Alias"] !== node["Relation Name"]) {
+        line += ` ${node["Alias"]}`;
+      }
+    }
+
+    // Cost and rows
+    const costStart = node["Startup Cost"] !== undefined ? node["Startup Cost"].toFixed(2) : "0.00";
+    const costEnd = node["Total Cost"] !== undefined ? node["Total Cost"].toFixed(2) : "0.00";
+    const rows = node["Plan Rows"] !== undefined ? node["Plan Rows"] : 0;
+    const width = node["Plan Width"] !== undefined ? node["Plan Width"] : 0;
+
+    line += `  (cost=${costStart}..${costEnd} rows=${rows} width=${width})`;
+
+    // Actual time if available
+    if (node["Actual Startup Time"] !== undefined && node["Actual Total Time"] !== undefined) {
+      const actualStart = node["Actual Startup Time"].toFixed(3);
+      const actualEnd = node["Actual Total Time"].toFixed(3);
+      const actualRows = node["Actual Rows"] !== undefined ? node["Actual Rows"] : 0;
+      const loops = node["Actual Loops"] !== undefined ? node["Actual Loops"] : 1;
+      line += ` (actual time=${actualStart}..${actualEnd} rows=${actualRows} loops=${loops})`;
+    }
+
+    output.push(line);
+
+    // Filter condition
+    if (node["Filter"]) {
+      const filterPrefix = prefix + (isLast ? "   " : "│  ");
+      output.push(filterPrefix + `Filter: ${node["Filter"]}`);
+      if (node["Rows Removed by Filter"] !== undefined) {
+        output.push(filterPrefix + `Rows Removed by Filter: ${node["Rows Removed by Filter"]}`);
+      }
+    }
+
+    // Index condition
+    if (node["Index Cond"]) {
+      const condPrefix = prefix + (isLast ? "   " : "│  ");
+      output.push(condPrefix + `Index Cond: ${node["Index Cond"]}`);
+    }
+
+    // Hash condition
+    if (node["Hash Cond"]) {
+      const hashPrefix = prefix + (isLast ? "   " : "│  ");
+      output.push(hashPrefix + `Hash Cond: ${node["Hash Cond"]}`);
+    }
+
+    // Join Filter
+    if (node["Join Filter"]) {
+      const joinPrefix = prefix + (isLast ? "   " : "│  ");
+      output.push(joinPrefix + `Join Filter: ${node["Join Filter"]}`);
+    }
+
+    // Sort Key
+    if (node["Sort Key"]) {
+      const sortPrefix = prefix + (isLast ? "   " : "│  ");
+      const sortKeys = Array.isArray(node["Sort Key"]) ? node["Sort Key"].join(", ") : node["Sort Key"];
+      output.push(sortPrefix + `Sort Key: ${sortKeys}`);
+    }
+
+    // Process child plans
+    if (node["Plans"] && node["Plans"].length > 0) {
+      const childPrefix = prefix + (isLast ? "   " : "│  ");
+      node["Plans"].forEach((child, idx) => {
+        const childIsLast = idx === node["Plans"].length - 1;
+        formatNode(child, indent + 1, childIsLast, childPrefix);
+      });
+    }
+  };
+
+  if (planJson && Array.isArray(planJson)) {
+    planJson.forEach((plan) => {
+      if (plan["Plan"]) {
+        formatNode(plan["Plan"], 0);
+      }
+      if (plan["Planning Time"] !== undefined) {
+        output.push(`Planning Time: ${plan["Planning Time"].toFixed(3)} ms`);
+      }
+      if (plan["Execution Time"] !== undefined) {
+        output.push(`Execution Time: ${plan["Execution Time"].toFixed(3)} ms`);
+      }
+    });
+  }
+  // Format the main plan
+  if (planJson && planJson["Plan"]) {
+    formatNode(planJson["Plan"], 0);
+
+    // Add planning and execution time
+    if (planJson["Planning Time"] !== undefined) {
+      output.push(`Planning Time: ${planJson["Planning Time"].toFixed(3)} ms`);
+    }
+    if (planJson["Execution Time"] !== undefined) {
+      output.push(`Execution Time: ${planJson["Execution Time"].toFixed(3)} ms`);
+    }
+  }
+  console.log(output.join("\n"));
+  return output.join("\n");
+}
