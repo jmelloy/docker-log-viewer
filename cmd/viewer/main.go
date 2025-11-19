@@ -1527,6 +1527,13 @@ func (wa *WebApp) handleSQLDetail(w http.ResponseWriter, r *http.Request) {
 
 	// Extract query hash from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/sql/")
+	
+	// Check if this is an export-notion request
+	if strings.HasSuffix(path, "/export-notion") {
+		wa.handleSQLNotionExport(w, r)
+		return
+	}
+	
 	queryHash := strings.TrimSpace(path)
 	if queryHash == "" {
 		http.Error(w, "Invalid query hash", http.StatusBadRequest)
@@ -1545,6 +1552,366 @@ func (wa *WebApp) handleSQLDetail(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(detail)
+}
+
+// handleSQLNotionExport exports SQL query details to Notion
+func (wa *WebApp) handleSQLNotionExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract query hash from path (remove "/export-notion" suffix)
+	path := strings.TrimPrefix(r.URL.Path, "/api/sql/")
+	queryHash := strings.TrimSuffix(path, "/export-notion")
+	queryHash = strings.TrimSpace(queryHash)
+	
+	if queryHash == "" {
+		http.Error(w, "Invalid query hash", http.StatusBadRequest)
+		return
+	}
+
+	// Get SQL query details
+	detail, err := wa.store.GetSQLQueryDetailByHash(queryHash)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if detail == nil {
+		http.Error(w, "SQL query not found", http.StatusNotFound)
+		return
+	}
+
+	// Get Notion API key and database ID from environment
+	notionAPIKey := os.Getenv("NOTION_API_KEY")
+	notionDatabaseID := os.Getenv("NOTION_DATABASE_ID")
+
+	if notionAPIKey == "" {
+		http.Error(w, "Notion API key not configured. Set NOTION_API_KEY environment variable.", http.StatusServiceUnavailable)
+		return
+	}
+
+	if notionDatabaseID == "" {
+		http.Error(w, "Notion database ID not configured. Set NOTION_DATABASE_ID environment variable.", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Create Notion page
+	pageURL, err := createNotionPage(notionAPIKey, notionDatabaseID, detail)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create Notion page: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"url": pageURL,
+		"message": "Successfully exported to Notion",
+	})
+}
+
+// createNotionPage creates a new page in Notion with the SQL query details
+func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (string, error) {
+	// Format SQL query with basic formatting
+	formattedQuery := formatSQLForDisplay(detail.Query)
+	formattedNormalized := formatSQLForDisplay(detail.NormalizedQuery)
+	
+	// Get execution info
+	var requestID string
+	var executedAt string
+	if len(detail.RelatedExecutions) > 0 {
+		firstExec := detail.RelatedExecutions[0]
+		requestID = firstExec.RequestIDHeader
+		executedAt = firstExec.ExecutedAt.Format(time.RFC3339)
+	}
+
+	// Build page content
+	title := fmt.Sprintf("SQL Query: %s on %s", detail.Operation, detail.TableName)
+	
+	// Create blocks for the page content
+	blocks := []map[string]interface{}{
+		// Metadata heading
+		{
+			"object": "block",
+			"type":   "heading_2",
+			"heading_2": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": "Query Information"},
+					},
+				},
+			},
+		},
+		// Metadata table as bulleted list
+		{
+			"object": "block",
+			"type":   "bulleted_list_item",
+			"bulleted_list_item": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": fmt.Sprintf("Operation: %s", detail.Operation)},
+					},
+				},
+			},
+		},
+		{
+			"object": "block",
+			"type":   "bulleted_list_item",
+			"bulleted_list_item": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": fmt.Sprintf("Table: %s", detail.TableName)},
+					},
+				},
+			},
+		},
+		{
+			"object": "block",
+			"type":   "bulleted_list_item",
+			"bulleted_list_item": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": fmt.Sprintf("Total Executions: %d", detail.TotalExecutions)},
+					},
+				},
+			},
+		},
+		{
+			"object": "block",
+			"type":   "bulleted_list_item",
+			"bulleted_list_item": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": fmt.Sprintf("Average Duration: %.2fms", detail.AvgDuration)},
+					},
+				},
+			},
+		},
+	}
+
+	// Add request ID and execution date if available
+	if requestID != "" {
+		blocks = append(blocks, map[string]interface{}{
+			"object": "block",
+			"type":   "bulleted_list_item",
+			"bulleted_list_item": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": fmt.Sprintf("Request ID: %s", requestID)},
+					},
+				},
+			},
+		})
+	}
+	
+	if executedAt != "" {
+		blocks = append(blocks, map[string]interface{}{
+			"object": "block",
+			"type":   "bulleted_list_item",
+			"bulleted_list_item": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": fmt.Sprintf("Last Executed: %s", executedAt)},
+					},
+				},
+			},
+		})
+	}
+
+	// SQL Query section
+	blocks = append(blocks,
+		map[string]interface{}{
+			"object": "block",
+			"type":   "heading_2",
+			"heading_2": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": "SQL Query"},
+					},
+				},
+			},
+		},
+		map[string]interface{}{
+			"object": "block",
+			"type":   "code",
+			"code": map[string]interface{}{
+				"language": "sql",
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": truncateText(formattedQuery, 2000)},
+					},
+				},
+			},
+		},
+	)
+
+	// Normalized Query section
+	blocks = append(blocks,
+		map[string]interface{}{
+			"object": "block",
+			"type":   "heading_2",
+			"heading_2": map[string]interface{}{
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": "Normalized Query"},
+					},
+				},
+			},
+		},
+		map[string]interface{}{
+			"object": "block",
+			"type":   "code",
+			"code": map[string]interface{}{
+				"language": "sql",
+				"rich_text": []map[string]interface{}{
+					{
+						"type": "text",
+						"text": map[string]string{"content": truncateText(formattedNormalized, 2000)},
+					},
+				},
+			},
+		},
+	)
+
+	// EXPLAIN Plan section (if available)
+	if detail.ExplainPlan != "" {
+		explainText := formatExplainPlanForNotion(detail.ExplainPlan)
+		blocks = append(blocks,
+			map[string]interface{}{
+				"object": "block",
+				"type":   "heading_2",
+				"heading_2": map[string]interface{}{
+					"rich_text": []map[string]interface{}{
+						{
+							"type": "text",
+							"text": map[string]string{"content": "EXPLAIN Plan"},
+						},
+					},
+				},
+			},
+			map[string]interface{}{
+				"object": "block",
+				"type":   "code",
+				"code": map[string]interface{}{
+					"language": "plain text",
+					"rich_text": []map[string]interface{}{
+						{
+							"type": "text",
+							"text": map[string]string{"content": truncateText(explainText, 2000)},
+						},
+					},
+				},
+			},
+		)
+	}
+
+	// Build the request payload
+	payload := map[string]interface{}{
+		"parent": map[string]string{
+			"database_id": databaseID,
+		},
+		"properties": map[string]interface{}{
+			"Name": map[string]interface{}{
+				"title": []map[string]interface{}{
+					{
+						"text": map[string]string{
+							"content": truncateText(title, 100),
+						},
+					},
+				},
+			},
+		},
+		"children": blocks,
+	}
+
+	// Convert to JSON
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Make the API request to Notion
+	req, err := http.NewRequest("POST", "https://api.notion.com/v1/pages", bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Notion-Version", "2022-06-28")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("notion API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response to get page URL
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	pageURL, ok := result["url"].(string)
+	if !ok {
+		return "", fmt.Errorf("page URL not found in response")
+	}
+
+	return pageURL, nil
+}
+
+// formatSQLForDisplay applies basic SQL formatting
+func formatSQLForDisplay(sql string) string {
+	if sql == "" {
+		return ""
+	}
+	// Add newlines before major keywords
+	formatted := regexp.MustCompile(`\s+(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|ORDER BY|GROUP BY|HAVING|LIMIT|OFFSET)`).
+		ReplaceAllString(sql, "\n$1")
+	return strings.TrimSpace(formatted)
+}
+
+// formatExplainPlanForNotion converts JSON explain plan to readable text
+func formatExplainPlanForNotion(explainPlan string) string {
+	// Try to parse as JSON and format nicely
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(explainPlan), &parsed); err == nil {
+		// It's valid JSON, format it nicely
+		formatted, err := json.MarshalIndent(parsed, "", "  ")
+		if err == nil {
+			return string(formatted)
+		}
+	}
+	// Not JSON or formatting failed, return as-is
+	return explainPlan
+}
+
+// truncateText truncates text to maxLen characters, adding ellipsis if truncated
+func truncateText(text string, maxLen int) string {
+	if len(text) <= maxLen {
+		return text
+	}
+	return text[:maxLen-3] + "..."
 }
 
 func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
