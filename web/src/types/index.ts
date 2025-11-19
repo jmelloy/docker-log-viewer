@@ -258,3 +258,19 @@ export interface SQLQueryDetail {
   indexAnalysis?: any;
   relatedExecutions: ExecutionReference[];
 }
+
+export interface PlanNodeType {
+  "Node Type": string;
+  "Relation Name"?: string;
+  "Startup Cost"?: number;
+  "Total Cost"?: number;
+  "Plan Rows"?: number;
+  "Plan Width"?: number;
+  "Actual Rows"?: number;
+  "Actual Loops"?: number;
+  "Index Name"?: string;
+  "Scan Direction"?: string;
+  Filter?: string;
+  Plans?: PlanNodeType[];
+  [key: string]: any;
+}
