@@ -4,53 +4,53 @@
    ======================================== */
 :root {
   /* Background Colors */
-  --bg-primary: var(--bg-primary);
-  --bg-secondary: var(--bg-secondary);
-  --bg-tertiary: var(--bg-tertiary);
-  --bg-hover: var(--bg-hover);
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-hover: #1c2128;
   
   /* Border Colors */
-  --border-primary: var(--border-primary);
-  --border-hover: var(--border-hover);
+  --border-primary: #30363d;
+  --border-hover: #484f58;
   
   /* Text Colors */
-  --text-primary: var(--text-primary);
-  --text-secondary: var(--text-secondary);
-  --text-muted: var(--text-muted);
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
   
   /* Accent Colors - Blue */
-  --color-blue: var(--color-blue);
-  --color-blue-light: var(--color-blue-light);
-  --color-blue-lighter: var(--color-blue-lighter);
-  --color-blue-dark: var(--color-blue-dark);
+  --color-blue: #58a6ff;
+  --color-blue-light: #79c0ff;
+  --color-blue-lighter: #a5d6ff;
+  --color-blue-dark: #1f6feb;
   
   /* Accent Colors - Green */
-  --color-green: var(--color-green);
-  --color-green-hover: var(--color-green-hover);
-  --color-green-light: var(--color-green-light);
-  --color-green-dark: var(--color-green-dark);
+  --color-green: #238636;
+  --color-green-hover: #2ea043;
+  --color-green-light: #7ee787;
+  --color-green-dark: #1f6f42;
   
   /* Accent Colors - Red */
-  --color-red: var(--color-red);
-  --color-red-dark: var(--color-red-dark);
-  --color-red-darker: var(--color-red-darker);
-  --color-red-darkest: var(--color-red-darkest);
-  --color-red-light: var(--color-red-light);
+  --color-red: #f85149;
+  --color-red-dark: #da3633;
+  --color-red-darker: #5a1e1e;
+  --color-red-darkest: #1f1214;
+  --color-red-light: #ff7b72;
   
   /* Accent Colors - Orange/Yellow */
-  --color-orange: var(--color-orange);
-  --color-orange-light: var(--color-orange-light);
-  --color-orange-lighter: var(--color-orange-lighter);
-  --color-yellow: var(--color-yellow);
-  --color-yellow-dark: var(--color-yellow-dark);
+  --color-orange: #f0883e;
+  --color-orange-light: #ffa657;
+  --color-orange-lighter: #ffb84d;
+  --color-yellow: #dbb861;
+  --color-yellow-dark: #d29922;
   
   /* Accent Colors - Purple */
-  --color-purple: var(--color-purple);
-  --color-purple-dark: var(--color-purple-dark);
+  --color-purple: #d2a8ff;
+  --color-purple-dark: #bc8cff;
   
   /* Accent Colors - Cyan */
-  --color-cyan: var(--color-cyan);
-  --color-cyan-light: var(--color-cyan-light);
+  --color-cyan: #76e3ea;
+  --color-cyan-light: #b3f0ff;
   
   /* Spacing */
   --spacing-xs: 0.25rem;
@@ -71,8 +71,8 @@
   --transition-slow: 0.3s ease;
   
   /* Fonts */
-  --font-mono: var(--font-mono);
-  --font-mono-alt: var(--font-mono-alt);
+  --font-mono: "Monaco", "Menlo", "Courier New", monospace;
+  --font-mono-alt: "Monaco", "Menlo", "Ubuntu Mono", monospace;
 }
 
 * {
