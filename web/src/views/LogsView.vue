@@ -1417,13 +1417,13 @@ export default defineComponent({
       try {
         // Enhance metadata with request_id and operationName from current context
         const enhancedMetadata = { ...metadata };
-        
+
         // Add request_id from trace filters if available
         const requestId = this.traceFilters.get("request_id");
         if (requestId) {
           enhancedMetadata.requestId = requestId;
         }
-        
+
         // Try to find gql.operationName from recent logs matching the request_id
         if (requestId) {
           const recentLogs = this.logs.slice(-100);
@@ -1437,7 +1437,7 @@ export default defineComponent({
             }
           }
         }
-        
+
         // Determine connection string based on container ports
         const connectionString = this.getDatabaseConnectionString();
 
@@ -1471,6 +1471,7 @@ export default defineComponent({
           this.explainData.error = null;
           this.explainData.planSource = planText;
           this.explainData.planQuery = result.query || "";
+          this.explainData.formattedQuery = formatSQLUtil(result.query || "");
           this.explainData.metadata = enhancedMetadata;
         }
 
@@ -1559,23 +1560,23 @@ export default defineComponent({
         let title = "Query Plan from Logseidon";
         if (this.explainData.metadata) {
           const parts = [];
-          
+
           // Add request_id if available
           const requestId = this.traceFilters.get("request_id") || this.explainData.metadata.requestId;
           if (requestId) {
             parts.push(requestId);
           }
-          
+
           // Add db.table if available
           if (this.explainData.metadata.table) {
             parts.push(this.explainData.metadata.table);
           }
-          
+
           // Add gql.operationName if available
           if (this.explainData.metadata.operationName) {
             parts.push(this.explainData.metadata.operationName);
           }
-          
+
           if (parts.length > 0) {
             title = parts.join(" / ");
           }
@@ -1596,7 +1597,7 @@ export default defineComponent({
         const queryInput = document.createElement("input");
         queryInput.type = "hidden";
         queryInput.name = "query";
-        queryInput.value = this.explainData.planQuery;
+        queryInput.value = this.explainData.formattedQuery || this.explainData.planQuery;
         form.appendChild(queryInput);
 
         document.body.appendChild(form);

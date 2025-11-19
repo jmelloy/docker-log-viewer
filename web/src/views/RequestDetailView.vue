@@ -844,15 +844,8 @@
         >
           {{ explainPlanData.error }}
         </div>
-        <div
-          v-if="explainPlanData && !explainPlanData.error"
-          class="d-flex flex-column"
-          style="height: 100%"
-        >
-          <ExplainPlanFormatter
-            :explain-plan="explainPlanData.planSource"
-            :query="explainPlanData.planQuery"
-          />
+        <div v-if="explainPlanData && !explainPlanData.error" class="d-flex flex-column" style="height: 100%">
+          <ExplainPlanFormatter :explain-plan="explainPlanData.planSource" :query="explainPlanData.planQuery" />
         </div>
       </div>
     </div>
@@ -1451,7 +1444,12 @@ export default defineComponent({
           table: query.table,
           operationName: query.graphqlOperation,
         };
-        this.runExplain(query.query, variables, this.requestDetail?.server?.defaultDatabase?.connectionString, metadata);
+        this.runExplain(
+          query.query,
+          variables,
+          this.requestDetail?.server?.defaultDatabase?.connectionString,
+          metadata
+        );
       }
     },
 
@@ -1485,22 +1483,22 @@ export default defineComponent({
         let title = "Query Plan from Logseidon";
         if (this.explainPlanData.metadata) {
           const parts = [];
-          
+
           // Add request_id if available
           if (this.explainPlanData.metadata.requestId) {
             parts.push(this.explainPlanData.metadata.requestId);
           }
-          
+
           // Add db.table if available
           if (this.explainPlanData.metadata.table) {
             parts.push(this.explainPlanData.metadata.table);
           }
-          
+
           // Add gql.operationName if available
           if (this.explainPlanData.metadata.operationName) {
             parts.push(this.explainPlanData.metadata.operationName);
           }
-          
+
           if (parts.length > 0) {
             title = parts.join(" / ");
           }
@@ -2003,4 +2001,3 @@ export default defineComponent({
   },
 });
 </script>
-
