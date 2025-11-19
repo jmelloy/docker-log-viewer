@@ -1989,16 +1989,3 @@ export default defineComponent({
 });
 </script>
 
-<style scoped>
-.sql-query-text-clickable,
-.query-text-clickable {
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.sql-query-text-clickable:hover,
-.query-text-clickable:hover {
-  background-color: rgba(110, 118, 129, 0.15);
-  border-radius: 4px;
-}
-</style>
