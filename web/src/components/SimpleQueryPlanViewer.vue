@@ -5,7 +5,7 @@
     </div>
     <div v-else-if="!plan" class="text-muted">No query plan available.</div>
     <div v-else class="plan-tree">
-      <PlanNode :node="plan" :level="0" />
+      <plan-node-item :node="plan" :level="0" />
     </div>
   </div>
 </template>
@@ -13,7 +13,7 @@
 <script lang="ts">
 import { defineComponent, PropType } from "vue";
 
-interface PlanNode {
+interface PlanNodeType {
   "Node Type": string;
   "Relation Name"?: string;
   "Startup Cost"?: number;
@@ -24,15 +24,16 @@ interface PlanNode {
   "Actual Loops"?: number;
   "Index Name"?: string;
   "Scan Direction"?: string;
-  Plans?: PlanNode[];
+  Plans?: PlanNodeType[];
   [key: string]: any;
 }
 
-const PlanNodeComponent = defineComponent({
-  name: "PlanNode",
+// Recursive component for rendering plan nodes
+const PlanNodeItem = defineComponent({
+  name: "PlanNodeItem",
   props: {
     node: {
-      type: Object as PropType<PlanNode>,
+      type: Object as PropType<PlanNodeType>,
       required: true,
     },
     level: {
@@ -84,7 +85,7 @@ const PlanNodeComponent = defineComponent({
         <span v-if="relationInfo" class="relation-info">on {{ relationInfo }}</span>
       </div>
       <div v-if="costInfo" class="node-details">{{ costInfo }}</div>
-      <PlanNode
+      <plan-node-item
         v-for="(child, index) in node.Plans"
         :key="index"
         :node="child"
@@ -97,7 +98,7 @@ const PlanNodeComponent = defineComponent({
 export default defineComponent({
   name: "SimpleQueryPlanViewer",
   components: {
-    PlanNode: PlanNodeComponent,
+    PlanNodeItem,
   },
   props: {
     planSource: {
@@ -107,7 +108,7 @@ export default defineComponent({
   },
   data() {
     return {
-      plan: null as PlanNode | null,
+      plan: null as PlanNodeType | null,
       error: null as string | null,
     };
   },
