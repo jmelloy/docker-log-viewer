@@ -248,8 +248,18 @@ export function formatSQL(sql: string): string {
       const chunkPositions = [];
       while (i < line.length) {
         const char = line[i];
-        if (char === "(") depth++;
-        else if (char === ")") depth--;
+        if (char === "(") {
+          if (depth === -1) {
+            indentStack.push(true);
+          }
+          depth++;
+        } else if (char === ")") {
+          depth--;
+          if (depth < 0) {
+            indentStack.pop();
+            result += "\n" + "  ".repeat(indentStack.length);
+          }
+        }
 
         if (depth == 0) {
           const remaining = line.substring(i);
