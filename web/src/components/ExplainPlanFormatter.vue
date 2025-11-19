@@ -3,9 +3,7 @@
     <div v-if="error" class="alert alert-danger">
       {{ error }}
     </div>
-    <div v-else-if="!explainPlan" class="text-muted">
-      No EXPLAIN plan available.
-    </div>
+    <div v-else-if="!explainPlan" class="text-muted">No EXPLAIN plan available.</div>
     <div v-else class="explain-plan-content">
       <!-- Display mode tabs -->
       <div class="display-mode-tabs">
@@ -16,43 +14,33 @@
         >
           📊 Visual
         </button>
-        <button
-          :class="['tab-button', { active: displayMode === 'json' }]"
-          @click="displayMode = 'json'"
-        >
+        <button :class="['tab-button', { active: displayMode === 'json' }]" @click="displayMode = 'json'">
           📄 JSON
         </button>
-        <button
-          :class="['tab-button', { active: displayMode === 'text' }]"
-          @click="displayMode = 'text'"
-        >
+        <button :class="['tab-button', { active: displayMode === 'text' }]" @click="displayMode = 'text'">
           📝 Text
         </button>
       </div>
 
-      <!-- Visual view using PEV2 -->
+      <!-- Visual view using simple query plan viewer -->
       <div v-if="displayMode === 'visual' && hasValidPlan" class="visual-view">
-        <pev2 :plan-source="formattedPlan" :plan-query="query || ''"></pev2>
+        <SimpleQueryPlanViewer :plan-source="formattedPlan" />
       </div>
 
       <!-- JSON view -->
       <div v-if="displayMode === 'json'" class="json-view">
         <div class="view-header">
-          <button @click="copyToClipboard(formattedPlan)" class="btn-copy" title="Copy to clipboard">
-            📋 Copy
-          </button>
+          <button @click="copyToClipboard(formattedPlan)" class="btn-copy" title="Copy to clipboard">📋 Copy</button>
         </div>
-        <pre class="json-display">{{ formattedPlan }}</pre>
+        <pre class="json-display" style="max-height: 75vh">{{ formattedPlan }}</pre>
       </div>
 
       <!-- Text view (plain) -->
       <div v-if="displayMode === 'text'" class="text-view">
         <div class="view-header">
-          <button @click="copyToClipboard(explainPlan)" class="btn-copy" title="Copy to clipboard">
-            📋 Copy
-          </button>
+          <button @click="copyToClipboard(explainPlan)" class="btn-copy" title="Copy to clipboard">📋 Copy</button>
         </div>
-        <pre class="text-display">{{ explainPlan }}</pre>
+        <pre class="text-display" style="max-height: 75vh">{{ textPlan }}</pre>
       </div>
     </div>
   </div>
@@ -60,12 +48,13 @@
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import { Plan } from "pev2";
+import SimpleQueryPlanViewer from "./SimpleQueryPlanViewer.vue";
+import { formatExplainPlanAsText } from "@/utils/ui-utils";
 
 export default defineComponent({
   name: "ExplainPlanFormatter",
   components: {
-    pev2: Plan,
+    SimpleQueryPlanViewer,
   },
   props: {
     explainPlan: {
@@ -96,6 +85,16 @@ export default defineComponent({
         return JSON.stringify(parsed, null, 2);
       } catch (e) {
         // If not valid JSON, return as-is
+        return this.explainPlan;
+      }
+    },
+
+    textPlan(): string {
+      if (!this.explainPlan) return "";
+      try {
+        const parsed = JSON.parse(this.explainPlan);
+        return formatExplainPlanAsText(parsed);
+      } catch (e) {
         return this.explainPlan;
       }
     },
@@ -140,4 +139,3 @@ export default defineComponent({
   },
 });
 </script>
-

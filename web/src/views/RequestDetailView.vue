@@ -830,7 +830,7 @@
   <div v-if="showExplainPlanPanel" class="side-panel-overlay" @click="closeExplainPlanModal">
     <div class="side-panel" @click.stop>
       <div class="side-panel-header">
-        <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
+        <h3>SQL Query EXPLAIN Plan</h3>
         <div style="display: flex; gap: 0.5rem">
           <button @click="shareExplainPlan" class="btn-secondary" style="padding: 0.5rem 1rem">📋 Share</button>
           <button @click="closeExplainPlanModal">✕</button>
@@ -844,13 +844,8 @@
         >
           {{ explainPlanData.error }}
         </div>
-        <div
-          v-if="explainPlanData && !explainPlanData.error"
-          id="pev2ExplainApp"
-          class="d-flex flex-column"
-          style="height: 100%"
-        >
-          <pev2 :plan-source="explainPlanData.planSource" :plan-query="explainPlanData.planQuery"></pev2>
+        <div v-if="explainPlanData && !explainPlanData.error" class="d-flex flex-column" style="height: 100%">
+          <ExplainPlanFormatter :explain-plan="explainPlanData.planSource" :query="explainPlanData.planQuery" />
         </div>
       </div>
     </div>
@@ -1030,11 +1025,11 @@ import {
   applySyntaxHighlighting,
 } from "@/utils/ui-utils";
 import type { Server, ExecutionDetail, ExplainResponse, ExplainData, ExecuteResponse, SQLQuery } from "@/types";
-import { Plan } from "pev2";
+import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
 
 export default defineComponent({
   components: {
-    pev2: Plan,
+    ExplainPlanFormatter,
   },
   setup() {
     const route = useRoute();
@@ -1431,25 +1426,42 @@ export default defineComponent({
         // Show saved plan
         try {
           const plan = JSON.parse(query.explainPlan);
-          this.displayExplainPlan(plan, query.query);
+          // Pass query metadata for share link
+          const metadata = {
+            requestId: this.requestDetail.request?.requestIdHeader,
+            table: query.table,
+            operationName: query.graphqlOperation,
+          };
+          this.displayExplainPlan(plan, query.query, metadata);
         } catch (err) {
           alert("Error parsing saved plan: " + err.message);
         }
       } else {
         // Run new EXPLAIN
         const variables = query.variables ? JSON.parse(query.variables) : {};
-        this.runExplain(query.query, variables, this.requestDetail?.server?.defaultDatabase?.connectionString);
+        const metadata = {
+          requestId: this.requestDetail.request?.requestIdHeader,
+          table: query.table,
+          operationName: query.graphqlOperation,
+        };
+        this.runExplain(
+          query.query,
+          variables,
+          this.requestDetail?.server?.defaultDatabase?.connectionString,
+          metadata
+        );
       }
     },
 
-    displayExplainPlan(planData, query) {
-      // Convert planData to JSON string for PEV2 component
+    displayExplainPlan(planData, query, metadata = null) {
+      // Convert planData to JSON string for formatter component
       const planSource = typeof planData === "string" ? planData : JSON.stringify(planData, null, 2);
 
       this.explainPlanData = {
         planSource,
         planQuery: query,
         error: null,
+        metadata,
       };
 
       this.showExplainPlanPanel = true;
@@ -1467,27 +1479,28 @@ export default defineComponent({
         form.action = "https://explain.dalibo.com/new";
         form.target = "_blank";
 
-        // Build descriptive title from query and request context
-        let title = "Query Plan";
-        if (this.requestDetail) {
+        // Build hierarchical title: request_id / db.table / gql.operationName
+        let title = "Query Plan from Logseidon";
+        if (this.explainPlanData.metadata) {
           const parts = [];
 
-          // Add request name if available
-          if (this.requestDetail.request?.name) {
-            parts.push(this.requestDetail.request.name);
+          // Add request_id if available
+          if (this.explainPlanData.metadata.requestId) {
+            parts.push(this.explainPlanData.metadata.requestId);
           }
 
-          // Extract table name or operation from the query
-          const query = this.explainPlanData.planQuery.toLowerCase();
-          if (query.includes("from")) {
-            const match = query.match(/from\s+([a-z_][a-z0-9_]*)/i);
-            if (match) {
-              parts.push(`on ${match[1]}`);
-            }
+          // Add db.table if available
+          if (this.explainPlanData.metadata.table) {
+            parts.push(this.explainPlanData.metadata.table);
+          }
+
+          // Add gql.operationName if available
+          if (this.explainPlanData.metadata.operationName) {
+            parts.push(this.explainPlanData.metadata.operationName);
           }
 
           if (parts.length > 0) {
-            title = parts.join(" - ");
+            title = parts.join(" / ");
           }
         }
 
@@ -1518,7 +1531,7 @@ export default defineComponent({
       }
     },
 
-    async runExplain(query, variables = {}, connectionString) {
+    async runExplain(query, variables = {}, connectionString, metadata = null) {
       try {
         // Convert variables to string map (backend expects map[string]string)
         const vars = {};
@@ -1545,7 +1558,7 @@ export default defineComponent({
           alert(`EXPLAIN Error: ${result.error}`);
         } else {
           const displayQuery = result.query || query;
-          this.displayExplainPlan(result.queryPlan, formatSQLUtil(displayQuery));
+          this.displayExplainPlan(result.queryPlan, formatSQLUtil(displayQuery), metadata);
         }
       } catch (error: Error | any) {
         alert(`Failed to run EXPLAIN: ${error instanceof Error ? error.message : String(error)}`);
@@ -1988,4 +2001,3 @@ export default defineComponent({
   },
 });
 </script>
-

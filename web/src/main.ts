@@ -7,9 +7,7 @@ import "tippy.js/dist/tippy.css";
 
 // Import global styles
 import "../static/css/styles.css";
-import "pev2/dist/pev2.css";
 import "highlight.js/styles/github-dark.css";
-// Import PEV2 CSS last to ensure it overrides any conflicting styles
 
 // Set up highlight.js globally
 import hljs from "highlight.js/lib/core";
@@ -31,7 +29,6 @@ if (typeof window !== "undefined") {
 declare global {
   interface Window {
     Vue: any;
-    pev2: any;
     hljs: any;
   }
 }

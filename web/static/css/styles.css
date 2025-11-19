@@ -2421,8 +2421,8 @@ button:disabled {
   color: var(--color-red);
 }
 
-/* Ensure PEV2 content has proper styling */
-.visual-view :deep(.pev2-container) {
+/* Visual view styling */
+.visual-view {
   background: transparent;
   color: var(--text-primary);
 }

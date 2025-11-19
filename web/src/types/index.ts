@@ -69,6 +69,8 @@ export interface ExplainMetadata {
   type?: string;
   operation?: string;
   table?: string;
+  requestId?: string;
+  operationName?: string;
 }
 
 export interface RecentRequest {
@@ -255,4 +257,20 @@ export interface SQLQueryDetail {
   variables?: string;
   indexAnalysis?: any;
   relatedExecutions: ExecutionReference[];
+}
+
+export interface PlanNodeType {
+  "Node Type": string;
+  "Relation Name"?: string;
+  "Startup Cost"?: number;
+  "Total Cost"?: number;
+  "Plan Rows"?: number;
+  "Plan Width"?: number;
+  "Actual Rows"?: number;
+  "Actual Loops"?: number;
+  "Index Name"?: string;
+  "Scan Direction"?: string;
+  Filter?: string;
+  Plans?: PlanNodeType[];
+  [key: string]: any;
 }

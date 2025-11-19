@@ -418,7 +418,7 @@
   <div v-if="showExplainModal" class="side-panel-overlay" @click="closeExplainPlanModal">
     <div class="side-panel" @click.stop>
       <div class="side-panel-header">
-        <h3>SQL Query EXPLAIN Plan (PEV2)</h3>
+        <h3>SQL Query EXPLAIN Plan</h3>
         <div style="display: flex; gap: 0.5rem">
           <button
             v-if="!explainData.error"
@@ -435,8 +435,8 @@
         <div v-if="explainData.error" class="alert alert-danger" style="display: block; margin: 1rem">
           {{ explainData.error }}
         </div>
-        <div v-if="!explainData.error" id="pev2App" class="d-flex flex-column" style="height: 100%">
-          <pev2 :plan-source="explainData.planSource" :plan-query="explainData.planQuery"></pev2>
+        <div v-if="!explainData.error" class="d-flex flex-column" style="height: 100%">
+          <ExplainPlanFormatter :explain-plan="explainData.planSource" :query="explainData.planQuery" />
         </div>
       </div>
     </div>
@@ -543,7 +543,7 @@ import {
   formatSQL as formatSQLUtil,
   applySyntaxHighlighting,
 } from "@/utils/ui-utils";
-import { Plan } from "pev2";
+import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
 import type {
   Container,
   LogMessage,
@@ -562,7 +562,7 @@ import type {
 
 export default defineComponent({
   components: {
-    pev2: Plan,
+    ExplainPlanFormatter,
   },
   data() {
     // Load persisted container state from localStorage (by name, not ID)
@@ -1415,6 +1415,29 @@ export default defineComponent({
 
     async runExplain(query, variables = {}, metadata = null) {
       try {
+        // Enhance metadata with request_id and operationName from current context
+        const enhancedMetadata = { ...metadata };
+
+        // Add request_id from trace filters if available
+        const requestId = this.traceFilters.get("request_id");
+        if (requestId) {
+          enhancedMetadata.requestId = requestId;
+        }
+
+        // Try to find gql.operationName from recent logs matching the request_id
+        if (requestId) {
+          const recentLogs = this.logs.slice(-100);
+          for (const log of recentLogs) {
+            if (log.entry?.fields?.request_id === requestId) {
+              const gqlOp = log.entry?.fields?.["gql.operationName"];
+              if (gqlOp) {
+                enhancedMetadata.operationName = gqlOp;
+                break;
+              }
+            }
+          }
+        }
+
         // Determine connection string based on container ports
         const connectionString = this.getDatabaseConnectionString();
 
@@ -1438,7 +1461,7 @@ export default defineComponent({
           this.explainData.error = result.error;
           this.explainData.planSource = "";
           this.explainData.planQuery = result.query || "";
-          this.explainData.metadata = metadata;
+          this.explainData.metadata = enhancedMetadata;
         } else {
           let planText = "";
           if (result.queryPlan && result.queryPlan.length > 0) {
@@ -1448,7 +1471,8 @@ export default defineComponent({
           this.explainData.error = null;
           this.explainData.planSource = planText;
           this.explainData.planQuery = result.query || "";
-          this.explainData.metadata = metadata;
+          this.explainData.formattedQuery = formatSQLUtil(result.query || "");
+          this.explainData.metadata = enhancedMetadata;
         }
 
         this.showExplainModal = true;
@@ -1456,7 +1480,12 @@ export default defineComponent({
         this.explainData.error = `Failed to run EXPLAIN: ${error.message}`;
         this.explainData.planSource = "";
         this.explainData.planQuery = query;
-        this.explainData.metadata = metadata;
+        const enhancedMetadata = { ...metadata };
+        const requestId = this.traceFilters.get("request_id");
+        if (requestId) {
+          enhancedMetadata.requestId = requestId;
+        }
+        this.explainData.metadata = enhancedMetadata;
         this.showExplainModal = true;
       }
     },
@@ -1527,21 +1556,29 @@ export default defineComponent({
         form.action = "https://explain.dalibo.com/new";
         form.target = "_blank";
 
-        // Build descriptive title from metadata
+        // Build hierarchical title: request_id / db.table / gql.operationName
         let title = "Query Plan from Logseidon";
         if (this.explainData.metadata) {
           const parts = [];
-          if (this.explainData.metadata.type) {
-            parts.push(this.explainData.metadata.type);
+
+          // Add request_id if available
+          const requestId = this.traceFilters.get("request_id") || this.explainData.metadata.requestId;
+          if (requestId) {
+            parts.push(requestId);
           }
-          if (this.explainData.metadata.operation) {
-            parts.push(this.explainData.metadata.operation.toUpperCase());
-          }
+
+          // Add db.table if available
           if (this.explainData.metadata.table) {
-            parts.push(`on ${this.explainData.metadata.table}`);
+            parts.push(this.explainData.metadata.table);
           }
+
+          // Add gql.operationName if available
+          if (this.explainData.metadata.operationName) {
+            parts.push(this.explainData.metadata.operationName);
+          }
+
           if (parts.length > 0) {
-            title = parts.join(" ") + " - Logseidon";
+            title = parts.join(" / ");
           }
         }
 
@@ -1560,7 +1597,7 @@ export default defineComponent({
         const queryInput = document.createElement("input");
         queryInput.type = "hidden";
         queryInput.name = "query";
-        queryInput.value = this.explainData.planQuery;
+        queryInput.value = this.explainData.formattedQuery || this.explainData.planQuery;
         form.appendChild(queryInput);
 
         document.body.appendChild(form);
