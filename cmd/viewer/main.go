@@ -1527,13 +1527,13 @@ func (wa *WebApp) handleSQLDetail(w http.ResponseWriter, r *http.Request) {
 
 	// Extract query hash from path
 	path := strings.TrimPrefix(r.URL.Path, "/api/sql/")
-	
+
 	// Check if this is an export-notion request
 	if strings.HasSuffix(path, "/export-notion") {
 		wa.handleSQLNotionExport(w, r)
 		return
 	}
-	
+
 	queryHash := strings.TrimSpace(path)
 	if queryHash == "" {
 		http.Error(w, "Invalid query hash", http.StatusBadRequest)
@@ -1565,7 +1565,7 @@ func (wa *WebApp) handleSQLNotionExport(w http.ResponseWriter, r *http.Request) 
 	path := strings.TrimPrefix(r.URL.Path, "/api/sql/")
 	queryHash := strings.TrimSuffix(path, "/export-notion")
 	queryHash = strings.TrimSpace(queryHash)
-	
+
 	if queryHash == "" {
 		http.Error(w, "Invalid query hash", http.StatusBadRequest)
 		return
@@ -1605,7 +1605,7 @@ func (wa *WebApp) handleSQLNotionExport(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"url": pageURL,
+		"url":     pageURL,
 		"message": "Successfully exported to Notion",
 	})
 }
@@ -1615,7 +1615,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 	// Format SQL query with basic formatting
 	formattedQuery := formatSQLForDisplay(detail.Query)
 	formattedNormalized := formatSQLForDisplay(detail.NormalizedQuery)
-	
+
 	// Get execution info
 	var requestID string
 	var executedAt string
@@ -1627,7 +1627,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 
 	// Build page content
 	title := fmt.Sprintf("SQL Query: %s on %s", detail.Operation, detail.TableName)
-	
+
 	// Create blocks for the page content
 	blocks := []map[string]interface{}{
 		// Metadata heading
@@ -1709,7 +1709,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 			},
 		})
 	}
-	
+
 	if executedAt != "" {
 		blocks = append(blocks, map[string]interface{}{
 			"object": "block",

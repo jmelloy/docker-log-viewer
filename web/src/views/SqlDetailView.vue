@@ -314,10 +314,7 @@ export default defineComponent({
       }
 
       // Index recommendations
-      if (
-        this.sqlDetail.indexAnalysis?.recommendations &&
-        this.sqlDetail.indexAnalysis.recommendations.length > 0
-      ) {
+      if (this.sqlDetail.indexAnalysis?.recommendations && this.sqlDetail.indexAnalysis.recommendations.length > 0) {
         markdown += `## Index Recommendations\n\n`;
         this.sqlDetail.indexAnalysis.recommendations.forEach((rec: any, index: number) => {
           markdown += `### ${index + 1}. ${rec.tableName} (${rec.priority.toUpperCase()})\n\n`;
@@ -456,4 +453,3 @@ export default defineComponent({
   },
 });
 </script>
-
