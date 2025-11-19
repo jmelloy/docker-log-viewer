@@ -272,5 +272,43 @@ export interface PlanNodeType {
   "Scan Direction"?: string;
   Filter?: string;
   Plans?: PlanNodeType[];
+  "Actual Startup Time"?: number;
+  "Actual Total Time"?: number;
+  Alias?: string;
+  "Async Capable"?: boolean;
+  "Index Cond"?: string;
+  [key: string]: any;
+}
+
+export interface Planning {
+  "Local Dirtied Blocks": number;
+  "Local Hit Blocks": number;
+  "Local I/O Read Time": number;
+  "Local I/O Write Time": number;
+  "Local Read Blocks": number;
+  "Local Written Blocks": number;
+}
+export interface Execution {
+  "Shared Dirtied Blocks": number;
+  "Shared Hit Blocks": number;
+  "Shared I/O Read Time": number;
+  "Shared I/O Write Time": number;
+  "Shared Read Blocks": number;
+  "Shared Written Blocks": number;
+}
+export interface Triggers {
+  "Temp I/O Read Time": number;
+  "Temp I/O Write Time": number;
+  "Temp Read Blocks": number;
+  "Temp Written Blocks": number;
+}
+export interface Plan {
+  Plan: PlanNodeType;
+  "Planning Time"?: number;
+  "Execution Time"?: number;
+  "Query Identifier"?: string;
+  Planning?: Planning;
+  Execution?: Execution;
+  Triggers?: Triggers;
   [key: string]: any;
 }

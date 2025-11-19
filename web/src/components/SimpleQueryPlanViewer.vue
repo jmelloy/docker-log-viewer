@@ -5,7 +5,7 @@
     </div>
     <div v-else-if="!plan" class="text-muted">No query plan available.</div>
     <div v-else class="plan-tree">
-      <plan-node-item :node="plan" :level="0" />
+      <plan-node-item :node="plan" :level="0" :root-cost="rootCost" />
     </div>
   </div>
 </template>
@@ -31,6 +31,12 @@ export default defineComponent({
       plan: null as PlanNodeType | null,
       error: null as string | null,
     };
+  },
+  computed: {
+    rootCost(): number | null {
+      if (!this.plan) return null;
+      return this.plan["Total Cost"] ?? null;
+    },
   },
   watch: {
     planSource: {

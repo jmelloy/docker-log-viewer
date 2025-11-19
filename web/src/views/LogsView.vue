@@ -1155,33 +1155,17 @@ export default defineComponent({
       const filterDesc = Array.from(this.traceFilters.entries())
         .map(([k, v]) => `${k}: ${v}`)
         .join(", ");
+
       const name = prompt(`Save trace as:`, filterDesc);
       if (!name) return;
 
       try {
-        // Get all logs for this trace
-        const traceLogs = this.logs.filter((log) => {
-          const containerName = this.getContainerName(log.containerId);
-          if (!this.selectedContainers.has(containerName)) {
-            return false;
-          }
-          // Match ALL filters
-          for (const [type, value] of this.traceFilters.entries()) {
-            const val = log.entry?.fields?.[type];
-            if (val !== value) return false;
-          }
-          return true;
-        });
-
-        // Extract SQL queries
-        const sqlQueries = this.extractSQLQueries(traceLogs);
-
         const payload = {
           traceId: this.traceFilters.get("trace_id") || null,
           requestId: this.traceFilters.get("request_id") || null,
+          filters: Array.from(this.traceFilters.entries()).map(([type, value]) => ({ type, value })),
+          selectedContainers: Array.from(this.selectedContainers.values()),
           name: name,
-          logs: traceLogs,
-          sqlQueries: sqlQueries,
         };
 
         const result = await API.post<SaveTraceResponse>("/api/save-trace", payload);

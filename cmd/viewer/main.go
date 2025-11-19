@@ -963,11 +963,11 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		TraceID    string                   `json:"traceId"`
-		RequestID  string                   `json:"requestId"`
-		Name       string                   `json:"name"`
-		Logs       []logs.LogMessage        `json:"logs"`
-		SQLQueries []map[string]interface{} `json:"sqlQueries"`
+		Name               string             `json:"name"`
+		TraceID            string             `json:"traceId"`
+		RequestID          string             `json:"requestId"`
+		Filters            []TraceFilterValue `json:"filters"`
+		SelectedContainers []string           `json:"selectedContainers"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -975,6 +975,47 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fieldFilters := []logstore.FieldFilter{}
+	for _, filter := range input.Filters {
+		fieldFilters = append(fieldFilters, logstore.FieldFilter{
+			Name:  filter.Type,
+			Value: filter.Value,
+		})
+		if filter.Type == "trace_id" && input.TraceID == "" {
+			input.TraceID = filter.Value
+		}
+		if filter.Type == "request_id" && input.RequestID == "" {
+			input.RequestID = filter.Value
+		}
+	}
+
+	slog.Info("[save trace]", "name", input.Name, "traceId", input.TraceID, "requestId", input.RequestID, "filters", input.Filters, "selectedContainers", input.SelectedContainers)
+	// Create an execution entry with the trace data
+
+	containerIDs := make([]string, 0, len(input.SelectedContainers))
+	for _, container := range wa.containers {
+		for _, containerName := range input.SelectedContainers {
+			if containerName == wa.containerIDNames[container.ID] {
+				containerIDs = append(containerIDs, container.ID)
+				break
+			}
+		}
+	}
+
+	logMessages := wa.logStore.Filter(logstore.FilterOptions{
+		FieldFilters: fieldFilters,
+		ContainerIDs: containerIDs,
+	}, 1000)
+
+	messages := make([]logs.LogMessage, 0, len(logMessages))
+	for _, msg := range logMessages {
+		messages = append(messages, logs.LogMessage{
+			Timestamp:   msg.Timestamp,
+			ContainerID: msg.ContainerID,
+			Entry:       deserializeLogEntry(msg),
+		})
+	}
+	slog.Info("[save trace] found", "count", len(messages), "containerIDs", containerIDs)
 	// Create an execution entry with the trace data
 	requestIDHeader := input.RequestID
 	if requestIDHeader == "" {
@@ -987,10 +1028,10 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	// Extract actual request body from logs
 	// Look for GraphQL request in logs - typically in fields like "query", "operation", or in message as JSON
 	requestBody := ""
-	for _, logMsg := range input.Logs {
-		if logMsg.Entry != nil && logMsg.Entry.Fields != nil {
+	for _, logMsg := range logMessages {
+		if logMsg.Fields != nil {
 			// Check if this log has GraphQL query data
-			if query, ok := logMsg.Entry.Fields["Operations"]; ok {
+			if query, ok := logMsg.Fields["Operations"]; ok {
 				requestBody = query
 				break
 			}
@@ -999,9 +1040,9 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate duration from logs
 	var durationMS int64
-	if len(input.Logs) > 1 {
-		firstTime := input.Logs[0].Timestamp
-		lastTime := input.Logs[len(input.Logs)-1].Timestamp
+	if len(messages) > 1 {
+		firstTime := messages[0].Timestamp
+		lastTime := messages[len(messages)-1].Timestamp
 		if !firstTime.IsZero() && !lastTime.IsZero() {
 			durationMS = lastTime.Sub(firstTime).Milliseconds()
 		}
@@ -1013,6 +1054,7 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		StatusCode:      200, // TODO: Set status code based on logs
 		DurationMS:      durationMS,
 		ExecutedAt:      time.Now(),
+		Name:            input.Name,
 	}
 
 	id, err := wa.store.CreateExecution(exec)
@@ -1022,19 +1064,72 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save logs for this execution
-	if len(input.Logs) > 0 {
-		if err := wa.store.SaveExecutionLogs(id, input.Logs); err != nil {
+	if len(messages) > 0 {
+		if err := wa.store.SaveExecutionLogs(id, messages); err != nil {
 			slog.Error("failed to save execution logs", "error", err)
 		}
 	}
 
 	// Extract and save SQL queries from logs (trigger SQL log collection)
-	sqlQueries := extractSQLQueries(input.Logs)
+	sqlQueries := extractSQLQueries(messages)
 	if len(sqlQueries) > 0 {
 		if err := wa.store.SaveSQLQueries(id, sqlQueries); err != nil {
 			slog.Error("failed to save SQL queries from trace", "error", err)
 		} else {
-			slog.Info("saved SQL queries from trace", "execution_id", id, "count", len(sqlQueries))
+			containerIDToConnectionString := map[string]string{}
+			buildPortToServerMap := wa.buildPortToServerMap(wa.containers)
+
+			for _, container := range wa.containers {
+				if slices.Contains(containerIDs, container.ID) {
+					if len(container.Ports) > 0 {
+						for _, port := range container.Ports {
+							if buildPortToServerMap[port.PublicPort] != "" {
+								containerIDToConnectionString[container.ID] = buildPortToServerMap[port.PublicPort]
+								break
+							}
+						}
+					}
+				}
+			}
+
+			// Auto-execute EXPLAIN for queries taking longer than 2ms
+			for i, q := range sqlQueries {
+				connectionString := containerIDToConnectionString[q.ContainerID]
+				if q.DurationMS > 2.0 && connectionString != "" {
+					// Parse db.vars to extract parameters
+					variables := make(map[string]string)
+					if q.Variables != "" {
+						var varsArray []interface{}
+						if err := json.Unmarshal([]byte(q.Variables), &varsArray); err == nil {
+							// Convert array values to map with 1-based indices
+							for idx, val := range varsArray {
+								variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
+							}
+						} else {
+							slog.Warn("failed to parse db.vars", "query_index", i, "error", err)
+						}
+					}
+
+					// Execute EXPLAIN
+					req := sqlexplain.Request{
+						Query:            q.Query,
+						Variables:        variables,
+						ConnectionString: connectionString,
+					}
+					resp := sqlexplain.Explain(req)
+
+					if resp.Error != "" {
+						slog.Warn("auto-EXPLAIN failed", "query_index", i, "error", resp.Error)
+						continue
+					}
+
+					// Save the EXPLAIN plan to database
+					planJSON, _ := json.Marshal(resp.QueryPlan)
+					if err := wa.store.UpdateQueryExplainPlan(id, q.QueryHash, string(planJSON)); err != nil {
+						slog.Error("failed to save EXPLAIN plan", "query_index", i, "error", err)
+					}
+				}
+			}
 		}
 	}
 
@@ -1894,13 +1989,14 @@ func formatSQLForDisplay(sql string) string {
 // formatExplainPlanForNotion converts JSON explain plan to readable text
 func formatExplainPlanForNotion(explainPlan string) string {
 	// Try to parse as JSON and format nicely
-	var parsed interface{}
+	var parsed any
 	if err := json.Unmarshal([]byte(explainPlan), &parsed); err == nil {
 		// It's valid JSON, format it nicely
-		formatted, err := json.MarshalIndent(parsed, "", "  ")
-		if err == nil {
-			return string(formatted)
+		formatted, err := sqlexplain.FormatExplainPlanAsText(parsed)
+		if err != nil {
+			return explainPlan
 		}
+		return formatted
 	}
 	// Not JSON or formatting failed, return as-is
 	return explainPlan
@@ -2392,18 +2488,15 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 			var query store.SQLQuery
 
 			// Handle [sql] format
-			if strings.Contains(message, "[sql]") {
-				sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
-				if len(sqlMatch) > 1 {
-					sqlText = sqlMatch[1]
-					normalizedQuery = utils.NormalizeQuery(sqlText)
-					query = store.SQLQuery{
-						Query:           sqlText,
-						NormalizedQuery: normalizedQuery,
-						QueryHash:       store.ComputeQueryHash(normalizedQuery),
-					}
-				} else {
-					continue
+			index := strings.Index(message, "[sql]:")
+			if index != -1 {
+				message = message[index+6:]
+				normalizedQuery = utils.NormalizeQuery(message)
+				query = store.SQLQuery{
+					Query:           message,
+					NormalizedQuery: normalizedQuery,
+					QueryHash:       store.ComputeQueryHash(normalizedQuery),
+					ContainerID:     msg.ContainerID,
 				}
 			} else if msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query" {
 				// Handle [query] format - message is the SQL query
@@ -2413,6 +2506,7 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 					Query:           sqlText,
 					NormalizedQuery: normalizedQuery,
 					QueryHash:       store.ComputeQueryHash(normalizedQuery),
+					ContainerID:     msg.ContainerID,
 				}
 
 				// Extract duration and rows from fields
@@ -2473,11 +2567,18 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		startTime := time.Now()
+
 		next(w, r)
-		slog.Info("request", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
+
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path),
+			"method", r.Method,
+			"path", r.URL.Path,
+			"remote", r.RemoteAddr,
+			"duration_ms", time.Since(startTime).Milliseconds(),
+		)
 	}
 }
-
 func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
