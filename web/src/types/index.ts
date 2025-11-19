@@ -69,6 +69,8 @@ export interface ExplainMetadata {
   type?: string;
   operation?: string;
   table?: string;
+  requestId?: string;
+  operationName?: string;
 }
 
 export interface RecentRequest {
