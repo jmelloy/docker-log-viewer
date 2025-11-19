@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ["graphql", "cm6-graphql", "highlight.js", "pev2"],
+    include: ["graphql", "cm6-graphql", "highlight.js"],
   },
   build: {
     outDir: "dist",
