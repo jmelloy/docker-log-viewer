@@ -537,19 +537,14 @@ func ParseLogLine(line string) *LogEntry {
 			if ok {
 				entry.Level = parsedLevel
 			}
-
-			start := match[0] - 1
-			end := match[1] + 1
-			if start >= 0 && (unicode.IsSpace(rune(line[start])) || line[start] == '[') && end <= len(line) && (unicode.IsSpace(rune(line[end])) || line[end] == ']') {
-				line = line[:match[0]-1] + line[end:]
-			}
 		}
 	}
 
 	if entry.File == "" {
 		if matches := fileRegex.FindStringSubmatch(line); len(matches) > 0 {
-			entry.File = matches[0]
-			line = strings.Replace(line, matches[0], "", 1)
+			if _, ok := ParseFile(matches[1]); ok {
+				entry.File = matches[1]
+			}
 		}
 	}
 
