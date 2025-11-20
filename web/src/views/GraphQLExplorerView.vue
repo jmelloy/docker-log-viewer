@@ -1075,7 +1075,7 @@ export default defineComponent(
 
       viewExecutionDetail() {
         if (this.executionId) {
-          window.location.href = `/requests/detail/?id=${this.executionId}`;
+          window.location.href = `/requests/${this.executionId}`;
         }
       },
 
