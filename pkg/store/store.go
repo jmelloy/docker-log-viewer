@@ -146,6 +146,10 @@ type SQLQuery struct {
 	Variables        string         `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
 	GraphQLOperation string         `gorm:"column:gql_operation" json:"graphqlOperation,omitempty"`
 	ExplainPlan      string         `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
+	RequestID        string         `gorm:"column:request_id" json:"requestId,omitempty"`
+	SpanID           string         `gorm:"column:span_id" json:"spanId,omitempty"`
+	TraceID          string         `gorm:"column:trace_id" json:"traceId,omitempty"`
+	LogFields        string         `gorm:"column:log_fields" json:"logFields,omitempty"` // JSON object of all other log fields
 	CreatedAt        time.Time      `json:"createdAt"`
 	UpdatedAt        time.Time      `json:"updatedAt"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`

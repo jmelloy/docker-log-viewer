@@ -5,14 +5,16 @@
     </div>
     <div v-else-if="!plan" class="text-muted">No query plan available.</div>
     <div v-else class="plan-tree">
-      <plan-node-item :node="plan" :level="0" :root-cost="rootCost" />
+      <plan-node-item :node="plan.Plan" :level="0" :root-cost="rootCost" />
+      <div class="total-rows">Planning Time: {{ planningTime }}</div>
+      <div class="total-width">Execution Time: {{ executionTime }}</div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import type { PlanNodeType } from "@/types";
+import type { Plan, PlanNodeType } from "@/types";
 import PlanNodeItem from "./PlanNodeItem.vue";
 
 export default defineComponent({
@@ -28,14 +30,22 @@ export default defineComponent({
   },
   data() {
     return {
-      plan: null as PlanNodeType | null,
+      plan: null as Plan | null,
       error: null as string | null,
     };
   },
   computed: {
     rootCost(): number | null {
       if (!this.plan) return null;
-      return this.plan["Total Cost"] ?? null;
+      return this.plan.Plan["Total Cost"] ?? null;
+    },
+    planningTime(): number | null {
+      if (!this.plan) return null;
+      return this.plan["Planning Time"] ?? null;
+    },
+    executionTime(): number | null {
+      if (!this.plan) return null;
+      return this.plan["Execution Time"] ?? null;
     },
   },
   watch: {
@@ -55,13 +65,14 @@ export default defineComponent({
       }
 
       try {
-        const parsed = JSON.parse(planJson);
+        const parsed = JSON.parse(planJson) as Plan | Plan[];
+        console.log(parsed);
         // PostgreSQL EXPLAIN returns an array with a Plan property
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].Plan) {
-          this.plan = parsed[0].Plan;
+        if (Array.isArray(parsed) && parsed.length > 0 && "Plan" in parsed[0]) {
+          this.plan = parsed[0];
           this.error = null;
-        } else if (parsed.Plan) {
-          this.plan = parsed.Plan;
+        } else if ("Plan" in parsed) {
+          this.plan = parsed;
           this.error = null;
         } else {
           this.error = "Invalid query plan format";

@@ -75,17 +75,9 @@
                 📋 Copy
               </button>
             </div>
-            <pre class="json-display" style="white-space: pre-wrap; max-height: 20em">{{
+            <pre class="sql-query-display" style="white-space: pre-wrap; max-height: 20em"><code>{{
               formatSQL(sqlDetail.query)
-            }}</pre>
-          </div>
-
-          <!-- Normalized Query -->
-          <div class="modal-section">
-            <h4>Normalized Query</h4>
-            <pre class="json-display" style="white-space: pre-wrap; max-height: 15em">{{
-              formatSQL(sqlDetail.normalizedQuery)
-            }}</pre>
+            }}</code></pre>
           </div>
 
           <!-- EXPLAIN Plan -->
@@ -186,14 +178,13 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
-import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
+import { formatSQL as formatSQLUtil, applySyntaxHighlighting } from "@/utils/ui-utils";
 import type { SQLQueryDetail } from "@/types";
 
 export default defineComponent({
   name: "SqlDetailView",
   components: {
     AppHeader,
-    ExplainPlanFormatter,
   },
   data() {
     return {
@@ -207,6 +198,13 @@ export default defineComponent({
     this.queryHash = this.$route.params.hash as string;
     this.loadSQLDetail();
   },
+  updated() {
+    // Apply syntax highlighting when content updates
+    this.$nextTick(() => {
+      applySyntaxHighlighting({ sqlSelector: ".sql-query-display code" });
+    });
+  },
+
   methods: {
     async loadSQLDetail() {
       this.loading = true;
@@ -218,6 +216,10 @@ export default defineComponent({
           throw new Error(`Failed to load SQL query: ${response.statusText}`);
         }
         this.sqlDetail = await response.json();
+        // Apply syntax highlighting after loading
+        this.$nextTick(() => {
+          applySyntaxHighlighting({ sqlSelector: ".sql-query-display code" });
+        });
       } catch (err: any) {
         this.error = err.message || "Failed to load SQL query details";
         console.error("Error loading SQL detail:", err);
@@ -226,16 +228,7 @@ export default defineComponent({
       }
     },
 
-    formatSQL(sql: string): string {
-      if (!sql) return "";
-      // Basic SQL formatting - add newlines before major keywords
-      return sql
-        .replace(
-          /\s+(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|ORDER BY|GROUP BY|HAVING|LIMIT|OFFSET)\s+/gi,
-          "\n$1 "
-        )
-        .trim();
-    },
+    formatSQL: formatSQLUtil,
 
     copyToClipboard(text: string) {
       navigator.clipboard.writeText(text).then(
@@ -295,10 +288,6 @@ export default defineComponent({
       // SQL Query
       markdown += `## SQL Query\n\n`;
       markdown += `\`\`\`sql\n${this.formatSQL(this.sqlDetail.query)}\n\`\`\`\n\n`;
-
-      // Normalized Query
-      markdown += `## Normalized Query\n\n`;
-      markdown += `\`\`\`sql\n${this.formatSQL(this.sqlDetail.normalizedQuery)}\n\`\`\`\n\n`;
 
       // EXPLAIN Plan (text version)
       if (this.sqlDetail.explainPlan) {
