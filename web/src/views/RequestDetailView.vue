@@ -17,14 +17,28 @@
           <div class="flex-between mb-1_5">
             <div>
               <button @click="goBack" class="btn-secondary mb-0_5">← Back to Requests</button>
-              <h2 class="m-0">{{ requestDetail.displayName || "(unnamed)" }}</h2>
+              <h2 class="m-0">
+                {{ requestDetail.execution.name || requestDetail.execution.displayName || "(unnamed)" }}
+              </h2>
               <p class="text-muted mt-0_25">
                 {{ requestDetail.server?.name || requestDetail.execution.server?.name || "N/A" }}
               </p>
             </div>
             <div style="display: flex; gap: 0.5rem">
-              <button @click="executeAgain" class="btn-primary">▶ Execute Again</button>
-              <button @click="openExecuteModal" class="btn-secondary">⚙️ Re-execute with Options</button>
+              <!-- <button v-if="requestDetail.execution.requestBody" @click="executeAgain" class="btn-primary">
+                ▶ Execute Again
+              </button> -->
+              <button v-if="requestDetail.execution.requestBody" @click="openExecuteModal" class="btn-secondary">
+                ⚙️ Execute Again
+              </button>
+              <button
+                @click="exportSQLQueriesAsMarkdown"
+                class="btn-secondary"
+                style="padding: 0.5rem 1rem; font-size: 0.875rem"
+                title="Export filtered SQL queries as Markdown"
+              >
+                📄 Export Markdown
+              </button>
             </div>
           </div>
 
@@ -425,19 +439,45 @@
             </div>
 
             <div class="analyzer-subsection">
-              <h5
-                style="
-                  color: #8b949e;
-                  font-size: 0.9rem;
-                  margin-bottom: 0.5rem;
-                  text-transform: uppercase;
-                  letter-spacing: 0.05em;
-                "
-              >
-                All Queries
-              </h5>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
+                <h5
+                  style="
+                    color: #8b949e;
+                    font-size: 0.9rem;
+                    margin: 0;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                  "
+                >
+                  All Queries
+                  <span
+                    v-if="filteredSQLQueries.length !== requestDetail.sqlQueries.length"
+                    style="color: #79c0ff; font-weight: normal"
+                  >
+                    ({{ filteredSQLQueries.length }} of {{ requestDetail.sqlQueries.length }})
+                  </span>
+                </h5>
+                <div style="display: flex; gap: 0.5rem; align-items: center">
+                  <input
+                    type="text"
+                    v-model="sqlSearchFilter"
+                    placeholder="Filter by operation, table, experiment..."
+                    style="
+                      padding: 0.5rem;
+                      background: #161b22;
+                      border: 1px solid #30363d;
+                      border-radius: 4px;
+                      color: #c9d1d9;
+                      font-family: monospace;
+                      font-size: 0.875rem;
+                      min-width: 250px;
+                    "
+                    title="Filter by GraphQL operation, table name, experiment, or any field"
+                  />
+                </div>
+              </div>
               <div class="sql-queries-list">
-                <div v-for="(q, idx) in requestDetail.sqlQueries" :key="idx" class="sql-query-item">
+                <div v-for="(q, idx) in filteredSQLQueries" :key="idx" class="sql-query-item">
                   <div class="sql-query-header">
                     <span>{{ q.tableName || "unknown" }} - {{ q.operation || "SELECT" }}</span>
                     <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
@@ -1026,10 +1066,13 @@ import {
 } from "@/utils/ui-utils";
 import type { Server, ExecutionDetail, ExplainResponse, ExplainData, ExecuteResponse, SQLQuery } from "@/types";
 import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
+import LogStream from "@/components/LogStream.vue";
+import { formatExplainPlanAsText } from "@/utils/ui-utils";
 
 export default defineComponent({
   components: {
     ExplainPlanFormatter,
+    LogStream,
   },
   setup() {
     const route = useRoute();
@@ -1058,6 +1101,7 @@ export default defineComponent({
       refreshTimer: null, // Timer for auto-refreshing recent requests
       selectedOperationIndex: 0, // For GraphQL batch requests
       responseFilter: "", // Search/filter for response JSON
+      sqlSearchFilter: "", // Search/filter for SQL queries
     };
   },
 
@@ -1212,6 +1256,60 @@ export default defineComponent({
       const executedAt = new Date(this.requestDetail.execution.executedAt);
       const now = new Date();
       return (now.getTime() - executedAt.getTime()) / 1000 / 60; // Convert milliseconds to minutes
+    },
+
+    filteredSQLQueries() {
+      if (!this.requestDetail?.sqlQueries || this.requestDetail.sqlQueries.length === 0) {
+        return [];
+      }
+
+      if (!this.sqlSearchFilter.trim()) {
+        return this.requestDetail.sqlQueries;
+      }
+
+      const filter = this.sqlSearchFilter.toLowerCase().trim();
+      return this.requestDetail.sqlQueries.filter((q) => {
+        // Filter by GraphQL operation
+        if (q.graphqlOperation && q.graphqlOperation.toLowerCase().includes(filter)) {
+          return true;
+        }
+        // Filter by table name
+        if (q.tableName && q.tableName.toLowerCase().includes(filter)) {
+          return true;
+        }
+        // Filter by operation
+        if (q.operation && q.operation.toLowerCase().includes(filter)) {
+          return true;
+        }
+        // Filter by request_id, span_id, trace_id
+        if (q.requestId && q.requestId.toLowerCase().includes(filter)) {
+          return true;
+        }
+        if (q.spanId && q.spanId.toLowerCase().includes(filter)) {
+          return true;
+        }
+        if (q.traceId && q.traceId.toLowerCase().includes(filter)) {
+          return true;
+        }
+        // Filter by query text
+        if (q.query && q.query.toLowerCase().includes(filter)) {
+          return true;
+        }
+        // Filter by log fields (if available)
+        if (q.logFields) {
+          try {
+            const fields = JSON.parse(q.logFields);
+            for (const [key, value] of Object.entries(fields)) {
+              if (key.toLowerCase().includes(filter) || String(value).toLowerCase().includes(filter)) {
+                return true;
+              }
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+        return false;
+      });
     },
 
     sqlAnalysisData() {
@@ -1997,6 +2095,100 @@ export default defineComponent({
         }
       }
       return message;
+    },
+
+    exportSQLQueriesAsMarkdown() {
+      if (!this.requestDetail?.sqlQueries || this.filteredSQLQueries.length === 0) {
+        alert("No SQL queries to export");
+        return;
+      }
+
+      const queries = this.filteredSQLQueries;
+      let markdown = `# SQL Queries Export\n\n`;
+      markdown += `**Request:** ${this.requestDetail.execution.name || "(unnamed)"}\n`;
+      markdown += `**Request ID:** ${this.requestDetail.execution.requestIdHeader}\n`;
+      markdown += `**Executed At:** ${new Date(this.requestDetail.execution.executedAt).toLocaleString()}\n`;
+      markdown += `**Total Queries:** ${queries.length}\n`;
+      markdown += `**Filter Applied:** ${this.sqlSearchFilter || "None"}\n\n`;
+      markdown += `---\n\n`;
+
+      let experiment = null;
+      queries.forEach(async (q, idx) => {
+        let fields = null;
+        const parts = [];
+        parts.push(q.operationName);
+        parts.push(q.tableName);
+
+        try {
+          fields = JSON.parse(q.logFields);
+          parts.push(fields?.experimental_type);
+          experiment = fields?.experiment;
+        } catch (e) {
+          console.error("Error parsing log fields:", e);
+        }
+
+        parts.push(q.graphqlOperation);
+
+        let queryName = parts.filter((p) => p).join(" - ");
+        markdown += `## ${queryName ? `Query: ${queryName}` : `Query ${idx + 1}`}\n\n`;
+
+        // Variables
+        if (q.variables) {
+          let query = q.query;
+          try {
+            const vars = typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables;
+            let idx = 0;
+            for (const value of vars) {
+              idx++;
+              query = query.replace(`$${idx}`, `'${String(value)}'`);
+            }
+            markdown += `**SQL Query:**\n\`\`\`sql\n${formatSQLUtil(query)}\n\`\`\`\n\n`;
+          } catch (e) {
+            markdown += `**SQL Query:**\n\`\`\`sql\n${formatSQLUtil(q.query)}\n\`\`\`\n\n`;
+            markdown += `**Variables:** ${q.variables}\n\n`;
+          }
+        }
+        // Explain plan if available
+        if (q.explainPlan) {
+          markdown += `**Explain Plan:**\n\`\`\`\n`;
+
+          try {
+            const plan = JSON.parse(q.explainPlan);
+            markdown += `${formatExplainPlanAsText(plan)}\n\`\`\`\n\n`;
+          } catch (e) {
+            markdown += `${q.explainPlan}\n\`\`\`\n\n`;
+          }
+        }
+
+        markdown += `\n| Field | Value |\n`;
+        markdown += `|-------|-------|\n`;
+        markdown += q.spanId ? `| **Span ID** | ${q.spanId} |\n |` : "";
+        markdown += q.traceId ? `| **Trace ID** | ${q.traceId} |\n` : "";
+
+        if (q.logFields) {
+          try {
+            const fields = JSON.parse(q.logFields);
+            for (const [key, value] of Object.entries(fields)) {
+              markdown += `| **${key}** | ${value} |\n`;
+            }
+          } catch (e) {
+            markdown += `| **Log Fields** | ${q.logFields} |\n`;
+          }
+        }
+
+        markdown += `---\n\n`;
+      });
+
+      // Create a blob and download
+      const blob = new Blob([markdown], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `req-${Date.now()}-${experiment || this.requestDetail?.displayName || this.requestDetail.execution.requestIdHeader || "export"}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     },
   },
 });

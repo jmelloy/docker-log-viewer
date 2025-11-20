@@ -80,16 +80,22 @@ export default defineComponent({
       if (nodeCost === undefined || this.rootCost === null || this.rootCost < 100) {
         return false;
       }
+
+      const firstChild = this.node.Plans?.[0]?.["Total Cost"] ?? 0;
+      const diff = nodeCost - firstChild;
+
       // Consider expensive if cost is > 30% of root cost
-      return nodeCost > this.rootCost * 0.3 || nodeCost > 1000;
+      return diff > this.rootCost * 0.3 || diff > 1000;
     },
     isVeryExpensive(): boolean {
       const nodeCost = this.node["Total Cost"];
       if (nodeCost === undefined || this.rootCost === null || this.rootCost < 100) {
         return false;
       }
+      const firstChild = this.node.Plans?.[0]?.["Total Cost"] ?? 0;
+      const diff = nodeCost - firstChild;
       // Consider very expensive if cost is > 60% of root cost
-      return nodeCost > this.rootCost * 0.6 || nodeCost > 10000;
+      return diff > this.rootCost * 0.6 || diff > 10000;
     },
     costClass(): Record<string, boolean> {
       if (this.isVeryExpensive) {

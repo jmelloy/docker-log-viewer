@@ -177,6 +177,7 @@ export interface ExecutedRequest {
   error?: string;
   isSync: boolean;
   displayName?: string;
+  name?: string;
   executedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -208,6 +209,10 @@ export interface ExecutionSQLQuery {
   variables?: string;
   graphqlOperation?: string;
   explainPlan?: string;
+  requestId?: string;
+  spanId?: string;
+  traceId?: string;
+  logFields?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -2556,6 +2556,43 @@ func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 				} else if gqlOp, ok := msg.Entry.Fields["gql.operationName"]; ok {
 					query.GraphQLOperation = gqlOp
 				}
+				// Extract trace/request/span IDs
+				if requestID, ok := msg.Entry.Fields["request_id"]; ok {
+					query.RequestID = requestID
+				}
+				if spanID, ok := msg.Entry.Fields["span_id"]; ok {
+					query.SpanID = spanID
+				}
+				if traceID, ok := msg.Entry.Fields["trace_id"]; ok {
+					query.TraceID = traceID
+				}
+
+				// Store all other log fields as JSON for reference
+				otherFields := make(map[string]string)
+				excludedFields := map[string]bool{
+					"duration":          true,
+					"duration_ms":       true,
+					"db.table":          true,
+					"db.operation":      true,
+					"db.rows":           true,
+					"db.vars":           true,
+					"gql.operation":     true,
+					"gql.operationName": true,
+					"request_id":        true,
+					"span_id":           true,
+					"trace_id":          true,
+					"type":              true,
+				}
+				for k, v := range msg.Entry.Fields {
+					if !excludedFields[k] {
+						otherFields[k] = v
+					}
+				}
+				if len(otherFields) > 0 {
+					if fieldsJSON, err := json.Marshal(otherFields); err == nil {
+						query.LogFields = string(fieldsJSON)
+					}
+				}
 			}
 
 			queries = append(queries, query)

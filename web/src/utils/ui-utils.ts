@@ -322,12 +322,15 @@ export function formatSQL(sql: string): string {
 
 export function explainPlanLine(node: PlanNodeType): string {
   let line = "";
+  console.log(node);
+
   if (node["Index Name"]) {
     line += ` using ${node["Index Name"]}`;
   }
 
-  if (node["Relation Name"]) {
-    line += ` on ${node["Relation Name"]}`;
+  if (node["Relation Name"] || node["CTE Name"]) {
+    line += ` on ${node["Relation Name"] || node["CTE Name"]}`;
+
     if (node["Alias"] && node["Alias"] !== node["Relation Name"]) {
       line += ` ${node["Alias"]}`;
     }
@@ -347,8 +350,10 @@ export function explainPlanLine(node: PlanNodeType): string {
     const actualEnd = node["Actual Total Time"].toFixed(3);
     const actualRows = node["Actual Rows"] !== undefined ? node["Actual Rows"] : 0;
     const loops = node["Actual Loops"] !== undefined ? node["Actual Loops"] : 1;
+
     line += ` (actual time=${actualStart}..${actualEnd} rows=${actualRows} loops=${loops})`;
   }
+
   return line;
 }
 export function formatExplainPlanAsText(planJson: Plan | Plan[]): string {
