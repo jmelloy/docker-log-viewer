@@ -75,24 +75,26 @@ func (SampleQuery) TableName() string {
 
 // ExecutedRequest represents a single execution of a request (executed request)
 type ExecutedRequest struct {
-	ID              uint           `gorm:"primaryKey" json:"id"`
-	SampleID        *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
-	ServerID        *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
-	Server          *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestIDHeader string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
-	RequestBody     string         `gorm:"column:request_body" json:"requestBody,omitempty"`
-	StatusCode      int            `gorm:"column:status_code" json:"statusCode"`
-	DurationMS      int64          `gorm:"column:duration_ms" json:"durationMs"`
-	ResponseBody    string         `gorm:"column:response_body" json:"responseBody,omitempty"`
-	ResponseHeaders string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
-	Error           string         `json:"error,omitempty"`
-	IsSync          bool           `gorm:"column:is_sync;index;default:false" json:"isSync"`
-	Name            string         `gorm:"column:name" json:"name"`
-	DisplayName     string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
-	ExecutedAt      time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
-	CreatedAt       time.Time      `json:"createdAt"`
-	UpdatedAt       time.Time      `json:"updatedAt"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                  uint           `gorm:"primaryKey" json:"id"`
+	SampleID            *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
+	ServerID            *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server              *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestIDHeader     string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
+	RequestBody         string         `gorm:"column:request_body" json:"requestBody,omitempty"`
+	StatusCode          int            `gorm:"column:status_code" json:"statusCode"`
+	DurationMS          int64          `gorm:"column:duration_ms" json:"durationMs"`
+	ResponseBody        string         `gorm:"column:response_body" json:"responseBody,omitempty"`
+	ResponseHeaders     string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
+	Error               string         `json:"error,omitempty"`
+	IsSync              bool           `gorm:"column:is_sync;index;default:false" json:"isSync"`
+	Name                string         `gorm:"column:name" json:"name"`
+	DisplayName         string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
+	BearerTokenOverride string         `gorm:"column:bearer_token_override" json:"bearerTokenOverride,omitempty"`
+	DevIDOverride       string         `gorm:"column:dev_id_override" json:"devIdOverride,omitempty"`
+	ExecutedAt          time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
+	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 func (ExecutedRequest) TableName() string {
