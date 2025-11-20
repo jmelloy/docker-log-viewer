@@ -1742,9 +1742,6 @@ func (wa *WebApp) handleSQLNotionExport(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-
-
-
 // handleExecutionNotionExport exports execution details to Notion
 func (wa *WebApp) handleExecutionNotionExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -2231,8 +2228,6 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Execu
 	return page.URL, nil
 }
 
-
-
 // truncateText truncates text to maxLen characters, adding ellipsis if truncated
 func truncateText(text string, maxLen int) string {
 	if len(text) <= maxLen {
@@ -2690,10 +2685,6 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 
 	return execID
 }
-
-
-
-
 
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

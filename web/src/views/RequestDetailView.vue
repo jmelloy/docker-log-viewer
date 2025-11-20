@@ -1857,7 +1857,7 @@ export default defineComponent({
 
         // Navigate to new execution detail
         if (result.executionId) {
-          window.location.href = `/requests/detail/?id=${result.executionId}`;
+          window.location.href = `/requests/${result.executionId}`;
         }
       } catch (error) {
         console.error("Failed to execute request:", error);
@@ -1896,7 +1896,7 @@ export default defineComponent({
 
         // Navigate to new execution detail
         if (result.executionId) {
-          window.location.href = `/requests/detail/?id=${result.executionId}`;
+          window.location.href = `/requests/${result.executionId}`;
         }
       } catch (error) {
         console.error("Failed to execute request:", error);
