@@ -1231,12 +1231,14 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 
 	// Create execution record immediately with pending status
 	execution := &store.ExecutedRequest{
-		ServerID:        input.ServerID,
-		RequestIDHeader: requestIDHeader,
-		RequestBody:     input.RequestData,
-		ExecutedAt:      time.Now(),
-		StatusCode:      0, // 0 indicates pending
-		IsSync:          input.Sync,
+		ServerID:            input.ServerID,
+		RequestIDHeader:     requestIDHeader,
+		RequestBody:         input.RequestData,
+		ExecutedAt:          time.Now(),
+		StatusCode:          0, // 0 indicates pending
+		IsSync:              input.Sync,
+		BearerTokenOverride: input.BearerTokenOverride,
+		DevIDOverride:       input.DevIDOverride,
 	}
 
 	// Save execution immediately
@@ -2758,12 +2760,14 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 
 	// Create execution record immediately with pending status
 	execution := &store.ExecutedRequest{
-		SampleID:        &sampleID,
-		ServerID:        serverIDForExec,
-		RequestIDHeader: requestIDHeader,
-		RequestBody:     requestData,
-		ExecutedAt:      time.Now(),
-		StatusCode:      0, // 0 indicates pending
+		SampleID:            &sampleID,
+		ServerID:            serverIDForExec,
+		RequestIDHeader:     requestIDHeader,
+		RequestBody:         requestData,
+		ExecutedAt:          time.Now(),
+		StatusCode:          0, // 0 indicates pending
+		BearerTokenOverride: bearerTokenOverride,
+		DevIDOverride:       devIDOverride,
 	}
 
 	// Save execution immediately

@@ -25,11 +25,11 @@
               </p>
             </div>
             <div style="display: flex; gap: 0.5rem">
-              <!-- <button v-if="requestDetail.execution.requestBody" @click="executeAgain" class="btn-primary">
+              <button v-if="requestDetail.execution.requestBody" @click="executeAgain" class="btn-primary">
                 ▶ Execute Again
-              </button> -->
+              </button>
               <button v-if="requestDetail.execution.requestBody" @click="openExecuteModal" class="btn-secondary">
-                ⚙️ Execute Again
+                ⚙️ Execute w/ Override
               </button>
               <button
                 @click="exportSQLQueriesAsMarkdown"
