@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"docker-log-parser/pkg/sqlutil"
 	"docker-log-parser/pkg/store"
 )
 
@@ -40,24 +41,24 @@ func TestFormatSQLForDisplay(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatSQLForDisplay(tt.input)
+			result := sqlutil.FormatSQLForDisplay(tt.input)
 			if tt.expectedEmpty {
 				if result != "" {
-					t.Errorf("formatSQLForDisplay() = %q, want empty string", result)
+					t.Errorf("sqlutil.FormatSQLForDisplay() = %q, want empty string", result)
 				}
 			} else {
 				if result == "" {
-					t.Errorf("formatSQLForDisplay() returned empty string for non-empty input")
+					t.Errorf("sqlutil.FormatSQLForDisplay() returned empty string for non-empty input")
 				}
 				// Check that all expected keywords are present
 				for _, keyword := range tt.shouldContain {
 					if !strings.Contains(result, keyword) {
-						t.Errorf("formatSQLForDisplay() output should contain %q, got %q", keyword, result)
+						t.Errorf("sqlutil.FormatSQLForDisplay() output should contain %q, got %q", keyword, result)
 					}
 				}
 				// Check that formatting happened (output should differ from input)
 				if tt.shouldNotEqual != "" && result == tt.shouldNotEqual {
-					t.Errorf("formatSQLForDisplay() should format the SQL, but output equals input: %q", result)
+					t.Errorf("sqlutil.FormatSQLForDisplay() should format the SQL, but output equals input: %q", result)
 				}
 			}
 		})
@@ -136,14 +137,14 @@ func TestFormatExplainPlanForNotion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatExplainPlanForNotion(tt.input)
+			result := sqlutil.FormatExplainPlanForNotion(tt.input)
 			if result == "" && tt.input != "" {
-				t.Errorf("formatExplainPlanForNotion() returned empty for non-empty input")
+				t.Errorf("sqlutil.FormatExplainPlanForNotion() returned empty for non-empty input")
 			}
 			if tt.hasJSON {
 				// Should be formatted JSON with indentation
 				if !strings.Contains(result, "\n") && len(tt.input) > 10 {
-					t.Errorf("formatExplainPlanForNotion() should format JSON with newlines")
+					t.Errorf("sqlutil.FormatExplainPlanForNotion() should format JSON with newlines")
 				}
 			}
 		})
@@ -176,12 +177,12 @@ func TestCreateNotionPagePayload(t *testing.T) {
 	}
 
 	// Just verify the helper functions work without panicking
-	formatted := formatSQLForDisplay(detail.Query)
+	formatted := sqlutil.FormatSQLForDisplay(detail.Query)
 	if formatted == "" {
 		t.Error("formatSQLForDisplay should not return empty string for valid query")
 	}
 
-	explainText := formatExplainPlanForNotion(detail.ExplainPlan)
+	explainText := sqlutil.FormatExplainPlanForNotion(detail.ExplainPlan)
 	if explainText == "" {
 		t.Error("formatExplainPlanForNotion should not return empty string for valid plan")
 	}

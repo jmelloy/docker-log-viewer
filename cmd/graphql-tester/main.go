@@ -1,25 +1,20 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
+	"docker-log-parser/pkg/httputil"
 	"docker-log-parser/pkg/logs"
+	"docker-log-parser/pkg/sqlutil"
 	"docker-log-parser/pkg/store"
-	"docker-log-parser/pkg/utils"
 )
 
 type Config struct {
@@ -325,7 +320,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	// Generate request ID
-	requestIDHeader := generateRequestID()
+	requestIDHeader := httputil.GenerateRequestID()
 
 	// Get server info for execution
 	var url, bearerToken, devID, experimentalMode string
@@ -349,7 +344,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	startTime := time.Now()
-	statusCode, responseBody, responseHeaders, err := makeRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
+	statusCode, responseBody, responseHeaders, err := httputil.MakeHTTPRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
 	execution.DurationMS = time.Since(startTime).Milliseconds()
 	execution.StatusCode = statusCode
 	execution.ResponseBody = responseBody
@@ -379,7 +374,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	// Extract and save SQL queries
-	sqlQueries := extractSQLQueries(collectedLogs)
+	sqlQueries := sqlutil.ExtractSQLQueries(collectedLogs)
 	if len(sqlQueries) > 0 {
 		if err := db.SaveSQLQueries(execID, sqlQueries); err != nil {
 			return fmt.Errorf("failed to save SQL queries: %w", err)
@@ -389,51 +384,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	return nil
 }
 
-func generateRequestID() string {
-	b := make([]byte, 4)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
 
-func makeRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
-	// Replace localhost with host.docker.internal if running in Docker
-	url = utils.ReplaceLocalhostWithDockerHost(url)
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
-	if err != nil {
-		return 0, "", "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Request-Id", requestID)
-
-	if bearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+bearerToken)
-	}
-	if devID != "" {
-		req.Header.Set("X-GlueDev-UserID", devID)
-	}
-	if experimentalMode != "" {
-		req.Header.Set("X-Glue-Experimental-Mode", experimentalMode)
-	}
-
-	client := &http.Client{Timeout: 300 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, "", "", err
-	}
-	defer resp.Body.Close()
-
-	// Capture response headers as JSON
-	headersJSON, _ := json.Marshal(resp.Header)
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return resp.StatusCode, "", string(headersJSON), err
-	}
-
-	return resp.StatusCode, string(bodyBytes), string(headersJSON), nil
-}
 
 func collectLogs(requestID string, logChan <-chan logs.LogMessage, timeout time.Duration) []logs.LogMessage {
 	collected := []logs.LogMessage{}
@@ -465,50 +416,3 @@ func matchesRequestID(msg logs.LogMessage, requestID string) bool {
 	return false
 }
 
-func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
-	queries := []store.SQLQuery{}
-
-	for _, msg := range logMessages {
-		if msg.Entry == nil || msg.Entry.Message == "" {
-			continue
-		}
-
-		message := msg.Entry.Message
-		if strings.Contains(message, "[sql]") {
-			sqlMatch := regexp.MustCompile(`\[sql\]:\s*(.+)`).FindStringSubmatch(message)
-			if len(sqlMatch) > 1 {
-				normalizedQuery := utils.NormalizeQuery(sqlMatch[1])
-				query := store.SQLQuery{
-					Query:           sqlMatch[1],
-					NormalizedQuery: normalizedQuery,
-					QueryHash:       store.ComputeQueryHash(normalizedQuery),
-				}
-
-				if msg.Entry.Fields != nil {
-					if duration, ok := msg.Entry.Fields["duration"]; ok {
-						fmt.Sscanf(duration, "%f", &query.DurationMS)
-					}
-					if table, ok := msg.Entry.Fields["db.table"]; ok {
-						query.QueriedTable = table
-					}
-					if op, ok := msg.Entry.Fields["db.operation"]; ok {
-						query.Operation = op
-					}
-					if rows, ok := msg.Entry.Fields["db.rows"]; ok {
-						fmt.Sscanf(rows, "%d", &query.Rows)
-					}
-					// Check both gql.operation and gql.operationName for GraphQL operation
-					if gqlOp, ok := msg.Entry.Fields["gql.operation"]; ok {
-						query.GraphQLOperation = gqlOp
-					} else if gqlOp, ok := msg.Entry.Fields["gql.operationName"]; ok {
-						query.GraphQLOperation = gqlOp
-					}
-				}
-
-				queries = append(queries, query)
-			}
-		}
-	}
-
-	return queries
-}
