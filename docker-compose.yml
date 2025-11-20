@@ -13,6 +13,8 @@ services:
       - go-modules:/go/pkg/mod
     environment:
       - DATABASE_URL=${DATABASE_URL:-}
+      - NOTION_API_KEY=${NOTION_API_KEY:-}
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID:-}
     working_dir: /app
     command: air -c .air.toml
     healthcheck:

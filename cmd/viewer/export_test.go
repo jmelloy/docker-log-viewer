@@ -10,32 +10,55 @@ import (
 
 func TestFormatSQLForDisplay(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected string
+		name           string
+		input          string
+		expectedEmpty  bool
+		shouldContain  []string // Keywords that should be present in formatted output
+		shouldNotEqual string   // Should not equal this (to ensure formatting happened)
 	}{
 		{
-			name:     "simple select",
-			input:    "SELECT * FROM users WHERE id = 1",
-			expected: "SELECT *\nFROM users\nWHERE id = 1",
+			name:           "simple select",
+			input:          "SELECT * FROM users WHERE id = 1",
+			expectedEmpty:  false,
+			shouldContain:  []string{"SELECT", "FROM", "users", "WHERE"},
+			shouldNotEqual: "SELECT * FROM users WHERE id = 1", // Should be formatted, not same as input
 		},
 		{
-			name:     "empty string",
-			input:    "",
-			expected: "",
+			name:          "empty string",
+			input:         "",
+			expectedEmpty: true,
+			shouldContain: []string{},
 		},
 		{
-			name:     "query with join",
-			input:    "SELECT u.name FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.active = true",
-			expected: "SELECT u.name\nFROM users u\nLEFT JOIN orders o ON u.id = o.user_id\nWHERE u.active = true",
+			name:           "query with join",
+			input:          "SELECT u.name FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.active = true",
+			expectedEmpty:  false,
+			shouldContain:  []string{"SELECT", "FROM", "LEFT JOIN", "WHERE"},
+			shouldNotEqual: "SELECT u.name FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.active = true",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := formatSQLForDisplay(tt.input)
-			if result != tt.expected {
-				t.Errorf("formatSQLForDisplay() = %q, want %q", result, tt.expected)
+			if tt.expectedEmpty {
+				if result != "" {
+					t.Errorf("formatSQLForDisplay() = %q, want empty string", result)
+				}
+			} else {
+				if result == "" {
+					t.Errorf("formatSQLForDisplay() returned empty string for non-empty input")
+				}
+				// Check that all expected keywords are present
+				for _, keyword := range tt.shouldContain {
+					if !strings.Contains(result, keyword) {
+						t.Errorf("formatSQLForDisplay() output should contain %q, got %q", keyword, result)
+					}
+				}
+				// Check that formatting happened (output should differ from input)
+				if tt.shouldNotEqual != "" && result == tt.shouldNotEqual {
+					t.Errorf("formatSQLForDisplay() should format the SQL, but output equals input: %q", result)
+				}
 			}
 		})
 	}

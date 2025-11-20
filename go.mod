@@ -7,6 +7,7 @@ toolchain go1.24.7
 require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/gorilla/websocket v1.5.3
+	github.com/jomei/notionapi v1.13.3
 	github.com/lib/pq v1.10.9
 	github.com/lmittmann/tint v1.1.2
 	github.com/pressly/goose/v3 v3.26.0
