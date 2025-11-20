@@ -1028,12 +1028,29 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	// Extract actual request body from logs
 	// Look for GraphQL request in logs - typically in fields like "query", "operation", or in message as JSON
 	requestBody := ""
+	minTimestamp := time.Now().Add(1 * time.Hour)
+	maxTimestamp := time.Time{}
+
+	statusCode := 200
 	for _, logMsg := range logMessages {
+		if logMsg.Timestamp.Before(minTimestamp) {
+			minTimestamp = logMsg.Timestamp
+		}
+		if logMsg.Timestamp.After(maxTimestamp) {
+			maxTimestamp = logMsg.Timestamp
+		}
 		if logMsg.Fields != nil {
 			// Check if this log has GraphQL query data
 			if query, ok := logMsg.Fields["Operations"]; ok {
 				requestBody = query
-				break
+			}
+
+			if status, ok := logMsg.Fields["status"]; ok {
+				statusCodeVal, err := strconv.Atoi(status)
+				if err != nil {
+					slog.Error("failed to parse status", "error", err)
+				}
+				statusCode = statusCodeVal
 			}
 		}
 	}
@@ -1041,17 +1058,16 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	// Calculate duration from logs
 	var durationMS int64
 	if len(messages) > 1 {
-		firstTime := messages[0].Timestamp
-		lastTime := messages[len(messages)-1].Timestamp
-		if !firstTime.IsZero() && !lastTime.IsZero() {
-			durationMS = lastTime.Sub(firstTime).Milliseconds()
+
+		if !minTimestamp.IsZero() && !maxTimestamp.IsZero() {
+			durationMS = maxTimestamp.Sub(minTimestamp).Milliseconds()
 		}
 	}
 
 	exec := &store.ExecutedRequest{
 		RequestIDHeader: requestIDHeader,
 		RequestBody:     requestBody,
-		StatusCode:      200, // TODO: Set status code based on logs
+		StatusCode:      statusCode,
 		DurationMS:      durationMS,
 		ExecutedAt:      time.Now(),
 		Name:            input.Name,

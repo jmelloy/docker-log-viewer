@@ -2104,8 +2104,7 @@ export default defineComponent({
       }
 
       const queries = this.filteredSQLQueries;
-      let markdown = `# SQL Queries Export\n\n`;
-      markdown += `**Request:** ${this.requestDetail.execution.name || "(unnamed)"}\n`;
+      let markdown = `# ${this.requestDetail.execution.name || "SQL Queries"} Export\n\n`;
       markdown += `**Request ID:** ${this.requestDetail.execution.requestIdHeader}\n`;
       markdown += `**Executed At:** ${new Date(this.requestDetail.execution.executedAt).toLocaleString()}\n`;
       markdown += `**Total Queries:** ${queries.length}\n`;

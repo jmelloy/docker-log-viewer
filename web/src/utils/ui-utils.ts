@@ -7,6 +7,7 @@ import hljs from "highlight.js/lib/core";
 import json from "highlight.js/lib/languages/json";
 import sql from "highlight.js/lib/languages/sql";
 import graphql from "highlight.js/lib/languages/graphql";
+import { format } from "sql-formatter";
 import type { Plan, PlanNodeType } from "@/types";
 
 // Register languages
@@ -203,126 +204,26 @@ export function convertAnsiToHtml(text: string): string {
 export function formatSQL(sql: string): string {
   if (!sql?.trim()) return sql;
 
-  let formatted = sql.replace(/\s+/g, " ").trim();
-
-  const keywords = [
-    `\\bSELECT\\b`,
-    `(?<!\\()\\bWHERE\\b`,
-    `\\bGROUP BY\\b`,
-    `\\bORDER BY\\b`,
-    `\\bHAVING\\b`,
-    `\\bUNION ALL\\b`,
-    `\\bUNION\\b`,
-    `\\bINSERT INTO\\b`,
-    `\\bUPDATE\\b`,
-    `\\bSET\\b`,
-    `\\bVALUES\\b`,
-    `\\b(?:LEFT|RIGHT|INNER|FULL)?\\s*JOIN\\b`,
-    `\\bDELETE FROM\\b`,
-    `\\bFROM\\b`,
-  ];
-
-  keywords.forEach((kw) => {
-    formatted = formatted.replace(new RegExp(kw, "gi"), (match) => `\n${match.toUpperCase()}`);
-  });
-  const lines = formatted
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const output: string[] = [];
-  const indentStack: boolean[] = [];
-
-  for (const line of lines) {
-    if (/^(SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|UNION)$/i.test(line)) {
-      indentStack.length = 0;
-    }
-
-    const opens = (line.match(/\(/g) || []).length;
-    const closes = (line.match(/\)/g) || []).length;
-    const netChange = opens - closes;
-
-    if (netChange <= 0) {
-      // Break on AND/OR outside parens
-      let depth = 0;
-      let result = "  ".repeat(indentStack.length);
-      let i = 0;
-      const chunkPositions = [];
-      while (i < line.length) {
-        const char = line[i];
-        if (char === "(") {
-          if (depth === -1) {
-            indentStack.push(true);
-          }
-          depth++;
-        } else if (char === ")") {
-          depth--;
-          if (depth < 0) {
-            indentStack.pop();
-            result += "\n" + "  ".repeat(indentStack.length);
-          }
-        }
-
-        if (depth == 0) {
-          const remaining = line.substring(i);
-          if (/^\s+(AND|OR)\b/i.test(remaining)) {
-            const match = remaining.match(/^(\s+)(AND|OR)\b/i);
-            if (match) {
-              result += "\n" + "  ".repeat(indentStack.length + 1) + match[2].toUpperCase();
-              i += match[0].length;
-              continue;
-            }
-          }
-
-          if (char == ",") {
-            chunkPositions.push(i);
-          }
-        }
-        result += char;
-        i++;
-      }
-
-      if (chunkPositions.length > 0 && result.length > 100) {
-        chunkPositions.push(line.length);
-
-        result = "  ".repeat(indentStack.length);
-        let previousChunkPosition = 0;
-        for (const position of chunkPositions) {
-          var chunk = line.substring(previousChunkPosition, position + 1);
-          if (result.length + chunk.length > 100) {
-            if (result.trim().length > 0) {
-              output.push(result);
-            }
-            result = "  ".repeat(indentStack.length + 1);
-          }
-          result += chunk;
-          previousChunkPosition = position + 1;
-        }
-      }
-
-      output.push(result);
-
-      if (netChange < 0) {
-        for (let i = 0; i < Math.abs(netChange); i++) {
-          indentStack.pop();
-        }
-      }
-    } else {
-      output.push("  ".repeat(indentStack.length) + line);
-    }
-
-    if (netChange > 0) {
-      for (let i = 0; i < netChange; i++) {
-        indentStack.push(true);
-      }
-    }
+  try {
+    return format(sql, {
+      language: "postgresql",
+      tabWidth: 2,
+      useTabs: false,
+      keywordCase: "upper",
+      functionCase: "preserve",
+      identifierCase: "preserve",
+      dataTypeCase: "preserve",
+      expressionWidth: 80,
+    });
+  } catch (error) {
+    // If formatting fails, return the original SQL
+    console.error("Error formatting SQL:", error);
+    return sql;
   }
-
-  return output.join("\n");
 }
 
 export function explainPlanLine(node: PlanNodeType): string {
   let line = "";
-  console.log(node);
 
   if (node["Index Name"]) {
     line += ` using ${node["Index Name"]}`;
