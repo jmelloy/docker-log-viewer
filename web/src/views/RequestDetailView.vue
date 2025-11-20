@@ -39,6 +39,14 @@
               >
                 📄 Export Markdown
               </button>
+              <button
+                @click="exportToNotion"
+                class="btn-secondary"
+                style="padding: 0.5rem 1rem; font-size: 0.875rem"
+                title="Export execution details to Notion"
+              >
+                📘 Export to Notion
+              </button>
             </div>
           </div>
 
@@ -1520,6 +1528,17 @@ export default defineComponent({
     handleExplainClick(queryIdx) {
       const query = this.requestDetail.sqlQueries[queryIdx];
 
+      // Get the query to display (interpolated if variables exist)
+      let displayQuery = query.query;
+      if (query.variables) {
+        try {
+          const vars = typeof query.variables === "string" ? JSON.parse(query.variables) : query.variables;
+          displayQuery = this.interpolateSQLQuery(query.query, vars);
+        } catch (e) {
+          console.error("Error parsing variables:", e);
+        }
+      }
+
       if (query.explainPlan && query.explainPlan.length > 0) {
         // Show saved plan
         try {
@@ -1530,7 +1549,7 @@ export default defineComponent({
             table: query.table,
             operationName: query.graphqlOperation,
           };
-          this.displayExplainPlan(plan, query.query, metadata);
+          this.displayExplainPlan(plan, displayQuery, metadata);
         } catch (err) {
           alert("Error parsing saved plan: " + err.message);
         }
@@ -1655,7 +1674,12 @@ export default defineComponent({
         if (result.error) {
           alert(`EXPLAIN Error: ${result.error}`);
         } else {
-          const displayQuery = result.query || query;
+          // Use interpolated query from result if available, otherwise interpolate locally
+          let displayQuery = result.query || query;
+          if (Object.keys(vars).length > 0 && displayQuery === query) {
+            // If backend didn't interpolate, do it locally
+            displayQuery = this.interpolateSQLQuery(query, vars);
+          }
           this.displayExplainPlan(result.queryPlan, formatSQLUtil(displayQuery), metadata);
         }
       } catch (error: Error | any) {
@@ -2131,22 +2155,19 @@ export default defineComponent({
         let queryName = parts.filter((p) => p).join(" - ");
         markdown += `## ${queryName ? `Query: ${queryName}` : `Query ${idx + 1}`}\n\n`;
 
-        // Variables
+        // Variables - use interpolated query if variables exist
+        let displayQuery = q.query;
         if (q.variables) {
-          let query = q.query;
           try {
             const vars = typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables;
-            let idx = 0;
-            for (const value of vars) {
-              idx++;
-              query = query.replace(`$${idx}`, `'${String(value)}'`);
+            if (vars && Object.keys(vars).length > 0) {
+              displayQuery = this.interpolateSQLQuery(q.query, vars);
             }
-            markdown += `**SQL Query:**\n\`\`\`sql\n${formatSQLUtil(query)}\n\`\`\`\n\n`;
           } catch (e) {
-            markdown += `**SQL Query:**\n\`\`\`sql\n${formatSQLUtil(q.query)}\n\`\`\`\n\n`;
-            markdown += `**Variables:** ${q.variables}\n\n`;
+            console.error("Error parsing variables:", e);
           }
         }
+        markdown += `**SQL Query:**\n\`\`\`sql\n${formatSQLUtil(displayQuery)}\n\`\`\`\n\n`;
         // Explain plan if available
         if (q.explainPlan) {
           markdown += `**Explain Plan:**\n\`\`\`\n`;
@@ -2188,6 +2209,81 @@ export default defineComponent({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    },
+
+    async exportToNotion() {
+      if (!this.requestDetail) return;
+
+      try {
+        const executionId = this.requestDetail.execution.id;
+        const response = await fetch(`/api/executions/${executionId}/export-notion`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error || "Failed to export to Notion");
+        }
+
+        const result = await response.json();
+        if (result.url) {
+          alert(`Successfully exported to Notion!\nPage URL: ${result.url}`);
+          // Optionally open the page
+          window.open(result.url, "_blank");
+        } else {
+          alert("Successfully exported to Notion!");
+        }
+      } catch (err: any) {
+        console.error("Error exporting to Notion:", err);
+        alert(`Failed to export to Notion: ${err.message}`);
+      }
+    },
+
+    interpolateSQLQuery(query: string, variables: any): string {
+      if (!variables || Object.keys(variables).length === 0) {
+        return query;
+      }
+
+      // Convert variables to a map where keys are parameter indices
+      const varsMap: Record<string, string> = {};
+      if (Array.isArray(variables)) {
+        // Array format: ["value1", "value2"] -> {"1": "value1", "2": "value2"}
+        variables.forEach((val, idx) => {
+          varsMap[String(idx + 1)] = typeof val === "string" ? val : JSON.stringify(val);
+        });
+      } else {
+        // Object format: {"key": "value"} -> {"key": "value"}
+        for (const [key, value] of Object.entries(variables)) {
+          varsMap[key] = typeof value === "string" ? value : JSON.stringify(value);
+        }
+      }
+
+      // Replace $1, $2, etc. with actual values
+      return query.replace(/\$(\d+)/g, (match, num) => {
+        const val = varsMap[num];
+        if (val === undefined) {
+          return match;
+        }
+
+        const trimmedVal = val.trim();
+        // Handle NULL
+        if (trimmedVal === "" || trimmedVal.toLowerCase() === "null") {
+          return "NULL";
+        }
+        // Handle booleans
+        if (val === "true" || val === "false" || val === "TRUE" || val === "FALSE") {
+          return val;
+        }
+        // Handle numbers
+        if (/^-?\d+(\.\d+)?$/.test(val)) {
+          return val;
+        }
+        // Quote strings (escape single quotes)
+        return `'${val.replace(/'/g, "''")}'`;
+      });
     },
   },
 });
