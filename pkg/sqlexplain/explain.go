@@ -278,104 +278,263 @@ type Plan struct {
 	ExecutionTime float64  `json:"Execution Time,omitempty"`
 }
 
+// explainPlanLine formats a single line for a plan node (matches TypeScript explainPlanLine)
+func explainPlanLine(node map[string]interface{}) string {
+	var line strings.Builder
+
+	// Index Name
+	if indexName, ok := getString(node, "Index Name"); ok && indexName != "" {
+		line.WriteString(fmt.Sprintf(" using %s", indexName))
+	}
+
+	// Relation Name or CTE Name
+	relationName, hasRelation := getString(node, "Relation Name")
+	cteName, hasCTE := getString(node, "CTE Name")
+	if hasRelation && relationName != "" {
+		line.WriteString(fmt.Sprintf(" on %s", relationName))
+		// Alias
+		if alias, ok := getString(node, "Alias"); ok && alias != "" && alias != relationName {
+			line.WriteString(fmt.Sprintf(" %s", alias))
+		}
+	} else if hasCTE && cteName != "" {
+		line.WriteString(fmt.Sprintf(" on %s", cteName))
+		// Alias
+		if alias, ok := getString(node, "Alias"); ok && alias != "" && alias != cteName {
+			line.WriteString(fmt.Sprintf(" %s", alias))
+		}
+	}
+
+	// Cost and rows
+	costStart := 0.0
+	if val, ok := getFloat64(node, "Startup Cost"); ok {
+		costStart = val
+	}
+	costEnd := 0.0
+	if val, ok := getFloat64(node, "Total Cost"); ok {
+		costEnd = val
+	}
+	rows := 0
+	if val, ok := getInt(node, "Plan Rows"); ok {
+		rows = val
+	}
+	width := 0
+	if val, ok := getInt(node, "Plan Width"); ok {
+		width = val
+	}
+	line.WriteString(fmt.Sprintf("  (cost=%.2f..%.2f rows=%d width=%d)", costStart, costEnd, rows, width))
+
+	// Actual time if available
+	if actualStart, ok1 := getFloat64(node, "Actual Startup Time"); ok1 {
+		if actualEnd, ok2 := getFloat64(node, "Actual Total Time"); ok2 {
+			actualRows := 0
+			if val, ok := getInt(node, "Actual Rows"); ok {
+				actualRows = val
+			}
+			loops := 1
+			if val, ok := getInt(node, "Actual Loops"); ok {
+				loops = val
+			}
+			line.WriteString(fmt.Sprintf(" (actual time=%.3f..%.3f rows=%d loops=%d)", actualStart, actualEnd, actualRows, loops))
+		}
+	}
+
+	return line.String()
+}
+
+// Helper functions to safely extract values from map[string]interface{}
+func getString(m map[string]interface{}, key string) (string, bool) {
+	val, ok := m[key]
+	if !ok {
+		return "", false
+	}
+	str, ok := val.(string)
+	return str, ok
+}
+
+func getFloat64(m map[string]interface{}, key string) (float64, bool) {
+	val, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	}
+	return 0, false
+}
+
+func getInt(m map[string]interface{}, key string) (int, bool) {
+	val, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case float32:
+		return int(v), true
+	}
+	return 0, false
+}
+
 func FormatExplainPlanAsText(planJSON any) (string, error) {
 	var output []string
 
-	var formatNode func(node PlanNode, indent int, isLast bool, prefix string)
-	formatNode = func(node PlanNode, indent int, isLast bool, prefix string) {
-		line := ""
+	var formatNode func(node map[string]interface{}, level int, isLast bool, prefix string)
+	formatNode = func(node map[string]interface{}, level int, isLast bool, prefix string) {
+		indent := level
+		spaces := strings.Repeat("  ", indent)
+		line := spaces
 
+		// Add tree structure characters
 		if indent > 0 {
 			if isLast {
 				line = prefix + "└─ "
 			} else {
 				line = prefix + "├─ "
 			}
-		} else {
-			line = strings.Repeat("  ", indent)
 		}
 
-		line += node.NodeType
-		if node.RelationName != "" {
-			line += fmt.Sprintf(" on %s", node.RelationName)
-			if node.Alias != "" && node.Alias != node.RelationName {
-				line += fmt.Sprintf(" %s", node.Alias)
-			}
+		// Subplan Name
+		if subplanName, ok := getString(node, "Subplan Name"); ok && subplanName != "" {
+			output = append(output, fmt.Sprintf("%s%s", spaces, subplanName))
 		}
 
-		line += fmt.Sprintf("  (cost=%.2f..%.2f rows=%d width=%d)",
-			node.StartupCost, node.TotalCost, node.PlanRows, node.PlanWidth)
-
-		if node.ActualStartupTime > 0 || node.ActualTotalTime > 0 {
-			loops := node.ActualLoops
-			if loops == 0 {
-				loops = 1
-			}
-			line += fmt.Sprintf(" (actual time=%.3f..%.3f rows=%d loops=%d)",
-				node.ActualStartupTime, node.ActualTotalTime, node.ActualRows, loops)
-		}
+		// Node type and relation
+		nodeType, _ := getString(node, "Node Type")
+		line += nodeType
+		line += explainPlanLine(node)
 
 		output = append(output, line)
 
-		childPrefix := prefix
-		if isLast {
-			childPrefix += "   "
-		} else {
-			childPrefix += "│  "
-		}
-
-		if node.Filter != "" {
-			output = append(output, childPrefix+fmt.Sprintf("Filter: %s", node.Filter))
-			if node.RowsRemovedByFilter > 0 {
-				output = append(output, childPrefix+fmt.Sprintf("Rows Removed by Filter: %d", node.RowsRemovedByFilter))
+		// Filter condition
+		if filter, ok := getString(node, "Filter"); ok && filter != "" {
+			filterPrefix := prefix
+			if isLast {
+				filterPrefix += "   "
+			} else {
+				filterPrefix += "│  "
+			}
+			output = append(output, filterPrefix+fmt.Sprintf("Filter: %s", filter))
+			if rowsRemoved, ok := getInt(node, "Rows Removed by Filter"); ok {
+				output = append(output, filterPrefix+fmt.Sprintf("Rows Removed by Filter: %d", rowsRemoved))
 			}
 		}
-		if node.IndexCond != "" {
-			output = append(output, childPrefix+fmt.Sprintf("Index Cond: %s", node.IndexCond))
+
+		// Index condition
+		if indexCond, ok := getString(node, "Index Cond"); ok && indexCond != "" {
+			condPrefix := prefix
+			if isLast {
+				condPrefix += "   "
+			} else {
+				condPrefix += "│  "
+			}
+			output = append(output, condPrefix+fmt.Sprintf("Index Cond: %s", indexCond))
 		}
-		if node.HashCond != "" {
-			output = append(output, childPrefix+fmt.Sprintf("Hash Cond: %s", node.HashCond))
+
+		// Hash condition
+		if hashCond, ok := getString(node, "Hash Cond"); ok && hashCond != "" {
+			hashPrefix := prefix
+			if isLast {
+				hashPrefix += "   "
+			} else {
+				hashPrefix += "│  "
+			}
+			output = append(output, hashPrefix+fmt.Sprintf("Hash Cond: %s", hashCond))
 		}
-		if node.JoinFilter != "" {
-			output = append(output, childPrefix+fmt.Sprintf("Join Filter: %s", node.JoinFilter))
+
+		// Join Filter
+		if joinFilter, ok := getString(node, "Join Filter"); ok && joinFilter != "" {
+			joinPrefix := prefix
+			if isLast {
+				joinPrefix += "   "
+			} else {
+				joinPrefix += "│  "
+			}
+			output = append(output, joinPrefix+fmt.Sprintf("Join Filter: %s", joinFilter))
 		}
-		if node.SortKey != nil {
-			sortKeys := ""
-			switch v := node.SortKey.(type) {
+
+		// Sort Key
+		if sortKey, ok := node["Sort Key"]; ok && sortKey != nil {
+			sortPrefix := prefix
+			if isLast {
+				sortPrefix += "   "
+			} else {
+				sortPrefix += "│  "
+			}
+			var sortKeys string
+			switch v := sortKey.(type) {
+			case []interface{}:
+				var parts []string
+				for _, item := range v {
+					parts = append(parts, fmt.Sprintf("%v", item))
+				}
+				sortKeys = strings.Join(parts, ", ")
 			case []string:
 				sortKeys = strings.Join(v, ", ")
-			case string:
-				sortKeys = v
+			default:
+				sortKeys = fmt.Sprintf("%v", v)
 			}
-			output = append(output, childPrefix+fmt.Sprintf("Sort Key: %s", sortKeys))
+			output = append(output, sortPrefix+fmt.Sprintf("Sort Key: %s", sortKeys))
 		}
 
-		for i, child := range node.Plans {
-			formatNode(child, indent+1, i == len(node.Plans)-1, childPrefix)
+		// Process child plans
+		if plans, ok := node["Plans"].([]interface{}); ok && len(plans) > 0 {
+			childPrefix := prefix
+			if isLast {
+				childPrefix += "   "
+			} else {
+				childPrefix += "│  "
+			}
+			for idx, child := range plans {
+				if childMap, ok := child.(map[string]interface{}); ok {
+					childIsLast := idx == len(plans)-1
+					formatNode(childMap, indent+1, childIsLast, childPrefix)
+				}
+			}
 		}
 	}
 
-	switch p := planJSON.(type) {
-	case []Plan:
-		for _, plan := range p {
-			formatNode(plan.Plan, 0, true, "")
-			if plan.PlanningTime > 0 {
-				output = append(output, fmt.Sprintf("Planning Time: %.3f ms", plan.PlanningTime))
+	// Handle array of plans
+	if planArray, ok := planJSON.([]interface{}); ok {
+		for _, planItem := range planArray {
+			if planMap, ok := planItem.(map[string]interface{}); ok {
+				if planNode, ok := planMap["Plan"].(map[string]interface{}); ok {
+					formatNode(planNode, 0, true, "")
+				}
+				if planningTime, ok := getFloat64(planMap, "Planning Time"); ok {
+					output = append(output, fmt.Sprintf("Planning Time: %.3f ms", planningTime))
+				}
+				if executionTime, ok := getFloat64(planMap, "Execution Time"); ok {
+					output = append(output, fmt.Sprintf("Execution Time: %.3f ms", executionTime))
+				}
+				output = append(output, "")
 			}
-			if plan.ExecutionTime > 0 {
-				output = append(output, fmt.Sprintf("Execution Time: %.3f ms", plan.ExecutionTime))
+		}
+	} else if planMap, ok := planJSON.(map[string]interface{}); ok {
+		// Handle single plan
+		if planNode, ok := planMap["Plan"].(map[string]interface{}); ok {
+			formatNode(planNode, 0, true, "")
+
+			// Add planning and execution time
+			if planningTime, ok := getFloat64(planMap, "Planning Time"); ok {
+				output = append(output, fmt.Sprintf("Planning Time: %.3f ms", planningTime))
 			}
-			output = append(output, "")
+			if executionTime, ok := getFloat64(planMap, "Execution Time"); ok {
+				output = append(output, fmt.Sprintf("Execution Time: %.3f ms", executionTime))
+			}
 		}
-	case Plan:
-		formatNode(p.Plan, 0, true, "")
-		if p.PlanningTime > 0 {
-			output = append(output, fmt.Sprintf("Planning Time: %.3f ms", p.PlanningTime))
-		}
-		if p.ExecutionTime > 0 {
-			output = append(output, fmt.Sprintf("Execution Time: %.3f ms", p.ExecutionTime))
-		}
-	default:
+	} else {
 		return "", fmt.Errorf("unsupported plan type: %T", planJSON)
 	}
 

@@ -24,7 +24,7 @@
 
       <!-- Visual view using simple query plan viewer -->
       <div v-if="displayMode === 'visual' && hasValidPlan" class="visual-view">
-        <div v-if="formattedQuery" class="query-section">
+        <div v-if="formattedQuery && showQuery" class="query-section">
           <div class="query-header">
             <h4>Query</h4>
             <button @click="copyToClipboard(query)" class="btn-copy" title="Copy query to clipboard">📋 Copy</button>
@@ -36,7 +36,7 @@
 
       <!-- JSON view -->
       <div v-if="displayMode === 'json'" class="json-view">
-        <div v-if="formattedQuery" class="query-section">
+        <div v-if="formattedQuery && showQuery" class="query-section">
           <div class="query-header">
             <h4>Query</h4>
             <button @click="copyToClipboard(query)" class="btn-copy" title="Copy query to clipboard">📋 Copy</button>
@@ -51,7 +51,7 @@
 
       <!-- Text view (plain) -->
       <div v-if="displayMode === 'text'" class="text-view">
-        <div v-if="formattedQuery" class="query-section">
+        <div v-if="formattedQuery && showQuery" class="query-section">
           <div class="query-header">
             <h4>Query</h4>
             <button @click="copyToClipboard(query)" class="btn-copy" title="Copy query to clipboard">📋 Copy</button>
@@ -90,6 +90,10 @@ export default defineComponent({
       type: String,
       default: "visual", // 'visual', 'json', or 'text'
       validator: (value: string) => ["visual", "json", "text"].includes(value),
+    },
+    showQuery: {
+      type: Boolean,
+      default: true,
     },
   },
   data() {

@@ -872,7 +872,7 @@ func (wa *WebApp) buildPortToServerMap(containers []logs.Container) map[int]stri
 					if strings.Contains(server.URL, fmt.Sprintf(":%d", port.PublicPort)) {
 						if server.DefaultDatabase != nil && server.DefaultDatabase.ConnectionString != "" {
 							portToServerMap[port.PublicPort] = server.DefaultDatabase.ConnectionString
-							slog.Info("mapped container port to server", "port", port, "server", server.Name, "container", container.Name)
+							slog.Debug("mapped container port to server", "port", port, "server", server.Name, "container", container.Name)
 						}
 						break
 					}
@@ -1725,7 +1725,6 @@ func (wa *WebApp) handleSQLNotionExport(w http.ResponseWriter, r *http.Request) 
 func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (string, error) {
 	// Format SQL query with basic formatting
 	formattedQuery := formatSQLForDisplay(detail.Query)
-	formattedNormalized := formatSQLForDisplay(detail.NormalizedQuery)
 
 	// Get execution info
 	var requestID string
@@ -1849,8 +1848,29 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 					},
 				},
 			},
-		},
-		map[string]interface{}{
+		})
+	statment := ""
+	for _, line := range strings.Split(formattedQuery, "\n") {
+		if len(statment)+len(line) > 2000 {
+			blocks = append(blocks, map[string]interface{}{
+				"object": "block",
+				"type":   "code",
+				"code": map[string]interface{}{
+					"language": "sql",
+					"rich_text": []map[string]interface{}{
+						{
+							"type": "text",
+							"text": map[string]string{"content": statment},
+						},
+					},
+				},
+			})
+			statment = ""
+		}
+		statment += line + "\n"
+	}
+	if statment != "" {
+		blocks = append(blocks, map[string]interface{}{
 			"object": "block",
 			"type":   "code",
 			"code": map[string]interface{}{
@@ -1858,41 +1878,12 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 				"rich_text": []map[string]interface{}{
 					{
 						"type": "text",
-						"text": map[string]string{"content": truncateText(formattedQuery, 2000)},
+						"text": map[string]string{"content": statment},
 					},
 				},
 			},
-		},
-	)
-
-	// Normalized Query section
-	blocks = append(blocks,
-		map[string]interface{}{
-			"object": "block",
-			"type":   "heading_2",
-			"heading_2": map[string]interface{}{
-				"rich_text": []map[string]interface{}{
-					{
-						"type": "text",
-						"text": map[string]string{"content": "Normalized Query"},
-					},
-				},
-			},
-		},
-		map[string]interface{}{
-			"object": "block",
-			"type":   "code",
-			"code": map[string]interface{}{
-				"language": "sql",
-				"rich_text": []map[string]interface{}{
-					{
-						"type": "text",
-						"text": map[string]string{"content": truncateText(formattedNormalized, 2000)},
-					},
-				},
-			},
-		},
-	)
+		})
+	}
 
 	// EXPLAIN Plan section (if available)
 	if detail.ExplainPlan != "" {
@@ -1909,8 +1900,29 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 						},
 					},
 				},
-			},
-			map[string]interface{}{
+			})
+		statment = ""
+		for _, line := range strings.Split(explainText, "\n") {
+			if len(statment)+len(line) > 2000 {
+				blocks = append(blocks, map[string]interface{}{
+					"object": "block",
+					"type":   "code",
+					"code": map[string]interface{}{
+						"language": "plain text",
+						"rich_text": []map[string]interface{}{
+							{
+								"type": "text",
+								"text": map[string]string{"content": statment},
+							},
+						},
+					},
+				})
+				statment = ""
+			}
+			statment += line + "\n"
+		}
+		if statment != "" {
+			blocks = append(blocks, map[string]interface{}{
 				"object": "block",
 				"type":   "code",
 				"code": map[string]interface{}{
@@ -1918,12 +1930,12 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 					"rich_text": []map[string]interface{}{
 						{
 							"type": "text",
-							"text": map[string]string{"content": truncateText(explainText, 2000)},
+							"text": map[string]string{"content": statment},
 						},
 					},
 				},
-			},
-		)
+			})
+		}
 	}
 
 	// Build the request payload
