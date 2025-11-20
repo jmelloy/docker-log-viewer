@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -23,11 +19,12 @@ import (
 	"syscall"
 	"time"
 
+	"docker-log-parser/pkg/httputil"
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/logstore"
 	"docker-log-parser/pkg/sqlexplain"
+	"docker-log-parser/pkg/sqlutil"
 	"docker-log-parser/pkg/store"
-	"docker-log-parser/pkg/utils"
 
 	"github.com/gorilla/websocket"
 	"github.com/jomei/notionapi"
@@ -240,6 +237,10 @@ func (wa *WebApp) loadContainerRetentions() error {
 	}
 	return nil
 }
+
+// ============================================================================
+// HTTP Handlers - Container & Log Management
+// ============================================================================
 
 func (wa *WebApp) handleContainers(w http.ResponseWriter, r *http.Request) {
 	containers, err := wa.docker.ListRunningContainers(wa.ctx)
@@ -936,6 +937,10 @@ func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 	}
 }
 
+// ============================================================================
+// HTTP Handlers - SQL Analysis & Trace Management
+// ============================================================================
+
 func (wa *WebApp) handleExplain(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -1090,7 +1095,7 @@ func (wa *WebApp) handleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract and save SQL queries from logs (trigger SQL log collection)
-	sqlQueries := extractSQLQueries(messages)
+	sqlQueries := sqlutil.ExtractSQLQueries(messages)
 	if len(sqlQueries) > 0 {
 		if err := wa.store.SaveSQLQueries(id, sqlQueries); err != nil {
 			slog.Error("failed to save SQL queries from trace", "error", err)
@@ -1227,7 +1232,7 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate request ID
-	requestIDHeader := generateRequestID()
+	requestIDHeader := httputil.GenerateRequestID()
 
 	// Create execution record immediately with pending status
 	execution := &store.ExecutedRequest{
@@ -1252,7 +1257,7 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 	// Define execution logic as a function
 	executeRequest := func() {
 		startTime := time.Now()
-		statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(input.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
+		statusCode, responseBody, responseHeaders, err := httputil.MakeHTTPRequest(url, []byte(input.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
 		execution.DurationMS = time.Since(startTime).Milliseconds()
 		execution.StatusCode = statusCode
 		execution.ResponseBody = responseBody
@@ -1266,7 +1271,7 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 		if execution.Error == "" && statusCode == 200 && responseBody != "" {
 			var responseData interface{}
 			if err := json.Unmarshal([]byte(responseBody), &responseData); err == nil {
-				if hasErrors, message, key := containsErrorsKey(responseData, ""); hasErrors {
+				if hasErrors, message, key := httputil.ContainsErrorsKey(responseData, ""); hasErrors {
 					slog.Warn("GraphQL errors in response", "message", message, "key", key)
 					msg := fmt.Sprintf("GraphQL errors: %s", message)
 					if key != "" {
@@ -1287,7 +1292,7 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 		slog.Info("request executed", "header_id", requestIDHeader, "status", statusCode, "duration_ms", execution.DurationMS)
 
 		// Collect logs
-		collectedLogs := wa.collectLogsForRequest(requestIDHeader, 10*time.Second)
+		collectedLogs := httputil.CollectLogsForRequest(requestIDHeader, wa.logStore, 10*time.Second)
 
 		// Save logs
 		if len(collectedLogs) > 0 {
@@ -1297,7 +1302,7 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Extract and save SQL queries
-		sqlQueries := extractSQLQueries(collectedLogs)
+		sqlQueries := sqlutil.ExtractSQLQueries(collectedLogs)
 		if len(sqlQueries) > 0 {
 			if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
 				slog.Error("failed to save SQL queries", "error", err)
@@ -1368,6 +1373,10 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 }
+
+// ============================================================================
+// HTTP Handlers - Request & Execution Management
+// ============================================================================
 
 // Request management handlers
 func (wa *WebApp) handleRequests(w http.ResponseWriter, r *http.Request) {
@@ -1733,99 +1742,8 @@ func (wa *WebApp) handleSQLNotionExport(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-// interpolateSQLQuery interpolates SQL query variables ($1, $2, etc.) with actual values
-// variables can be a JSON string (array or object) or a map[string]string
-func interpolateSQLQuery(query string, variables interface{}) string {
-	if variables == nil {
-		return query
-	}
 
-	var varsMap map[string]string
 
-	// Handle different variable formats
-	switch v := variables.(type) {
-	case string:
-		if v == "" {
-			return query
-		}
-		// Try to parse as JSON
-		var parsed interface{}
-		if err := json.Unmarshal([]byte(v), &parsed); err != nil {
-			return query
-		}
-		varsMap = convertVariablesToMap(parsed)
-	case map[string]string:
-		varsMap = v
-	case map[string]interface{}:
-		varsMap = make(map[string]string)
-		for k, val := range v {
-			varsMap[k] = fmt.Sprintf("%v", val)
-		}
-	default:
-		// Try to convert to map
-		varsMap = convertVariablesToMap(v)
-	}
-
-	if len(varsMap) == 0 {
-		return query
-	}
-
-	// Use the same substitution logic as sqlexplain package
-	return substituteVariables(query, varsMap)
-}
-
-// convertVariablesToMap converts variables from various formats to map[string]string
-func convertVariablesToMap(vars interface{}) map[string]string {
-	result := make(map[string]string)
-
-	switch v := vars.(type) {
-	case []interface{}:
-		// Array format: ["value1", "value2"] -> {"1": "value1", "2": "value2"}
-		for i, val := range v {
-			result[strconv.Itoa(i+1)] = fmt.Sprintf("%v", val)
-		}
-	case map[string]interface{}:
-		// Object format: {"key": "value"} -> {"key": "value"}
-		for k, val := range v {
-			result[k] = fmt.Sprintf("%v", val)
-		}
-	case map[string]string:
-		return v
-	}
-
-	return result
-}
-
-// substituteVariables replaces $1, $2, etc. with actual values from variables map
-func substituteVariables(query string, variables map[string]string) string {
-	// Match $1, $2, $3, etc.
-	re := regexp.MustCompile(`\$(\d+)`)
-
-	result := re.ReplaceAllStringFunc(query, func(match string) string {
-		// Extract the number
-		num := match[1:]
-		if val, ok := variables[num]; ok {
-			// Handle NULL (but only if it's exactly "NULL" or empty, case-insensitive)
-			trimmedVal := strings.TrimSpace(val)
-			if trimmedVal == "" || strings.EqualFold(trimmedVal, "NULL") {
-				return "NULL"
-			}
-			// Handle booleans
-			if val == "true" || val == "false" || val == "TRUE" || val == "FALSE" {
-				return val
-			}
-			// Handle numbers (integers and floats)
-			if regexp.MustCompile(`^-?\d+(\.\d+)?$`).MatchString(val) {
-				return val
-			}
-			// Quote strings (including timestamps, UUIDs, etc.)
-			return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
-		}
-		return match
-	})
-
-	return result
-}
 
 // handleExecutionNotionExport exports execution details to Notion
 func (wa *WebApp) handleExecutionNotionExport(w http.ResponseWriter, r *http.Request) {
@@ -2007,7 +1925,7 @@ func newDividerBlock() notionapi.Block {
 // createNotionPage creates a new page in Notion with the SQL query details
 func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (string, error) {
 	// Format SQL query with basic formatting
-	formattedQuery := formatSQLForDisplay(detail.Query)
+	formattedQuery := sqlutil.FormatSQLForDisplay(detail.Query)
 
 	// Get execution info
 	var requestID string
@@ -2060,7 +1978,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 
 	// EXPLAIN Plan section (if available)
 	if detail.ExplainPlan != "" {
-		explainText := formatExplainPlanForNotion(detail.ExplainPlan)
+		explainText := sqlutil.FormatExplainPlanForNotion(detail.ExplainPlan)
 		blocks = append(blocks, newHeading2Block("EXPLAIN Plan"))
 
 		// Add Dalibo explain link
@@ -2214,9 +2132,9 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Execu
 			// Get the query to display (interpolated if variables exist)
 			displayQuery := q.Query
 			if q.Variables != "" {
-				displayQuery = interpolateSQLQuery(q.Query, q.Variables)
+				displayQuery = sqlutil.InterpolateSQLQuery(q.Query, q.Variables)
 			}
-			formattedQuery := formatSQLForDisplay(displayQuery)
+			formattedQuery := sqlutil.FormatSQLForDisplay(displayQuery)
 
 			// Add SQL query as code block
 			statement := ""
@@ -2240,7 +2158,7 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Execu
 
 			// Add EXPLAIN plan if available
 			if q.ExplainPlan != "" {
-				explainText := formatExplainPlanForNotion(q.ExplainPlan)
+				explainText := sqlutil.FormatExplainPlanForNotion(q.ExplainPlan)
 				blocks = append(blocks, newHeading4Block("EXPLAIN Plan"))
 
 				// Add EXPLAIN plan as code block
@@ -2313,108 +2231,7 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Execu
 	return page.URL, nil
 }
 
-// formatSQLForDisplay formats SQL using the sql-formatter binary from the web package
-func formatSQLForDisplay(sql string) string {
-	if sql == "" {
-		return ""
-	}
 
-	// Try to find sql-formatter binary
-	// First, try in web/node_modules/.bin/sql-formatter (relative to current working directory)
-	webDir := "web"
-	if _, err := os.Stat(webDir); os.IsNotExist(err) {
-		// Try to find web directory relative to executable
-		execPath, err := os.Executable()
-		if err == nil {
-			execDir := filepath.Dir(execPath)
-			// Try going up a few directories to find web
-			for i := 0; i < 5; i++ {
-				candidate := filepath.Join(execDir, webDir)
-				if _, err := os.Stat(candidate); err == nil {
-					webDir = candidate
-					break
-				}
-				execDir = filepath.Dir(execDir)
-			}
-		}
-	}
-
-	sqlFormatterPath := filepath.Join(webDir, "node_modules", ".bin", "sql-formatter")
-	if _, err := os.Stat(sqlFormatterPath); os.IsNotExist(err) {
-		// Fallback: try using npx
-		return formatSQLWithNpx(sql)
-	}
-
-	// Use the sql-formatter binary
-	cmd := exec.Command(sqlFormatterPath, "--language", "postgresql")
-	cmd.Stdin = strings.NewReader(sql)
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		slog.Error("failed to format SQL", "error", err)
-		slog.Error("stderr", "stderr", stderr.String())
-		// If formatting fails, fall back to basic formatting
-		return formatSQLBasic(sql)
-	}
-
-	formatted := strings.TrimSpace(out.String())
-	if formatted == "" {
-		return formatSQLBasic(sql)
-	}
-
-	return formatted
-}
-
-// formatSQLWithNpx tries to format SQL using npx sql-formatter
-func formatSQLWithNpx(sql string) string {
-	cmd := exec.Command("npx", "--yes", "sql-formatter")
-	cmd.Stdin = strings.NewReader(sql)
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		// If npx fails, fall back to basic formatting
-		return formatSQLBasic(sql)
-	}
-
-	formatted := strings.TrimSpace(out.String())
-	if formatted == "" {
-		return formatSQLBasic(sql)
-	}
-
-	return formatted
-}
-
-// formatSQLBasic applies basic SQL formatting as fallback
-func formatSQLBasic(sql string) string {
-	// Add newlines before major keywords
-	formatted := regexp.MustCompile(`\s+(SELECT|FROM|WHERE|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|ORDER BY|GROUP BY|HAVING|LIMIT|OFFSET)`).
-		ReplaceAllString(sql, "\n$1")
-	return strings.TrimSpace(formatted)
-}
-
-// formatExplainPlanForNotion converts JSON explain plan to readable text
-func formatExplainPlanForNotion(explainPlan string) string {
-	// Try to parse as JSON and format nicely
-	var parsed any
-	if err := json.Unmarshal([]byte(explainPlan), &parsed); err == nil {
-		// It's valid JSON, format it nicely
-		formatted, err := sqlexplain.FormatExplainPlanAsText(parsed)
-		if err != nil {
-			return explainPlan
-		}
-		return formatted
-	}
-	// Not JSON or formatting failed, return as-is
-	return explainPlan
-}
 
 // truncateText truncates text to maxLen characters, adding ellipsis if truncated
 func truncateText(text string, maxLen int) string {
@@ -2512,6 +2329,10 @@ func generateDaliboExplainLink(explainPlan, query, title string) string {
 	// Fallback: return base URL
 	return "https://explain.dalibo.com/new"
 }
+
+// ============================================================================
+// HTTP Handlers - Server & Database Configuration
+// ============================================================================
 
 func (wa *WebApp) handleServers(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
@@ -2702,7 +2523,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	}
 
 	// Generate request ID
-	requestIDHeader := generateRequestID()
+	requestIDHeader := httputil.GenerateRequestID()
 
 	// Get server info for execution
 	var url, bearerToken, devID, experimentalMode, connectionString string
@@ -2780,7 +2601,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	// Execute HTTP request in background
 	go func() {
 		startTime := time.Now()
-		statusCode, responseBody, responseHeaders, err := makeHTTPRequest(url, []byte(requestData), requestIDHeader, bearerToken, devID, experimentalMode)
+		statusCode, responseBody, responseHeaders, err := httputil.MakeHTTPRequest(url, []byte(requestData), requestIDHeader, bearerToken, devID, experimentalMode)
 		execution.DurationMS = time.Since(startTime).Milliseconds()
 		execution.StatusCode = statusCode
 		execution.ResponseBody = responseBody
@@ -2794,7 +2615,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		if execution.Error == "" && statusCode == 200 && responseBody != "" {
 			var responseData interface{}
 			if err := json.Unmarshal([]byte(responseBody), &responseData); err == nil {
-				if hasErrors, message, key := containsErrorsKey(responseData, ""); hasErrors {
+				if hasErrors, message, key := httputil.ContainsErrorsKey(responseData, ""); hasErrors {
 					slog.Warn("GraphQL errors in response", "message", message, "key", key)
 					execution.Error = fmt.Sprintf("GraphQL errors in response: %s at %s", message, key)
 				}
@@ -2811,7 +2632,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		slog.Info("request executed", "request_id", requestID, "header_id", requestIDHeader, "status", statusCode, "duration_ms", execution.DurationMS)
 
 		// Collect logs
-		collectedLogs := wa.collectLogsForRequest(requestIDHeader, 10*time.Second)
+		collectedLogs := httputil.CollectLogsForRequest(requestIDHeader, wa.logStore, 10*time.Second)
 
 		// Save logs
 		if len(collectedLogs) > 0 {
@@ -2821,7 +2642,7 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 		}
 
 		// Extract and save SQL queries
-		sqlQueries := extractSQLQueries(collectedLogs)
+		sqlQueries := sqlutil.ExtractSQLQueries(collectedLogs)
 		if len(sqlQueries) > 0 {
 			if err := wa.store.SaveSQLQueries(execID, sqlQueries); err != nil {
 				slog.Error("failed to save SQL queries", "error", err)
@@ -2870,242 +2691,9 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	return execID
 }
 
-func generateRequestID() string {
-	b := make([]byte, 4)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
 
-// containsErrorsKey recursively checks if the data contains an "errors" key
-func containsErrorsKey(data interface{}, key string) (bool, string, string) {
-	slog.Debug("containsErrorsKey", "data", data, "key", key)
-	errors := map[string]string{}
 
-	switch v := data.(type) {
-	case map[string]interface{}:
-		if _, exists := v["errors"]; exists {
-			if errors, ok := v["errors"].([]interface{}); ok && len(errors) > 0 {
-				if first, ok := errors[0].(map[string]interface{}); ok {
-					message, _ := json.Marshal(first)
-					return true, string(message), key
-				}
-			}
-			return true, "Unknown error", key
-		}
-		for k, value := range v {
-			if hasErrors, message, key := containsErrorsKey(value, fmt.Sprintf("%s.%s", key, k)); hasErrors {
-				return true, message, key
-			}
-		}
-	case []interface{}:
-		for i, item := range v {
-			if hasErrors, message, key := containsErrorsKey(item, fmt.Sprintf("%s.[%d]", key, i)); hasErrors {
-				errors[key] = message
-			}
-		}
-	}
-	if len(errors) > 0 {
-		errorsString := ""
-		for k, v := range errors {
-			errorsString += fmt.Sprintf("%s: %s\n", k, v)
-		}
-		return true, errorsString, ""
-	}
-	return false, "", key
-}
 
-func makeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
-	// Replace localhost with host.docker.internal if running in Docker
-	url = utils.ReplaceLocalhostWithDockerHost(url)
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
-	if err != nil {
-		return 0, "", "", err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Request-Id", requestID)
-
-	if bearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+bearerToken)
-	}
-	if devID != "" {
-		req.Header.Set("X-GlueDev-UserID", devID)
-	}
-	if experimentalMode != "" {
-		req.Header.Set("x-glue-experimental-mode", experimentalMode)
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, "", "", err
-	}
-	defer resp.Body.Close()
-
-	// Capture response headers as JSON
-	headersJSON, _ := json.Marshal(resp.Header)
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return resp.StatusCode, "", string(headersJSON), err
-	}
-
-	return resp.StatusCode, string(bodyBytes), string(headersJSON), nil
-}
-
-func (wa *WebApp) collectLogsForRequest(requestID string, timeout time.Duration) []logs.LogMessage {
-	// Wait for logs to arrive
-	time.Sleep(timeout)
-
-	// Search LogStore for matching request ID
-	filters := []logstore.FieldFilter{
-		{Name: "request_id", Value: requestID},
-	}
-	storeResults := wa.logStore.SearchByFields(filters, 100000)
-
-	// Convert back to logs.LogMessage
-	collected := make([]logs.LogMessage, 0, len(storeResults))
-	for _, storeMsg := range storeResults {
-		collected = append(collected, logs.LogMessage{
-			ContainerID: storeMsg.ContainerID,
-			Timestamp:   storeMsg.Timestamp,
-			Entry:       deserializeLogEntry(storeMsg),
-		})
-	}
-
-	return collected
-}
-
-func extractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
-	queries := []store.SQLQuery{}
-
-	for _, msg := range logMessages {
-		if msg.Entry == nil || msg.Entry.Message == "" {
-			continue
-		}
-
-		message := msg.Entry.Message
-		// Check for [sql] or [query] format
-		if strings.Contains(message, "[sql]") || (msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query") {
-			var sqlText string
-			var normalizedQuery string
-			var query store.SQLQuery
-
-			// Handle [sql] format
-			index := strings.Index(message, "[sql]:")
-			if index != -1 {
-				message = message[index+6:]
-				normalizedQuery = utils.NormalizeQuery(message)
-				query = store.SQLQuery{
-					Query:           message,
-					NormalizedQuery: normalizedQuery,
-					QueryHash:       store.ComputeQueryHash(normalizedQuery),
-					ContainerID:     msg.ContainerID,
-				}
-			} else if msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query" {
-				// Handle [query] format - message is the SQL query
-				sqlText = message
-				normalizedQuery = utils.NormalizeQuery(sqlText)
-				query = store.SQLQuery{
-					Query:           sqlText,
-					NormalizedQuery: normalizedQuery,
-					QueryHash:       store.ComputeQueryHash(normalizedQuery),
-					ContainerID:     msg.ContainerID,
-				}
-
-				// Extract duration and rows from fields
-				if duration, ok := msg.Entry.Fields["duration_ms"]; ok {
-					if durationVal, err := strconv.ParseFloat(duration, 64); err == nil {
-						query.DurationMS = durationVal
-					}
-				}
-				if rows, ok := msg.Entry.Fields["rows"]; ok {
-					if rowsVal, err := strconv.Atoi(rows); err == nil {
-						query.Rows = rowsVal
-					}
-				}
-			} else {
-				continue
-			}
-
-			if msg.Entry.Fields != nil {
-				// These apply to both [sql] and [query] formats
-				if duration, ok := msg.Entry.Fields["duration"]; ok {
-					var durationVal float64
-					if _, err := strconv.ParseFloat(duration, 64); err == nil {
-						durationVal, _ = strconv.ParseFloat(duration, 64)
-						query.DurationMS = durationVal
-					}
-				}
-				if table, ok := msg.Entry.Fields["db.table"]; ok {
-					query.QueriedTable = table
-				}
-				if op, ok := msg.Entry.Fields["db.operation"]; ok {
-					query.Operation = op
-				}
-				if rows, ok := msg.Entry.Fields["db.rows"]; ok {
-					var rowsVal int
-					if _, err := strconv.Atoi(rows); err == nil {
-						rowsVal, _ = strconv.Atoi(rows)
-						query.Rows = rowsVal
-					}
-				}
-				// Store db.vars as JSON for later use in EXPLAIN
-				if vars, ok := msg.Entry.Fields["db.vars"]; ok {
-					query.Variables = vars
-				}
-				// Check both gql.operation and gql.operationName for GraphQL operation
-				if gqlOp, ok := msg.Entry.Fields["gql.operation"]; ok {
-					query.GraphQLOperation = gqlOp
-				} else if gqlOp, ok := msg.Entry.Fields["gql.operationName"]; ok {
-					query.GraphQLOperation = gqlOp
-				}
-				// Extract trace/request/span IDs
-				if requestID, ok := msg.Entry.Fields["request_id"]; ok {
-					query.RequestID = requestID
-				}
-				if spanID, ok := msg.Entry.Fields["span_id"]; ok {
-					query.SpanID = spanID
-				}
-				if traceID, ok := msg.Entry.Fields["trace_id"]; ok {
-					query.TraceID = traceID
-				}
-
-				// Store all other log fields as JSON for reference
-				otherFields := make(map[string]string)
-				excludedFields := map[string]bool{
-					"duration":          true,
-					"duration_ms":       true,
-					"db.table":          true,
-					"db.operation":      true,
-					"db.rows":           true,
-					"db.vars":           true,
-					"gql.operation":     true,
-					"gql.operationName": true,
-					"request_id":        true,
-					"span_id":           true,
-					"trace_id":          true,
-					"type":              true,
-				}
-				for k, v := range msg.Entry.Fields {
-					if !excludedFields[k] {
-						otherFields[k] = v
-					}
-				}
-				if len(otherFields) > 0 {
-					if fieldsJSON, err := json.Marshal(otherFields); err == nil {
-						query.LogFields = string(fieldsJSON)
-					}
-				}
-			}
-
-			queries = append(queries, query)
-		}
-	}
-
-	return queries
-}
 
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -3121,6 +2709,11 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		)
 	}
 }
+
+// ============================================================================
+// HTTP Handlers - Container Retention Settings
+// ============================================================================
+
 func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
