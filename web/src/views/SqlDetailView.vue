@@ -83,10 +83,11 @@
           <!-- EXPLAIN Plan -->
           <div class="modal-section">
             <h4>EXPLAIN Plan</h4>
-            <explain-plan-formatter
+            <ExplainPlanFormatter
               :explain-plan="sqlDetail.explainPlan || ''"
               :query="sqlDetail.query"
               default-mode="visual"
+              :show-query="false"
             />
           </div>
 
@@ -180,11 +181,14 @@ import { defineComponent } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
 import { formatSQL as formatSQLUtil, applySyntaxHighlighting } from "@/utils/ui-utils";
 import type { SQLQueryDetail } from "@/types";
+import { formatExplainPlanAsText } from "@/utils/ui-utils";
+import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
 
 export default defineComponent({
   name: "SqlDetailView",
   components: {
     AppHeader,
+    ExplainPlanFormatter,
   },
   data() {
     return {
@@ -295,7 +299,7 @@ export default defineComponent({
         try {
           // Try to format as text if it's JSON
           const parsed = JSON.parse(this.sqlDetail.explainPlan);
-          markdown += `\`\`\`\n${this.formatExplainPlanAsText(parsed)}\n\`\`\`\n\n`;
+          markdown += `\`\`\`\n${formatExplainPlanAsText(parsed)}\n\`\`\`\n\n`;
         } catch {
           // If not JSON, use as-is
           markdown += `\`\`\`\n${this.sqlDetail.explainPlan}\n\`\`\`\n\n`;
@@ -317,81 +321,7 @@ export default defineComponent({
         });
       }
 
-      // Related executions
-      if (this.sqlDetail.relatedExecutions && this.sqlDetail.relatedExecutions.length > 0) {
-        markdown += `## Related Executions\n\n`;
-        markdown += `| Request ID | Display Name | Status | Duration | Executed At |\n`;
-        markdown += `|------------|--------------|--------|----------|-------------|\n`;
-        this.sqlDetail.relatedExecutions.forEach((exec: any) => {
-          markdown += `| ${exec.requestIdHeader} | ${exec.displayName} | ${exec.statusCode} | ${exec.durationMs.toFixed(2)}ms | ${new Date(exec.executedAt).toLocaleString()} |\n`;
-        });
-      }
-
       return markdown;
-    },
-
-    formatExplainPlanAsText(plan: any, indent: number = 0): string {
-      // Convert JSON explain plan to human-readable text format
-      const indentStr = "  ".repeat(indent);
-      let text = "";
-
-      if (Array.isArray(plan)) {
-        plan.forEach((item) => {
-          text += this.formatExplainPlanAsText(item, indent);
-        });
-      } else if (typeof plan === "object" && plan !== null) {
-        if (plan.Plan) {
-          // PostgreSQL EXPLAIN format
-          text += `${indentStr}${plan.Plan["Node Type"] || "Unknown"}`;
-          if (plan.Plan["Relation Name"]) {
-            text += ` on ${plan.Plan["Relation Name"]}`;
-          }
-          if (plan.Plan["Alias"]) {
-            text += ` (${plan.Plan["Alias"]})`;
-          }
-          text += `\n`;
-          text += `${indentStr}  Cost: ${plan.Plan["Startup Cost"]?.toFixed(2) || 0}..${plan.Plan["Total Cost"]?.toFixed(2) || 0}`;
-          text += ` Rows: ${plan.Plan["Plan Rows"] || 0}`;
-          if (plan.Plan["Actual Rows"] !== undefined) {
-            text += ` Actual: ${plan.Plan["Actual Rows"]}`;
-          }
-          text += `\n`;
-
-          if (plan.Plan["Filter"]) {
-            text += `${indentStr}  Filter: ${plan.Plan["Filter"]}\n`;
-          }
-          if (plan.Plan["Index Cond"]) {
-            text += `${indentStr}  Index Cond: ${plan.Plan["Index Cond"]}\n`;
-          }
-
-          if (plan.Plan["Plans"]) {
-            plan.Plan["Plans"].forEach((subPlan: any) => {
-              text += this.formatExplainPlanAsText({ Plan: subPlan }, indent + 1);
-            });
-          }
-
-          if (plan["Planning Time"]) {
-            text += `\nPlanning Time: ${plan["Planning Time"].toFixed(3)}ms\n`;
-          }
-          if (plan["Execution Time"]) {
-            text += `Execution Time: ${plan["Execution Time"].toFixed(3)}ms\n`;
-          }
-        } else {
-          // Simple object format
-          Object.entries(plan).forEach(([key, value]) => {
-            if (typeof value === "object" && value !== null) {
-              text += `${indentStr}${key}:\n`;
-              text += this.formatExplainPlanAsText(value, indent + 1);
-            } else {
-              text += `${indentStr}${key}: ${value}\n`;
-            }
-          });
-        }
-      } else {
-        text += `${indentStr}${plan}\n`;
-      }
-
-      return text;
     },
 
     exportAsMarkdown() {
