@@ -384,8 +384,6 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	return nil
 }
 
-
-
 func collectLogs(requestID string, logChan <-chan logs.LogMessage, timeout time.Duration) []logs.LogMessage {
 	collected := []logs.LogMessage{}
 	deadline := time.After(timeout)
@@ -415,4 +413,3 @@ func matchesRequestID(msg logs.LogMessage, requestID string) bool {
 
 	return false
 }
-

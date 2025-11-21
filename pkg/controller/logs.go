@@ -292,7 +292,7 @@ func (c *Controller) BroadcastBatch(batch []logs.LogMessage) {
 		if err := client.conn.WriteJSON(wsMsg); err != nil {
 			// Close connection on error and remove from clients map
 			client.conn.Close()
-			
+
 			c.clientsMutex.Lock()
 			delete(c.clients, client)
 			c.clientsMutex.Unlock()

@@ -7,15 +7,15 @@ import (
 func TestGenerateRequestID(t *testing.T) {
 	id1 := GenerateRequestID()
 	id2 := GenerateRequestID()
-	
+
 	if id1 == "" {
 		t.Error("GenerateRequestID returned empty string")
 	}
-	
+
 	if len(id1) != 8 {
 		t.Errorf("Expected ID length of 8, got %d", len(id1))
 	}
-	
+
 	// IDs should be different
 	if id1 == id2 {
 		t.Error("GenerateRequestID returned same ID twice")
@@ -57,7 +57,7 @@ func TestContainsErrorsKey(t *testing.T) {
 			expected: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hasErrors, _, _ := ContainsErrorsKey(tt.data, "")
