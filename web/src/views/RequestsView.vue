@@ -515,7 +515,7 @@ export default defineComponent(
 
       async loadSampleQueries() {
         try {
-          this.sampleQueries = await API.get<SampleQuery[]>("/api/requests");
+          this.sampleQueries = await API.get<SampleQuery[]>("/api/samples/");
         } catch (error) {
           console.error("Failed to load sample queries:", error);
         }
@@ -530,7 +530,7 @@ export default defineComponent(
             search: this.searchQuery,
           });
 
-          const response = await API.get<AllExecutionsResponse>(`/api/all-executions?${params}`);
+          const response = await API.get<AllExecutionsResponse>(`/api/requests?${params}`);
           this.allRequests = response.executions || [];
           this.totalRequests = response.total || 0;
         } catch (error) {
@@ -575,7 +575,7 @@ export default defineComponent(
 
       async loadRequests(sampleQueryId: number) {
         try {
-          this.requests = await API.get<ExecutedRequest[]>(`/api/executions?request_id=${sampleQueryId}`);
+          this.requests = await API.get<ExecutedRequest[]>(`/api/requests?request_id=${sampleQueryId}`);
         } catch (error) {
           console.error("Failed to load requests for sample query:", error);
           this.requests = [];
@@ -631,9 +631,7 @@ export default defineComponent(
         const ids = this.selectedRequestIds;
 
         // Fetch details for both requests
-        const [detail1, detail2] = await Promise.all(
-          ids.map((id) => API.get<ExecutionDetail>(`/api/executions/${id}`))
-        );
+        const [detail1, detail2] = await Promise.all(ids.map((id) => API.get<ExecutionDetail>(`/api/requests/${id}`)));
 
         this.comparisonData = { detail1, detail2 };
         this.showComparisonModal = true;
@@ -729,7 +727,7 @@ export default defineComponent(
             payload.devId = this.newQueryForm.devId;
           }
 
-          await API.post<{ id: number }>("/api/requests", payload);
+          await API.post<{ id: number }>("/api/samples/", payload);
 
           // Reload sample queries
           await this.loadSampleQueries();
@@ -817,7 +815,7 @@ export default defineComponent(
             };
 
             const result = await API.post<ExecuteResponse>(
-              `/api/requests/${this.selectedSampleQuery.id}/execute`,
+              `/api/samples//${this.selectedSampleQuery.id}/execute`,
               payload
             );
 
@@ -833,7 +831,7 @@ export default defineComponent(
               window.dispatchEvent(new PopStateEvent("popstate"));
             }
           } else {
-            // No sample query - execute directly using /api/execute endpoint
+            // No sample query - execute directly using /api/requests endpoint
             const payload = {
               serverId: serverId,
               requestData: requestData,
@@ -842,7 +840,7 @@ export default defineComponent(
               experimentalModeOverride: this.executeForm.experimentHeaderOverride || undefined,
             };
 
-            const result = await API.post<ExecuteResponse>("/api/execute", payload);
+            const result = await API.post<ExecuteResponse>("/api/requests", payload);
 
             // Reload requests to show new execution
             await this.loadAllRequests();

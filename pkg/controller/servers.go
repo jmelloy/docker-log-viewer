@@ -145,7 +145,7 @@ func (c *Controller) HandleCreateDatabaseURL(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var dbURL store.DatabaseURL
+	var dbURL store.Database
 	if err := json.NewDecoder(r.Body).Decode(&dbURL); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -200,7 +200,7 @@ func (c *Controller) HandleUpdateDatabaseURL(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var dbURL store.DatabaseURL
+	var dbURL store.Database
 	if err := json.NewDecoder(r.Body).Decode(&dbURL); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

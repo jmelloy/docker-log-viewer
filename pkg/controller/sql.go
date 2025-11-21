@@ -146,7 +146,7 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	exec := &store.ExecutedRequest{
+	exec := &store.Request{
 		RequestIDHeader: requestIDHeader,
 		RequestBody:     requestBody,
 		StatusCode:      statusCode,
@@ -155,14 +155,14 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		Name:            input.Name,
 	}
 
-	id, err := c.store.CreateExecution(exec)
+	id, err := c.store.CreateRequest(exec)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if len(messages) > 0 {
-		if err := c.store.SaveExecutionLogs(id, messages); err != nil {
+		if err := c.store.SaveRequestLogs(id, messages); err != nil {
 			slog.Error("failed to save execution logs", "error", err)
 		}
 	}

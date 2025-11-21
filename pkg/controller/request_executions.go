@@ -19,8 +19,8 @@ import (
 	"github.com/jomei/notionapi"
 )
 
-// HandleExecute executes a GraphQL request
-func (c *Controller) HandleExecute(w http.ResponseWriter, r *http.Request) {
+// HandleCreateRequest creates a new request
+func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -81,7 +81,7 @@ func (c *Controller) HandleExecute(w http.ResponseWriter, r *http.Request) {
 
 	requestIDHeader := httputil.GenerateRequestID()
 
-	execution := &store.ExecutedRequest{
+	execution := &store.Request{
 		ServerID:            input.ServerID,
 		RequestIDHeader:     requestIDHeader,
 		RequestBody:         input.RequestData,
@@ -92,7 +92,7 @@ func (c *Controller) HandleExecute(w http.ResponseWriter, r *http.Request) {
 		DevIDOverride:       input.DevIDOverride,
 	}
 
-	execID, err := c.store.CreateExecution(execution)
+	execID, err := c.store.CreateRequest(execution)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -111,7 +111,7 @@ func (c *Controller) HandleExecute(w http.ResponseWriter, r *http.Request) {
 		}
 
 		execution.ID = uint(execID)
-		if err := c.store.UpdateExecution(execution); err != nil {
+		if err := c.store.UpdateRequest(execution); err != nil {
 			slog.Error("failed to update execution", "error", err)
 		}
 	}
@@ -134,8 +134,8 @@ func (c *Controller) HandleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HandleListExecutions lists executions for a request
-func (c *Controller) HandleListExecutions(w http.ResponseWriter, r *http.Request) {
+// HandleListRequestsBySample lists executions for a request
+func (c *Controller) HandleListRequestsBySample(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -151,7 +151,7 @@ func (c *Controller) HandleListExecutions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	executions, err := c.store.ListExecutions(params.RequestID)
+	executions, err := c.store.ListRequestsBySample(params.RequestID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -161,8 +161,8 @@ func (c *Controller) HandleListExecutions(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(executions)
 }
 
-// HandleListAllExecutions lists all executions with pagination
-func (c *Controller) HandleListAllExecutions(w http.ResponseWriter, r *http.Request) {
+// HandleListAllRequests lists all executions with pagination
+func (c *Controller) HandleListAllRequests(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -183,7 +183,7 @@ func (c *Controller) HandleListAllExecutions(w http.ResponseWriter, r *http.Requ
 		slog.Warn("failed to decode query parameters", "error", err)
 	}
 
-	executions, total, err := c.store.ListAllExecutions(params.Limit, params.Offset, params.Search, true)
+	executions, total, err := c.store.ListRequests(params.Limit, params.Offset, params.Search, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -200,8 +200,8 @@ func (c *Controller) HandleListAllExecutions(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(response)
 }
 
-// HandleGetExecutionDetail gets execution details by ID
-func (c *Controller) HandleGetExecutionDetail(w http.ResponseWriter, r *http.Request) {
+// HandleGetRequestDetail gets execution details by ID
+func (c *Controller) HandleGetRequestDetail(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -214,7 +214,7 @@ func (c *Controller) HandleGetExecutionDetail(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	detail, err := c.store.GetExecutionDetail(id)
+	detail, err := c.store.GetRequestDetail(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -228,8 +228,8 @@ func (c *Controller) HandleGetExecutionDetail(w http.ResponseWriter, r *http.Req
 	json.NewEncoder(w).Encode(detail)
 }
 
-// HandleExecutionNotionExport exports execution to Notion
-func (c *Controller) HandleExecutionNotionExport(w http.ResponseWriter, r *http.Request) {
+// HandleNotionExportForRequest exports request to Notion
+func (c *Controller) HandleNotionExportForRequest(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
@@ -237,7 +237,7 @@ func (c *Controller) HandleExecutionNotionExport(w http.ResponseWriter, r *http.
 		return
 	}
 
-	detail, err := c.store.GetExecutionDetail(id)
+	detail, err := c.store.GetRequestDetail(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -300,7 +300,7 @@ func sortSQLQueries(queries []store.SQLQuery) []store.SQLQuery {
 	return queries
 }
 
-func createNotionPageForExecution(apiKey, databaseID string, detail *store.ExecutionDetail) (string, error) {
+func createNotionPageForExecution(apiKey, databaseID string, detail *store.RequestDetailResponse) (string, error) {
 	sortedQueries := sortSQLQueries(detail.SQLQueries)
 
 	title := fmt.Sprintf("Execution: %s", detail.Execution.RequestIDHeader)

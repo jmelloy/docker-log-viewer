@@ -788,7 +788,7 @@ export default defineComponent(
 
       async loadSampleQueries() {
         try {
-          this.sampleQueries = await API.get<SampleQuery[]>("/api/requests");
+          this.sampleQueries = await API.get<SampleQuery[]>("/api/samples/");
         } catch (error) {
           console.error("Failed to load sample queries:", error);
           this.sampleQueries = [];
@@ -838,7 +838,7 @@ export default defineComponent(
             sync: false,
           };
 
-          const response = await API.post<ExecuteResponse>("/api/execute", payload);
+          const response = await API.post<ExecuteResponse>("/api/requests", payload);
 
           if (response.executionId) {
             this.executionId = response.executionId;
@@ -859,7 +859,7 @@ export default defineComponent(
       async pollForResult(executionId: number, maxAttempts = 30, intervalMs = 1000) {
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
-            const execution = await API.get<ExecutionDetail>(`/api/executions/${executionId}`);
+            const execution = await API.get<ExecutionDetail>(`/api/requests/${executionId}`);
 
             console.log("execution", execution);
 
@@ -1045,7 +1045,7 @@ export default defineComponent(
             sync: true,
           };
 
-          const response = await API.post("/api/execute", payload);
+          const response = await API.post("/api/requests", payload);
 
           if (response.executionId) {
             // Response is returned synchronously
