@@ -1,4 +1,4 @@
-package handlers
+package main
 
 import (
 	"encoding/json"
@@ -10,31 +10,32 @@ import (
 
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/logstore"
-
-	"github.com/gorilla/websocket"
 )
 
-// HandleContainers returns a list of running containers with their log counts and retention settings
-func (wa *WebApp) HandleContainers(w http.ResponseWriter, r *http.Request) {
-	containers, err := wa.Docker.ListRunningContainers(wa.Ctx)
+// ============================================================================
+// HTTP Handlers - Container & Log Management
+// ============================================================================
+
+func (wa *WebApp) handleContainers(w http.ResponseWriter, r *http.Request) {
+	containers, err := wa.docker.ListRunningContainers(wa.ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	portToServerMap := wa.BuildPortToServerMap(containers)
+	portToServerMap := wa.buildPortToServerMap(containers)
 
 	// Get log counts for each container
 	logCounts := make(map[string]int)
 	for _, container := range containers {
-		count := wa.LogStore.CountByContainer(container.ID)
+		count := wa.logStore.CountByContainer(container.ID)
 		logCounts[container.Name] = count
 	}
 
 	// Get retention settings for all containers
 	retentions := make(map[string]RetentionInfo)
-	if wa.Store != nil {
-		retentionList, err := wa.Store.ListContainerRetentions()
+	if wa.store != nil {
+		retentionList, err := wa.store.ListContainerRetentions()
 		if err == nil {
 			for _, r := range retentionList {
 				retentions[r.ContainerName] = RetentionInfo{
@@ -56,17 +57,16 @@ func (wa *WebApp) HandleContainers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// HandleLogs returns recent logs from the store
-func (wa *WebApp) HandleLogs(w http.ResponseWriter, r *http.Request) {
+func (wa *WebApp) handleLogs(w http.ResponseWriter, r *http.Request) {
 	// Get recent logs from the store (limit to 1000)
-	recentLogs := wa.LogStore.GetRecent(1000)
+	recentLogs := wa.logStore.GetRecent(1000)
 
 	logs := make([]LogWSMessage, 0, len(recentLogs))
 	for _, logMsg := range recentLogs {
 		logs = append(logs, LogWSMessage{
 			ContainerID: logMsg.ContainerID,
 			Timestamp:   logMsg.Timestamp,
-			Entry:       DeserializeLogEntry(logMsg),
+			Entry:       deserializeLogEntry(logMsg),
 		})
 	}
 
@@ -74,22 +74,21 @@ func (wa *WebApp) HandleLogs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(logs)
 }
 
-// HandleDebug returns debug information about the application state
-func (wa *WebApp) HandleDebug(w http.ResponseWriter, r *http.Request) {
-	totalLogs := wa.LogStore.Count()
+func (wa *WebApp) handleDebug(w http.ResponseWriter, r *http.Request) {
+	totalLogs := wa.logStore.Count()
 
 	// Count logs by container
 	logsByContainer := make(map[string]int)
 
-	wa.ContainerMutex.RLock()
+	wa.containerMutex.RLock()
 	containers := make([]map[string]string, 0)
-	for id, name := range wa.ContainerIDNames {
+	for id, name := range wa.containerIDNames {
 		shortID := id
 		if len(id) > 12 {
 			shortID = id[:12]
 		}
 		// Get count from logstore for this container
-		count := wa.LogStore.CountByContainer(id)
+		count := wa.logStore.CountByContainer(id)
 		logsByContainer[id] = count
 
 		containers = append(containers, map[string]string{
@@ -98,20 +97,20 @@ func (wa *WebApp) HandleDebug(w http.ResponseWriter, r *http.Request) {
 			"count": fmt.Sprintf("%d", count),
 		})
 	}
-	wa.ContainerMutex.RUnlock()
+	wa.containerMutex.RUnlock()
 
-	wa.ClientsMutex.RLock()
-	clientCount := len(wa.Clients)
+	wa.clientsMutex.RLock()
+	clientCount := len(wa.clients)
 	clientFilters := make([]map[string]interface{}, 0)
-	for client := range wa.Clients {
+	for client := range wa.clients {
 		clientFilters = append(clientFilters, map[string]interface{}{
-			"selectedContainers": client.Filter.SelectedContainers,
-			"selectedLevels":     client.Filter.SelectedLevels,
-			"searchQuery":        client.Filter.SearchQuery,
-			"traceFilterCount":   len(client.Filter.TraceFilters),
+			"selectedContainers": client.filter.SelectedContainers,
+			"selectedLevels":     client.filter.SelectedLevels,
+			"searchQuery":        client.filter.SearchQuery,
+			"traceFilterCount":   len(client.filter.TraceFilters),
 		})
 	}
-	wa.ClientsMutex.RUnlock()
+	wa.clientsMutex.RUnlock()
 
 	debugInfo := map[string]interface{}{
 		"totalLogsInMemory": totalLogs,
@@ -119,25 +118,24 @@ func (wa *WebApp) HandleDebug(w http.ResponseWriter, r *http.Request) {
 		"containers":        containers,
 		"connectedClients":  clientCount,
 		"clientFilters":     clientFilters,
-		"logChannelSize":    len(wa.LogChan),
-		"logChannelCap":     cap(wa.LogChan),
+		"logChannelSize":    len(wa.logChan),
+		"logChannelCap":     cap(wa.logChan),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(debugInfo)
 }
 
-// HandleWebSocket handles WebSocket connections for real-time log streaming
-func (wa *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := wa.Upgrader.Upgrade(w, r, nil)
+func (wa *WebApp) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := wa.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Error("websocket upgrade error", "error", err)
 		return
 	}
 
 	client := &Client{
-		Conn: conn,
-		Filter: ClientFilter{
+		conn: conn,
+		filter: ClientFilter{
 			SelectedContainers: []string{},
 			SelectedLevels:     []string{},
 			SearchQuery:        "",
@@ -145,14 +143,14 @@ func (wa *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	wa.ClientsMutex.Lock()
-	wa.Clients[client] = true
-	wa.ClientsMutex.Unlock()
+	wa.clientsMutex.Lock()
+	wa.clients[client] = true
+	wa.clientsMutex.Unlock()
 
 	defer func() {
-		wa.ClientsMutex.Lock()
-		delete(wa.Clients, client)
-		wa.ClientsMutex.Unlock()
+		wa.clientsMutex.Lock()
+		delete(wa.clients, client)
+		wa.clientsMutex.Unlock()
 		conn.Close()
 	}()
 
@@ -173,27 +171,26 @@ func (wa *WebApp) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				slog.Error("failed to parse filter", "error", err)
 				continue
 			}
-			client.Mu.Lock()
-			client.Filter = filter
-			client.Mu.Unlock()
+			client.mu.Lock()
+			client.filter = filter
+			client.mu.Unlock()
 
 			// Send initial filtered logs to the client
-			go wa.SendInitialLogs(client)
+			go wa.sendInitialLogs(client)
 		}
 	}
 }
 
-// SendInitialLogs sends filtered logs to a newly connected or updated client
-func (wa *WebApp) SendInitialLogs(client *Client) {
-	client.Mu.RLock()
-	filter := client.Filter
-	client.Mu.RUnlock()
+func (wa *WebApp) sendInitialLogs(client *Client) {
+	client.mu.RLock()
+	filter := client.filter
+	client.mu.RUnlock()
 
 	// Convert client filter to LogStore FilterOptions
-	filterOpts := wa.ClientFilterToLogStoreFilter(filter)
+	filterOpts := wa.clientFilterToLogStoreFilter(filter)
 
 	// Use LogStore's Filter method to get filtered logs directly
-	recentStoreLogs := wa.LogStore.Filter(filterOpts, 10000)
+	recentStoreLogs := wa.logStore.Filter(filterOpts, 10000)
 
 	// Convert to WebSocket format
 	filteredLogs := make([]LogWSMessage, 0, len(recentStoreLogs))
@@ -203,7 +200,7 @@ func (wa *WebApp) SendInitialLogs(client *Client) {
 		filteredLogs = append(filteredLogs, LogWSMessage{
 			ContainerID: storeMsg.ContainerID,
 			Timestamp:   storeMsg.Timestamp,
-			Entry:       DeserializeLogEntry(storeMsg),
+			Entry:       deserializeLogEntry(storeMsg),
 		})
 	}
 
@@ -215,23 +212,23 @@ func (wa *WebApp) SendInitialLogs(client *Client) {
 	data, _ := json.Marshal(filteredLogs)
 	wsMsg.Data = data
 
-	client.Conn.WriteJSON(wsMsg)
+	client.conn.WriteJSON(wsMsg)
 }
 
-// ClientFilterToLogStoreFilter converts a ClientFilter to logstore.FilterOptions
-func (wa *WebApp) ClientFilterToLogStoreFilter(filter ClientFilter) logstore.FilterOptions {
+// clientFilterToLogStoreFilter converts a ClientFilter to logstore.FilterOptions
+func (wa *WebApp) clientFilterToLogStoreFilter(filter ClientFilter) logstore.FilterOptions {
 	opts := logstore.FilterOptions{}
 
 	// Convert container names to container IDs
 	if len(filter.SelectedContainers) > 0 {
-		wa.ContainerMutex.RLock()
+		wa.containerMutex.RLock()
 		containerIDs := make([]string, 0, len(filter.SelectedContainers))
-		for containerID, containerName := range wa.ContainerIDNames {
+		for containerID, containerName := range wa.containerIDNames {
 			if slices.Contains(filter.SelectedContainers, containerName) {
 				containerIDs = append(containerIDs, containerID)
 			}
 		}
-		wa.ContainerMutex.RUnlock()
+		wa.containerMutex.RUnlock()
 		opts.ContainerIDs = containerIDs
 	}
 
@@ -260,13 +257,13 @@ func (wa *WebApp) ClientFilterToLogStoreFilter(filter ClientFilter) logstore.Fil
 	return opts
 }
 
-// MatchesFilter checks if a log matches the client's filter criteria (including container filter)
-func (wa *WebApp) MatchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
+// matchesFilter checks if a log matches the client's filter criteria (including container filter)
+func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
 	// Container filter
 	if len(filter.SelectedContainers) > 0 {
-		wa.ContainerMutex.RLock()
-		containerName := wa.ContainerIDNames[msg.ContainerID]
-		wa.ContainerMutex.RUnlock()
+		wa.containerMutex.RLock()
+		containerName := wa.containerIDNames[msg.ContainerID]
+		wa.containerMutex.RUnlock()
 
 		if !slices.Contains(filter.SelectedContainers, containerName) {
 			return false
@@ -344,39 +341,4 @@ func (wa *WebApp) MatchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
 	}
 
 	return true
-}
-
-// BuildPortToServerMap builds a mapping of container ports to database connection strings
-func (wa *WebApp) BuildPortToServerMap(containers []logs.Container) map[int]string {
-	portToServerMap := make(map[int]string)
-
-	if wa.Store == nil {
-		return portToServerMap
-	}
-
-	// Get all servers with default databases
-	servers, err := wa.Store.ListServers()
-	if err != nil {
-		slog.Error("failed to list servers for port mapping", "error", err)
-		return portToServerMap
-	}
-
-	// Build a map of ports exposed by containers
-	for _, container := range containers {
-		for _, port := range container.Ports {
-			if port.PublicPort > 0 {
-				for _, server := range servers {
-					if strings.Contains(server.URL, fmt.Sprintf(":%d", port.PublicPort)) {
-						if server.DefaultDatabase != nil && server.DefaultDatabase.ConnectionString != "" {
-							portToServerMap[port.PublicPort] = server.DefaultDatabase.ConnectionString
-							slog.Debug("mapped container port to server", "port", port, "server", server.Name, "container", container.Name)
-						}
-						break
-					}
-				}
-			}
-		}
-	}
-
-	return portToServerMap
 }
