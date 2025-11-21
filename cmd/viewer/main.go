@@ -1178,12 +1178,13 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		ServerID            *uint  `json:"serverId"`
-		URLOverride         string `json:"urlOverride,omitempty"`
-		BearerTokenOverride string `json:"bearerTokenOverride,omitempty"`
-		DevIDOverride       string `json:"devIdOverride,omitempty"`
-		RequestData         string `json:"requestData"`
-		Sync                bool   `json:"sync,omitempty"`
+		ServerID                 *uint  `json:"serverId"`
+		URLOverride              string `json:"urlOverride,omitempty"`
+		BearerTokenOverride      string `json:"bearerTokenOverride,omitempty"`
+		DevIDOverride            string `json:"devIdOverride,omitempty"`
+		ExperimentalModeOverride string `json:"experimentalModeOverride,omitempty"`
+		RequestData              string `json:"requestData"`
+		Sync                     bool   `json:"sync,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -1230,6 +1231,9 @@ func (wa *WebApp) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.DevIDOverride != "" {
 		devID = input.DevIDOverride
+	}
+	if input.ExperimentalModeOverride != "" {
+		experimentalMode = input.ExperimentalModeOverride
 	}
 
 	// Generate request ID
@@ -1523,11 +1527,12 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body for overrides
 	var input struct {
-		ServerID            *uint  `json:"serverId,omitempty"`
-		URLOverride         string `json:"urlOverride,omitempty"`
-		BearerTokenOverride string `json:"bearerTokenOverride,omitempty"`
-		DevIDOverride       string `json:"devIdOverride,omitempty"`
-		RequestDataOverride string `json:"requestDataOverride,omitempty"`
+		ServerID                 *uint  `json:"serverId,omitempty"`
+		URLOverride              string `json:"urlOverride,omitempty"`
+		BearerTokenOverride      string `json:"bearerTokenOverride,omitempty"`
+		DevIDOverride            string `json:"devIdOverride,omitempty"`
+		ExperimentalModeOverride string `json:"experimentalModeOverride,omitempty"`
+		RequestDataOverride      string `json:"requestDataOverride,omitempty"`
 	}
 
 	if r.Body != nil {
@@ -1538,7 +1543,7 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute request in background with overrides
-	executionID := wa.executeRequestWithOverrides(id, input.ServerID, input.URLOverride, input.BearerTokenOverride, input.DevIDOverride, input.RequestDataOverride)
+	executionID := wa.executeRequestWithOverrides(id, input.ServerID, input.URLOverride, input.BearerTokenOverride, input.DevIDOverride, input.ExperimentalModeOverride, input.RequestDataOverride)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -2548,7 +2553,7 @@ func (wa *WebApp) handleDatabaseURLDetail(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, urlOverride, bearerTokenOverride, devIDOverride, requestDataOverride string) int64 {
+func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride *uint, urlOverride, bearerTokenOverride, devIDOverride, experimentalModeOverride, requestDataOverride string) int64 {
 	req, err := wa.store.GetRequest(requestID)
 	if err != nil {
 		slog.Error("failed to get request", "request_id", requestID, "error", err)
@@ -2605,6 +2610,9 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	}
 	if devIDOverride != "" {
 		devID = devIDOverride
+	}
+	if experimentalModeOverride != "" {
+		experimentalMode = experimentalModeOverride
 	}
 
 	// Determine request data to use
