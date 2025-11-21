@@ -2879,7 +2879,7 @@ func (wa *WebApp) Run(addr string) error {
 	http.HandleFunc("/api/explain", loggingMiddleware(wa.handleExplain))
 	http.HandleFunc("/api/save-trace", loggingMiddleware(wa.handleSaveTrace))
 	http.HandleFunc("/api/execute", loggingMiddleware(wa.handleExecute))
-	http.HandleFunc("/debug", loggingMiddleware(wa.handleDebug))
+	http.HandleFunc("/api/debug", loggingMiddleware(wa.handleDebug))
 
 	// Request management endpoints
 	http.HandleFunc("/api/servers", loggingMiddleware(wa.handleServers))
