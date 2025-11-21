@@ -123,56 +123,59 @@ func (c *Controller) HandleDebug(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(debugInfo)
 }
 
-// HandleRetention manages container retention settings
-func (c *Controller) HandleRetention(w http.ResponseWriter, r *http.Request) {
+// HandleListRetentions lists all container retention settings
+func (c *Controller) HandleListRetentions(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	switch r.Method {
-	case http.MethodGet:
-		retentions, err := c.store.ListContainerRetentions()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(retentions)
-	case http.MethodPost:
-		var retention store.ContainerRetention
-		if err := json.NewDecoder(r.Body).Decode(&retention); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := c.store.SaveContainerRetention(&retention); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		c.containerMutex.RLock()
-		containers := c.containers
-		c.containerMutex.RUnlock()
-
-		for _, container := range containers {
-			if container.Name == retention.ContainerName {
-				containerID := container.ID
-				slog.Info("setting container retention", "containerID", containerID, "retention", retention)
-				c.logStore.SetContainerRetention(containerID, logstore.ContainerRetentionPolicy{
-					Type:  retention.RetentionType,
-					Value: retention.RetentionValue,
-				})
-			}
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(retention)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	retentions, err := c.store.ListContainerRetentions()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(retentions)
 }
 
-// HandleRetentionDetail manages a specific container's retention settings
-func (c *Controller) HandleRetentionDetail(w http.ResponseWriter, r *http.Request) {
+// HandleCreateRetention creates or updates container retention settings
+func (c *Controller) HandleCreateRetention(w http.ResponseWriter, r *http.Request) {
+	if c.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var retention store.ContainerRetention
+	if err := json.NewDecoder(r.Body).Decode(&retention); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := c.store.SaveContainerRetention(&retention); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	c.containerMutex.RLock()
+	containers := c.containers
+	c.containerMutex.RUnlock()
+
+	for _, container := range containers {
+		if container.Name == retention.ContainerName {
+			containerID := container.ID
+			slog.Info("setting container retention", "containerID", containerID, "retention", retention)
+			c.logStore.SetContainerRetention(containerID, logstore.ContainerRetentionPolicy{
+				Type:  retention.RetentionType,
+				Value: retention.RetentionValue,
+			})
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(retention)
+}
+
+// HandleGetRetention gets retention settings for a specific container
+func (c *Controller) HandleGetRetention(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -185,28 +188,38 @@ func (c *Controller) HandleRetentionDetail(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	switch r.Method {
-	case http.MethodGet:
-		retention, err := c.store.GetContainerRetention(containerName)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if retention == nil {
-			http.Error(w, "Retention settings not found", http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(retention)
-	case http.MethodDelete:
-		if err := c.store.DeleteContainerRetention(containerName); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	retention, err := c.store.GetContainerRetention(containerName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	if retention == nil {
+		http.Error(w, "Retention settings not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(retention)
+}
+
+// HandleDeleteRetention deletes retention settings for a specific container
+func (c *Controller) HandleDeleteRetention(w http.ResponseWriter, r *http.Request) {
+	if c.store == nil {
+		http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	vars := mux.Vars(r)
+	containerName := vars["containerName"]
+	if containerName == "" {
+		http.Error(w, "Container name required", http.StatusBadRequest)
+		return
+	}
+
+	if err := c.store.DeleteContainerRetention(containerName); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // buildPortToServerMap builds a map of container ports to database connection strings

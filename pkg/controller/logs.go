@@ -119,14 +119,19 @@ func (c *Controller) sendInitialLogs(client *Client) {
 		})
 	}
 
-	slog.Info("filteredLogs", "count", len(filteredLogs))
 	wsMsg := WSMessage{
 		Type: "logs_initial",
 	}
-	data, _ := json.Marshal(filteredLogs)
+	data, err := json.Marshal(filteredLogs)
+	if err != nil {
+		slog.Error("failed to marshal filtered logs", "error", err)
+		return
+	}
 	wsMsg.Data = data
 
-	client.conn.WriteJSON(wsMsg)
+	if err := client.conn.WriteJSON(wsMsg); err != nil {
+		slog.Error("failed to send initial logs", "error", err)
+	}
 }
 
 // clientFilterToLogStoreFilter converts a ClientFilter to logstore.FilterOptions
@@ -244,13 +249,17 @@ func (c *Controller) matchesFilter(msg logs.LogMessage, filter ClientFilter) boo
 // BroadcastBatch sends a batch of logs to all connected WebSocket clients
 func (c *Controller) BroadcastBatch(batch []logs.LogMessage) {
 	c.clientsMutex.RLock()
-	defer c.clientsMutex.RUnlock()
+	clients := make([]*Client, 0, len(c.clients))
+	for client := range c.clients {
+		clients = append(clients, client)
+	}
+	c.clientsMutex.RUnlock()
 
 	if len(batch) == 0 {
 		return
 	}
 
-	for client := range c.clients {
+	for _, client := range clients {
 		client.mu.RLock()
 		filter := client.filter
 		client.mu.RUnlock()
@@ -273,13 +282,20 @@ func (c *Controller) BroadcastBatch(batch []logs.LogMessage) {
 		wsMsg := WSMessage{
 			Type: "logs",
 		}
-		data, _ := json.Marshal(filteredLogs)
+		data, err := json.Marshal(filteredLogs)
+		if err != nil {
+			slog.Error("failed to marshal logs batch", "error", err)
+			continue
+		}
 		wsMsg.Data = data
 
-		err := client.conn.WriteJSON(wsMsg)
-		if err != nil {
+		if err := client.conn.WriteJSON(wsMsg); err != nil {
+			// Close connection on error and remove from clients map
 			client.conn.Close()
+			
+			c.clientsMutex.Lock()
 			delete(c.clients, client)
+			c.clientsMutex.Unlock()
 		}
 	}
 }
