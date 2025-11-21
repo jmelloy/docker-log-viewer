@@ -28,6 +28,7 @@ import (
 	"docker-log-parser/pkg/store"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/schema"
 	"github.com/gorilla/websocket"
 	"github.com/jomei/notionapi"
 	"github.com/lmittmann/tint"
@@ -72,6 +73,7 @@ type WebApp struct {
 	shutdownOnce        sync.Once       // Ensure shutdown happens only once
 	activeStreams       map[string]bool // Tracks which containers have active log streams
 	activeStreamsMutex  sync.RWMutex
+	decoder             *schema.Decoder // For parsing query/form parameters
 }
 
 type WSMessage struct {
@@ -197,6 +199,10 @@ func NewWebApp() (*WebApp, error) {
 		db = nil
 	}
 
+	// Initialize schema decoder for parsing query and form parameters
+	decoder := schema.NewDecoder()
+	decoder.IgnoreUnknownKeys(true) // Ignore unknown keys for flexibility
+
 	app := &WebApp{
 		docker:           docker,
 		logStore:         logstore.NewLogStore(10000, 2*time.Hour),
@@ -215,6 +221,7 @@ func NewWebApp() (*WebApp, error) {
 		store:          db,
 		lastTimestamps: make(map[string]time.Time),
 		activeStreams:  make(map[string]bool),
+		decoder:        decoder,
 	}
 
 	return app, nil
@@ -1553,20 +1560,18 @@ func (wa *WebApp) handleExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract request ID from query param
-	requestIDStr := r.URL.Query().Get("request_id")
-	if requestIDStr == "" {
+	// Parse query parameters using gorilla/schema
+	type QueryParams struct {
+		RequestID int64 `schema:"request_id,required"`
+	}
+	
+	var params QueryParams
+	if err := wa.decoder.Decode(&params, r.URL.Query()); err != nil {
 		http.Error(w, "request_id parameter required", http.StatusBadRequest)
 		return
 	}
 
-	requestID, err := strconv.ParseInt(requestIDStr, 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid request_id", http.StatusBadRequest)
-		return
-	}
-
-	executions, err := wa.store.ListExecutions(requestID)
+	executions, err := wa.store.ListExecutions(params.RequestID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1582,25 +1587,24 @@ func (wa *WebApp) handleAllExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse query parameters
-	query := r.URL.Query()
-	limit := 20
-	if limitStr := query.Get("limit"); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
-			limit = parsedLimit
-		}
+	// Parse query parameters using gorilla/schema
+	type QueryParams struct {
+		Limit  int    `schema:"limit"`
+		Offset int    `schema:"offset"`
+		Search string `schema:"search"`
+	}
+	
+	params := QueryParams{
+		Limit:  20, // Default values
+		Offset: 0,
+	}
+	
+	if err := wa.decoder.Decode(&params, r.URL.Query()); err != nil {
+		slog.Warn("failed to decode query parameters", "error", err)
+		// Continue with defaults on error
 	}
 
-	offset := 0
-	if offsetStr := query.Get("offset"); offsetStr != "" {
-		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
-			offset = parsedOffset
-		}
-	}
-
-	search := query.Get("search")
-
-	executions, total, err := wa.store.ListAllExecutions(limit, offset, search, true)
+	executions, total, err := wa.store.ListAllExecutions(params.Limit, params.Offset, params.Search, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1609,8 +1613,8 @@ func (wa *WebApp) handleAllExecutions(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"executions": executions,
 		"total":      total,
-		"limit":      limit,
-		"offset":     offset,
+		"limit":      params.Limit,
+		"offset":     params.Offset,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
