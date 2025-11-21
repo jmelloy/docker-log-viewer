@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/logstore"
