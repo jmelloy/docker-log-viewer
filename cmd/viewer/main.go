@@ -788,34 +788,33 @@ func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 // ============================================================================
 
 func (wa *WebApp) shutdown() {
-wa.shutdownOnce.Do(func() {
-slog.Info("cancelling context to stop goroutines")
-wa.cancel()
+	wa.shutdownOnce.Do(func() {
+		slog.Info("cancelling context to stop goroutines")
+		wa.cancel()
 
-// Give goroutines time to see context cancellation and exit
-// This prevents them from trying to send on a closed channel
-time.Sleep(300 * time.Millisecond)
+		// Give goroutines time to see context cancellation and exit
+		// This prevents them from trying to send on a closed channel
+		time.Sleep(300 * time.Millisecond)
 
-// Close logChan to signal that no more logs will be processed
-// sync.Once ensures this only happens once
-close(wa.logChan)
-})
+		// Close logChan to signal that no more logs will be processed
+		// sync.Once ensures this only happens once
+		close(wa.logChan)
+	})
 }
 
-
 func loggingMiddleware(next http.Handler) http.Handler {
-return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-startTime := time.Now()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		startTime := time.Now()
 
-next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r)
 
-slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path),
-"method", r.Method,
-"path", r.URL.Path,
-"remote", r.RemoteAddr,
-"duration_ms", time.Since(startTime).Milliseconds(),
-)
-})
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path),
+			"method", r.Method,
+			"path", r.URL.Path,
+			"remote", r.RemoteAddr,
+			"duration_ms", time.Since(startTime).Milliseconds(),
+		)
+	})
 }
 
 func (wa *WebApp) Run(addr string) error {
@@ -853,7 +852,7 @@ func (wa *WebApp) Run(addr string) error {
 
 	// Create Gorilla mux router
 	r := mux.NewRouter()
-	
+
 	// Apply logging middleware to all routes
 	r.Use(loggingMiddleware)
 
