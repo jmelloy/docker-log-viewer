@@ -598,6 +598,38 @@ func (wa *WebApp) broadcastContainerUpdate(containers []logs.Container) {
 	}
 }
 
+// loggingMiddleware logs HTTP request details
+func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		startTime := time.Now()
+
+		next(w, r)
+
+		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path),
+			"method", r.Method,
+			"path", r.URL.Path,
+			"remote", r.RemoteAddr,
+			"duration_ms", time.Since(startTime).Milliseconds(),
+		)
+	}
+}
+
+// shutdown safely cancels context and closes channels, ensuring it only happens once
+func (wa *WebApp) shutdown() {
+	wa.shutdownOnce.Do(func() {
+		slog.Info("cancelling context to stop goroutines")
+		wa.cancel()
+
+		// Give goroutines time to see context cancellation and exit
+		// This prevents them from trying to send on a closed channel
+		time.Sleep(300 * time.Millisecond)
+
+		// Close logChan to signal that no more logs will be processed
+		// sync.Once ensures this only happens once
+		close(wa.logChan)
+	})
+}
+
 
 func (wa *WebApp) Run(addr string) error {
 	if err := wa.loadContainers(); err != nil {

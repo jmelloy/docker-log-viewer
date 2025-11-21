@@ -376,17 +376,3 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	return execID
 }
 
-func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		startTime := time.Now()
-
-		next(w, r)
-
-		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path),
-			"method", r.Method,
-			"path", r.URL.Path,
-			"remote", r.RemoteAddr,
-			"duration_ms", time.Since(startTime).Milliseconds(),
-		)
-	}
-}

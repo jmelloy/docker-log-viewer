@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"docker-log-parser/pkg/logstore"
 	"docker-log-parser/pkg/store"
@@ -58,21 +57,6 @@ func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// shutdown safely cancels context and closes channels, ensuring it only happens once
-func (wa *WebApp) shutdown() {
-	wa.shutdownOnce.Do(func() {
-		slog.Info("cancelling context to stop goroutines")
-		wa.cancel()
-
-		// Give goroutines time to see context cancellation and exit
-		// This prevents them from trying to send on a closed channel
-		time.Sleep(300 * time.Millisecond)
-
-		// Close logChan to signal that no more logs will be processed
-		// sync.Once ensures this only happens once
-		close(wa.logChan)
-	})
-}
 
 func (wa *WebApp) handleRetentionDetail(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
