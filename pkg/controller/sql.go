@@ -147,12 +147,11 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	exec := &store.Request{
-		RequestIDHeader: requestIDHeader,
-		RequestBody:     requestBody,
-		StatusCode:      statusCode,
-		DurationMS:      durationMS,
-		ExecutedAt:      time.Now(),
-		Name:            input.Name,
+		RequestBody: requestBody,
+		StatusCode:  statusCode,
+		DurationMS:  durationMS,
+		ExecutedAt:  time.Now(),
+		Name:        input.Name,
 	}
 
 	id, err := c.store.CreateRequest(exec)
@@ -404,11 +403,9 @@ func newDividerBlock() notionapi.Block {
 func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (string, error) {
 	formattedQuery := sqlutil.FormatSQLForDisplay(detail.Query)
 
-	var requestID string
 	var executedAt string
 	if len(detail.RelatedExecutions) > 0 {
 		firstExec := detail.RelatedExecutions[0]
-		requestID = firstExec.RequestIDHeader
 		executedAt = firstExec.ExecutedAt.Format(time.RFC3339)
 	}
 
@@ -422,10 +419,6 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Table: %s", detail.TableName)))
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Total Executions: %d", detail.TotalExecutions)))
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Average Duration: %.2fms", detail.AvgDuration)))
-
-	if requestID != "" {
-		blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Request ID: %s", requestID)))
-	}
 
 	if executedAt != "" {
 		blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Last Executed: %s", executedAt)))

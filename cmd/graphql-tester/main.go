@@ -336,11 +336,10 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	// Execute request
 	sampleID := uint(requestID)
 	execution := &store.Request{
-		SampleID:        &sampleID,
-		ServerID:        serverIDForExec,
-		RequestIDHeader: requestIDHeader,
-		RequestBody:     req.RequestData,
-		ExecutedAt:      time.Now(),
+		SampleID:    &sampleID,
+		ServerID:    serverIDForExec,
+		RequestBody: req.RequestData,
+		ExecutedAt:  time.Now(),
 	}
 
 	startTime := time.Now()
