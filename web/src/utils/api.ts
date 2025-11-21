@@ -3,9 +3,38 @@ export const API = {
     try {
       const response: Response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            // Fall back to status text if JSON parsing fails
+          }
+        } else {
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Fall back to status text if text parsing fails
+          }
+        }
+        throw new Error(errorMessage);
       }
-      return (await response.json()) as T;
+      // Try to parse as JSON, but handle gracefully if it fails
+      try {
+        const text = await response.text();
+        if (!text) {
+          return null as T;
+        }
+        return JSON.parse(text) as T;
+      } catch (parseError) {
+        if (parseError instanceof SyntaxError) {
+          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`);
+        }
+        throw parseError;
+      }
     } catch (error) {
       console.error(`GET ${url} failed:`, error);
       throw error;
@@ -22,9 +51,38 @@ export const API = {
         body: JSON.stringify(data),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            // Fall back to status text if JSON parsing fails
+          }
+        } else {
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Fall back to status text if text parsing fails
+          }
+        }
+        throw new Error(errorMessage);
       }
-      return (await response.json()) as T;
+      // Try to parse as JSON, but handle gracefully if it fails
+      try {
+        const text = await response.text();
+        if (!text) {
+          return null as T;
+        }
+        return JSON.parse(text) as T;
+      } catch (parseError) {
+        if (parseError instanceof SyntaxError) {
+          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`);
+        }
+        throw parseError;
+      }
     } catch (error) {
       console.error(`POST ${url} failed:`, error);
       throw error;
@@ -41,9 +99,38 @@ export const API = {
         body: JSON.stringify(data),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        if (contentType && contentType.includes("application/json")) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            // Fall back to status text if JSON parsing fails
+          }
+        } else {
+          try {
+            const text = await response.text();
+            if (text) errorMessage = text;
+          } catch {
+            // Fall back to status text if text parsing fails
+          }
+        }
+        throw new Error(errorMessage);
       }
-      return (await response.json()) as T;
+      // Try to parse as JSON, but handle gracefully if it fails
+      try {
+        const text = await response.text();
+        if (!text) {
+          return null as T;
+        }
+        return JSON.parse(text) as T;
+      } catch (parseError) {
+        if (parseError instanceof SyntaxError) {
+          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`);
+        }
+        throw parseError;
+      }
     } catch (error) {
       console.error(`PUT ${url} failed:`, error);
       throw error;

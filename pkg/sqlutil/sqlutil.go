@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	"docker-log-parser/pkg/logs"
-	"docker-log-parser/pkg/store"
 	"docker-log-parser/pkg/sqlexplain"
+	"docker-log-parser/pkg/store"
 	"docker-log-parser/pkg/utils"
 )
 
