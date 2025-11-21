@@ -7,6 +7,8 @@ toolchain go1.24.7
 require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/mux v1.8.1
+	github.com/gorilla/schema v1.4.1
 	github.com/jomei/notionapi v1.13.3
 	github.com/lib/pq v1.10.9
 	github.com/lmittmann/tint v1.1.2
@@ -22,8 +24,6 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/gorilla/mux v1.8.1 // indirect
-	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-sqlite3 v1.14.32 // indirect
