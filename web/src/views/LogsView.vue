@@ -271,7 +271,16 @@
 
         <div class="sidebar-footer">
           <div class="status">
-            <span :style="{ color: statusColor }">{{ statusText }}</span>
+            <span
+              :style="{
+                color: statusColor,
+                cursor: wsConnected ? 'pointer' : 'default',
+                textDecoration: wsConnected ? 'underline' : 'none',
+              }"
+              @click="showDebugInfo"
+              :title="wsConnected ? 'Click to view debug information' : ''"
+              >{{ statusText }}</span
+            >
             <span>{{ logCountText }}</span>
           </div>
           <button @click="clearLogs" class="clear-logs-btn" title="Clear all logs">Clear Logs</button>
@@ -533,6 +542,103 @@
       </div>
     </div>
   </div>
+
+  <!-- Debug Info Modal -->
+  <div v-if="showDebugModal" class="modal" @click="showDebugModal = false">
+    <div class="modal-content" @click.stop style="max-width: 800px; max-height: 90vh; overflow-y: auto">
+      <div class="modal-header">
+        <h3>Debug Information</h3>
+        <button @click="showDebugModal = false">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem">
+        <div v-if="debugInfo" style="display: flex; flex-direction: column; gap: 1.5rem">
+          <div class="modal-section">
+            <h4>System Status</h4>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
+              <div>
+                <div class="parsed-field-key">Total Logs in Memory</div>
+                <div class="parsed-field-value">{{ debugInfo.totalLogsInMemory.toLocaleString() }}</div>
+              </div>
+              <div>
+                <div class="parsed-field-key">Container Count</div>
+                <div class="parsed-field-value">{{ debugInfo.containerCount }}</div>
+              </div>
+              <div>
+                <div class="parsed-field-key">Connected Clients</div>
+                <div class="parsed-field-value">{{ debugInfo.connectedClients }}</div>
+              </div>
+              <div>
+                <div class="parsed-field-key">Log Channel</div>
+                <div class="parsed-field-value">{{ debugInfo.logChannelSize }} / {{ debugInfo.logChannelCap }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="debugInfo.containers.length > 0" class="modal-section">
+            <h4>Containers ({{ debugInfo.containers.length }})</h4>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto">
+              <div
+                v-for="(container, index) in debugInfo.containers"
+                :key="index"
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  padding: 0.5rem;
+                  background: var(--bg-secondary);
+                  border-radius: 4px;
+                "
+              >
+                <div style="flex: 1">
+                  <div style="font-weight: 500">{{ container.name }}</div>
+                  <div style="font-size: 0.85rem; color: var(--text-secondary)">{{ container.id }}</div>
+                </div>
+                <div style="font-weight: 500; color: var(--color-blue)">{{ container.count }} logs</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="debugInfo.clientFilters.length > 0" class="modal-section">
+            <h4>Client Filters ({{ debugInfo.clientFilters.length }})</h4>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto">
+              <div
+                v-for="(filter, index) in debugInfo.clientFilters"
+                :key="index"
+                style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 4px; font-size: 0.9rem"
+              >
+                <div style="margin-bottom: 0.5rem">
+                  <span class="parsed-field-key">Containers:</span>
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
+                    {{ filter.selectedContainers.length > 0 ? filter.selectedContainers.join(", ") : "None" }}
+                  </span>
+                </div>
+                <div style="margin-bottom: 0.5rem">
+                  <span class="parsed-field-key">Levels:</span>
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
+                    {{ filter.selectedLevels.length > 0 ? filter.selectedLevels.join(", ") : "None" }}
+                  </span>
+                </div>
+                <div style="margin-bottom: 0.5rem">
+                  <span class="parsed-field-key">Search Query:</span>
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
+                    {{ filter.searchQuery || "None" }}
+                  </span>
+                </div>
+                <div>
+                  <span class="parsed-field-key">Trace Filters:</span>
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
+                    {{ filter.traceFilterCount }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else style="text-align: center; padding: 2rem; color: var(--text-secondary)">
+          Loading debug information...
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script lang="ts">
@@ -558,6 +664,7 @@ import type {
   SaveTraceResponse,
   ExplainResponse,
   RetentionResponse,
+  DebugInfo,
 } from "@/types";
 
 export default defineComponent({
@@ -620,6 +727,8 @@ export default defineComponent({
         type: "count",
         value: 1000,
       },
+      showDebugModal: false,
+      debugInfo: null as DebugInfo | null,
     };
   },
 
@@ -1657,6 +1766,22 @@ export default defineComponent({
     clearLogs() {
       this.logs = [];
       this.recentRequests = [];
+    },
+
+    async showDebugInfo() {
+      if (!this.wsConnected) {
+        return; // Don't show debug info if not connected
+      }
+      this.showDebugModal = true;
+      this.debugInfo = null;
+      try {
+        this.debugInfo = await API.get<DebugInfo>("/api/debug");
+      } catch (error) {
+        console.error("Failed to fetch debug info:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        alert(`Failed to fetch debug information: ${errorMessage}`);
+        this.showDebugModal = false;
+      }
     },
   },
 });
