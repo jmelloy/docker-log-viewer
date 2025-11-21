@@ -318,3 +318,22 @@ export interface Plan {
   Triggers?: Triggers;
   [key: string]: any;
 }
+
+export interface DebugInfo {
+  totalLogsInMemory: number;
+  containerCount: number;
+  containers: Array<{
+    id: string;
+    name: string;
+    count: string;
+  }>;
+  connectedClients: number;
+  clientFilters: Array<{
+    selectedContainers: string[];
+    selectedLevels: string[];
+    searchQuery: string;
+    traceFilterCount: number;
+  }>;
+  logChannelSize: number;
+  logChannelCap: number;
+}

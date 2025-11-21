@@ -188,8 +188,8 @@
           ></textarea>
         </div>
         <div class="form-group">
-          <label for="executeServer">Server:</label>
-          <select id="executeServer" v-model="executeForm.serverId" @change="selectSampleQueryForExecution">
+          <label for="executeServer">Server: <span style="color: #f85149">*</span></label>
+          <select id="executeServer" v-model="executeForm.serverId" @change="selectSampleQueryForExecution" required>
             <option value="">-- Select Server --</option>
             <option v-for="server in servers" :key="server.id" :value="server.id">
               {{ server.name }} ({{ server.url }})
@@ -197,12 +197,28 @@
           </select>
         </div>
         <div class="form-group">
-          <label for="executeToken">Bearer Token Override (optional):</label>
-          <input type="text" id="executeToken" v-model="executeForm.tokenOverride" placeholder="Override token" />
+          <label for="executeUserID">User ID (optional):</label>
+          <input type="text" id="executeUserID" v-model="executeForm.devIdOverride" placeholder="Override user ID" />
         </div>
         <div class="form-group">
-          <label for="executeDevID">Dev ID Override (optional):</label>
-          <input type="text" id="executeDevID" v-model="executeForm.devIdOverride" placeholder="Override dev ID" />
+          <details style="cursor: pointer">
+            <summary style="user-select: none; color: #79c0ff; margin-bottom: 0.5rem">Advanced Options</summary>
+            <div style="margin-top: 0.75rem; padding-left: 1rem; border-left: 2px solid #30363d">
+              <div class="form-group">
+                <label for="executeToken">Bearer Token Override (optional):</label>
+                <input type="text" id="executeToken" v-model="executeForm.tokenOverride" placeholder="Override token" />
+              </div>
+              <div class="form-group">
+                <label for="executeExperimentHeader">Experiment Header (optional):</label>
+                <input
+                  type="text"
+                  id="executeExperimentHeader"
+                  v-model="executeForm.experimentHeaderOverride"
+                  placeholder="Override experiment header"
+                />
+              </div>
+            </div>
+          </details>
         </div>
 
         <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">
@@ -240,7 +256,7 @@
               </div>
               <textarea
                 :value="typeof value === 'string' ? value : JSON.stringify(value, null, 2)"
-                @input="updateGraphQLVariable(key, $event.target.value)"
+                @input="updateGraphQLVariable(key, ($event.target as HTMLTextAreaElement).value)"
                 style="
                   width: 100%;
                   background: #161b22;
@@ -408,6 +424,7 @@ export default defineComponent(
           requestDataOverride: "",
           tokenOverride: "",
           devIdOverride: "",
+          experimentHeaderOverride: "",
           graphqlVariables: {},
         },
         // Selected data
@@ -664,6 +681,7 @@ export default defineComponent(
           requestDataOverride: "",
           tokenOverride: "",
           devIdOverride: "",
+          experimentHeaderOverride: "",
           graphqlVariables: {},
         };
         this.showExecuteNewModal = true;
@@ -679,6 +697,7 @@ export default defineComponent(
           requestDataOverride: sq.requestData || "",
           tokenOverride: server?.bearerToken || "",
           devIdOverride: server?.devId || "",
+          experimentHeaderOverride: server?.experimentalMode || "",
           graphqlVariables: {},
         };
         // Parse GraphQL variables
@@ -742,7 +761,7 @@ export default defineComponent(
           // Pre-populate server if available
           if (this.selectedSampleQuery.serverId) {
             this.executeForm.serverId = String(this.selectedSampleQuery.serverId);
-            // Get token and dev ID from server
+            // Get token, dev ID, and experiment header from server
             this.updateServerDefaults();
           }
           // Parse GraphQL variables
@@ -760,12 +779,19 @@ export default defineComponent(
             // Always set defaults from server (user can still override)
             this.executeForm.tokenOverride = server.bearerToken || "";
             this.executeForm.devIdOverride = server.devId || "";
+            this.executeForm.experimentHeaderOverride = server.experimentalMode || "";
           }
         }
       },
 
       async executeSelectedQuery() {
         try {
+          // Validate server is selected
+          if (!this.executeForm.serverId) {
+            alert("Please select a server");
+            return;
+          }
+
           // Determine request data to use
           let requestData = this.executeForm.requestDataOverride;
           if (!requestData && this.selectedSampleQuery) {
@@ -778,12 +804,7 @@ export default defineComponent(
           }
 
           // Determine server
-          let serverId = null;
-          if (this.executeForm.serverId) {
-            serverId = parseInt(this.executeForm.serverId);
-          } else if (this.selectedSampleQuery && this.selectedSampleQuery.serverId) {
-            serverId = parseInt(this.selectedSampleQuery.serverId);
-          }
+          const serverId = parseInt(this.executeForm.serverId);
 
           // If we have a sample query ID, use the execute endpoint
           if (this.selectedSampleQuery && this.selectedSampleQuery.id) {
@@ -791,6 +812,7 @@ export default defineComponent(
               serverId: serverId || undefined,
               bearerTokenOverride: this.executeForm.tokenOverride || undefined,
               devIdOverride: this.executeForm.devIdOverride || undefined,
+              experimentalModeOverride: this.executeForm.experimentHeaderOverride || undefined,
               requestDataOverride: requestData,
             };
 
@@ -812,16 +834,12 @@ export default defineComponent(
             }
           } else {
             // No sample query - execute directly using /api/execute endpoint
-            if (!serverId) {
-              alert("Please select a server");
-              return;
-            }
-
             const payload = {
               serverId: serverId,
               requestData: requestData,
               bearerTokenOverride: this.executeForm.tokenOverride || undefined,
               devIdOverride: this.executeForm.devIdOverride || undefined,
+              experimentalModeOverride: this.executeForm.experimentHeaderOverride || undefined,
             };
 
             const result = await API.post<ExecuteResponse>("/api/execute", payload);
