@@ -72,7 +72,7 @@
             <div class="stat-item" v-if="requestDetail.server?.devId || requestDetail.execution.server?.devId">
               <span class="stat-label">Dev ID</span>
               <span class="stat-value">{{
-                requestDetail.server?.devId || requestDetail.execution.server?.devId || "N/A"
+                requestDetail.devId || requestDetail.server?.devId || requestDetail.execution.server?.devId || "N/A"
               }}</span>
             </div>
           </div>
@@ -1842,6 +1842,7 @@ export default defineComponent({
         // Determine server ID
         const server = this.requestDetail?.server || this.requestDetail?.execution?.server;
         const serverId = server?.id || this.requestDetail?.execution?.serverId;
+        const devId = this.requestDetail?.devId || this.requestDetail?.execution?.devId;
 
         if (!serverId) {
           alert("No server found for this request");
@@ -1851,6 +1852,7 @@ export default defineComponent({
         const payload = {
           serverId: serverId,
           requestData: requestBody,
+          devIdOverride: devId,
         };
 
         const result = await API.post<ExecuteResponse>("/api/execute", payload);

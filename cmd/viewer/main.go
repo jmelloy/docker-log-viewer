@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2092,6 +2093,34 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 	return page.URL, nil
 }
 
+func sortSQLQueries(queries []store.SQLQuery) []store.SQLQuery {
+	// first, graphqloperation
+	// then, timestamp ascending
+
+	sort.Slice(queries, func(i, j int) bool {
+		if queries[i].GraphQLOperation != queries[j].GraphQLOperation {
+			return queries[i].GraphQLOperation < queries[j].GraphQLOperation
+		}
+
+		if queries[i].LogFields != "" && queries[j].LogFields != "" {
+			logFieldsI := make(map[string]string)
+			if err := json.Unmarshal([]byte(queries[i].LogFields), &logFieldsI); err == nil {
+				logFieldsJ := make(map[string]string)
+				if err := json.Unmarshal([]byte(queries[j].LogFields), &logFieldsJ); err == nil {
+					if logFieldsI["experiment_id"] == logFieldsJ["experiment_id"] {
+						if logFieldsI["experimental_type"] == "experimental" {
+							return true
+						}
+						return false
+					}
+				}
+			}
+		}
+		return queries[i].CreatedAt.Before(queries[j].CreatedAt)
+	})
+	return queries
+}
+
 // createNotionPageForExecution creates a new page in Notion with execution details and SQL queries
 func createNotionPageForExecution(apiKey, databaseID string, detail *store.ExecutionDetail) (string, error) {
 	// Build page title
@@ -2121,9 +2150,9 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Execu
 		blocks = append(blocks, newHeading2Block(fmt.Sprintf("SQL Queries (%d)", len(detail.SQLQueries))))
 
 		// Add each SQL query
-		for idx, q := range detail.SQLQueries {
+		for idx, q := range sortSQLQueries(detail.SQLQueries) {
 			// Query header
-			queryTitle := fmt.Sprintf("Query %d: %s on %s", idx+1, q.Operation, q.QueriedTable)
+			queryTitle := fmt.Sprintf("Query %d: %s on %s", idx+1, q.GraphQLOperation, q.QueriedTable)
 			blocks = append(blocks, newHeading3Block(queryTitle))
 
 			// Get the query to display (interpolated if variables exist)
@@ -2148,13 +2177,26 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Execu
 
 			// Add query metadata
 			blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Duration: %.2fms", q.DurationMS)))
+			blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Rows: %d", q.Rows)))
 
-			if q.GraphQLOperation != "" {
-				blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("GraphQL Operation: %s", q.GraphQLOperation)))
+			logFields := make(map[string]string)
+			if err := json.Unmarshal([]byte(q.LogFields), &logFields); err == nil {
+				for key, value := range logFields {
+					blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("%s: %s", key, value)))
+				}
 			}
 
 			// Add EXPLAIN plan if available
 			if q.ExplainPlan != "" {
+				daliboLink := generateDaliboExplainLink(q.ExplainPlan, formattedQuery, title)
+				slog.Info("dalibo link", "daliboLink", daliboLink)
+				if daliboLink != "" {
+					blocks = append(blocks, newParagraphBlock(
+						newTextRichText("View in Dalibo EXPLAIN: "),
+						newTextRichTextWithLink(title, daliboLink),
+					))
+				}
+
 				explainText := sqlutil.FormatExplainPlanForNotion(q.ExplainPlan)
 				blocks = append(blocks, newHeading4Block("EXPLAIN Plan"))
 
