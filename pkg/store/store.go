@@ -136,7 +136,7 @@ func (ContainerRetention) TableName() string {
 
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
-	ID               uint           `gorm:"primaryKey" json:"id"`
+	ID               uint           `gorm:"primaryKey;autoIncrement" json:"id"`
 	ExecutionID      uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
 	Query            string         `gorm:"not null" json:"query"`
 	NormalizedQuery  string         `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
@@ -171,6 +171,7 @@ type ExecutionDetail struct {
 	SQLAnalysis   *SQLAnalysis              `json:"sqlAnalysis,omitempty"`
 	IndexAnalysis *sqlexplain.IndexAnalysis `json:"indexAnalysis,omitempty"`
 	Server        *Server                   `json:"server,omitempty"`
+	DevID         string                    `json:"devId,omitempty"`
 	DisplayName   string                    `json:"displayName"` // Computed field
 }
 
@@ -653,6 +654,7 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		SQLQueries:  sqlQueries,
 		Server:      server,
 		DisplayName: displayName,
+		DevID:       exec.DevIDOverride,
 	}
 
 	// Calculate SQL analysis

@@ -226,6 +226,7 @@ export interface ExecutionDetail {
   indexAnalysis?: any;
   server?: Server | null;
   displayName: string;
+  devId?: string;
 }
 
 export interface ExecuteResponse {
