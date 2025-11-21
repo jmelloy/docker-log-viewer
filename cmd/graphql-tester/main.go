@@ -53,7 +53,7 @@ func main() {
 	}
 
 	if config.Delete > 0 {
-		if err := db.DeleteRequest(config.Delete); err != nil {
+		if err := db.DeleteSampleQuery(config.Delete); err != nil {
 			log.Fatalf("Failed to delete request: %v", err)
 		}
 		log.Printf("Deleted request %d", config.Delete)
@@ -101,7 +101,7 @@ func parseFlags() Config {
 }
 
 func listRequests(db *store.Store) {
-	requests, err := db.ListRequests()
+	requests, err := db.ListSampleQueries()
 	if err != nil {
 		log.Fatalf("Failed to list requests: %v", err)
 	}
@@ -123,7 +123,7 @@ func listRequests(db *store.Store) {
 		log.Printf("Created: %s", req.CreatedAt.Format(time.RFC3339))
 
 		// Count executions
-		executions, _ := db.ListExecutions(int64(req.ID))
+		executions, _ := db.ListRequestsBySample(int64(req.ID))
 		log.Printf("Executions: %d", len(executions))
 		log.Println("---")
 	}
@@ -175,7 +175,7 @@ func handleRequest(db *store.Store, config Config) error {
 		RequestData: string(data),
 	}
 
-	reqID, err := db.CreateRequest(req)
+	reqID, err := db.CreateSampleQuery(req)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -257,7 +257,7 @@ func handleDirectory(db *store.Store, config Config) error {
 			RequestData: string(data),
 		}
 
-		reqID, err := db.CreateRequest(req)
+		reqID, err := db.CreateSampleQuery(req)
 		if err != nil {
 			log.Printf("failed to create request for file %s, operation %s: %v", jsonFile, operationName, err)
 			continue
@@ -289,7 +289,7 @@ func handleDirectory(db *store.Store, config Config) error {
 
 func executeRequest(db *store.Store, requestID int64, config Config) error {
 	// Get request details
-	req, err := db.GetRequest(requestID)
+	req, err := db.GetSampleQuery(requestID)
 	if err != nil {
 		return fmt.Errorf("failed to get request: %w", err)
 	}
@@ -335,7 +335,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 
 	// Execute request
 	sampleID := uint(requestID)
-	execution := &store.ExecutedRequest{
+	execution := &store.Request{
 		SampleID:        &sampleID,
 		ServerID:        serverIDForExec,
 		RequestIDHeader: requestIDHeader,
@@ -355,7 +355,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	// Save execution
-	execID, err := db.CreateExecution(execution)
+	execID, err := db.CreateRequest(execution)
 	if err != nil {
 		return fmt.Errorf("failed to save execution: %w", err)
 	}
@@ -368,7 +368,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 
 	// Save logs
 	if len(collectedLogs) > 0 {
-		if err := db.SaveExecutionLogs(execID, collectedLogs); err != nil {
+		if err := db.SaveRequestLogs(execID, collectedLogs); err != nil {
 			return fmt.Errorf("failed to save logs: %w", err)
 		}
 	}
@@ -383,8 +383,6 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 
 	return nil
 }
-
-
 
 func collectLogs(requestID string, logChan <-chan logs.LogMessage, timeout time.Duration) []logs.LogMessage {
 	collected := []logs.LogMessage{}
@@ -415,4 +413,3 @@ func matchesRequestID(msg logs.LogMessage, requestID string) bool {
 
 	return false
 }
-

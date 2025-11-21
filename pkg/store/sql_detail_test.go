@@ -20,7 +20,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 	}
 
 	// Create sample queries
-	sampleID, err := store.CreateRequest(&SampleQuery{
+	sampleID, err := store.CreateSampleQuery(&SampleQuery{
 		Name:        "Test Query",
 		ServerID:    ptrUint(uint(serverID)),
 		RequestData: `{"query": "query Test { user { id } }"}`,
@@ -30,7 +30,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 	}
 
 	// Create test executions
-	exec1ID, err := store.CreateExecution(&ExecutedRequest{
+	exec1ID, err := store.CreateRequest(&Request{
 		SampleID:        ptrUint(uint(sampleID)),
 		ServerID:        ptrUint(uint(serverID)),
 		RequestIDHeader: "req-1",
@@ -41,7 +41,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 		t.Fatalf("Failed to create execution 1: %v", err)
 	}
 
-	exec2ID, err := store.CreateExecution(&ExecutedRequest{
+	exec2ID, err := store.CreateRequest(&Request{
 		SampleID:        ptrUint(uint(sampleID)),
 		ServerID:        ptrUint(uint(serverID)),
 		RequestIDHeader: "req-2",

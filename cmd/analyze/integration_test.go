@@ -34,7 +34,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 	}
 
 	// Create execution 1
-	exec1 := &store.ExecutedRequest{
+	exec1 := &store.Request{
 		ServerID:        uintPtr(uint(serverID)),
 		RequestIDHeader: "req-001",
 		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
@@ -42,7 +42,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 		DurationMS:      150,
 		ExecutedAt:      time.Now(),
 	}
-	exec1ID, err := db.CreateExecution(exec1)
+	exec1ID, err := db.CreateRequest(exec1)
 	if err != nil {
 		t.Fatalf("Failed to create execution 1: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 	}
 
 	// Create execution 2 (optimized)
-	exec2 := &store.ExecutedRequest{
+	exec2 := &store.Request{
 		ServerID:        uintPtr(uint(serverID)),
 		RequestIDHeader: "req-002",
 		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
@@ -83,7 +83,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 		DurationMS:      80,
 		ExecutedAt:      time.Now(),
 	}
-	exec2ID, err := db.CreateExecution(exec2)
+	exec2ID, err := db.CreateRequest(exec2)
 	if err != nil {
 		t.Fatalf("Failed to create execution 2: %v", err)
 	}

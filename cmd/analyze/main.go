@@ -63,7 +63,7 @@ func parseFlags() Config {
 
 func runAnalysis(db *store.Store, config Config) error {
 	// Get execution details for both requests
-	exec1, err := db.GetExecutionDetail(config.ExecutionID1)
+	exec1, err := db.GetRequestDetail(config.ExecutionID1)
 	if err != nil {
 		return fmt.Errorf("failed to get execution %d: %w", config.ExecutionID1, err)
 	}
@@ -71,7 +71,7 @@ func runAnalysis(db *store.Store, config Config) error {
 		return fmt.Errorf("execution %d not found", config.ExecutionID1)
 	}
 
-	exec2, err := db.GetExecutionDetail(config.ExecutionID2)
+	exec2, err := db.GetRequestDetail(config.ExecutionID2)
 	if err != nil {
 		return fmt.Errorf("failed to get execution %d: %w", config.ExecutionID2, err)
 	}
@@ -128,7 +128,7 @@ func convertToQueryWithPlan(queries []store.SQLQuery, operationName string) []sq
 	return result
 }
 
-func generateOutput(exec1, exec2 *store.ExecutionDetail, comparison *sqlexplain.ExplainPlanComparison,
+func generateOutput(exec1, exec2 *store.RequestDetailResponse, comparison *sqlexplain.ExplainPlanComparison,
 	indexAnalysis1, indexAnalysis2 *sqlexplain.IndexAnalysis, verbose bool) string {
 	var sb strings.Builder
 
