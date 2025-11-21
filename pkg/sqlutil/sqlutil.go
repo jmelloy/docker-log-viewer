@@ -104,7 +104,7 @@ func ExtractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 				}
 				// Extract trace/request/span IDs
 				if requestID, ok := msg.Entry.Fields["request_id"]; ok {
-					query.RequestID = requestID
+					query.LogRequestID = requestID
 				}
 				if spanID, ok := msg.Entry.Fields["span_id"]; ok {
 					query.SpanID = spanID

@@ -26,12 +26,11 @@ func TestMarkdownExportGeneration(t *testing.T) {
 		ExplainPlan:     `[{"Plan":{"Node Type":"Seq Scan","Total Cost":100.50}}]`,
 		RelatedExecutions: []store.ExecutionReference{
 			{
-				ID:              123,
-				DisplayName:     "GetActiveUsers",
-				RequestIDHeader: "req-abc-123",
-				DurationMS:      15.5,
-				ExecutedAt:      time.Now(),
-				StatusCode:      200,
+				ID:          123,
+				DisplayName: "GetActiveUsers",
+				DurationMS:  15.5,
+				ExecutedAt:  time.Now(),
+				StatusCode:  200,
 			},
 		},
 	}
@@ -87,7 +86,6 @@ func simulateMarkdownGeneration(detail *store.SQLQueryDetail) string {
 
 	if len(detail.RelatedExecutions) > 0 {
 		exec := detail.RelatedExecutions[0]
-		sb.WriteString("**Request ID:** " + exec.RequestIDHeader + "\n")
 		sb.WriteString("**Execution Date:** " + exec.ExecutedAt.Format(time.RFC1123) + "\n\n")
 	}
 
@@ -119,11 +117,11 @@ func simulateMarkdownGeneration(detail *store.SQLQueryDetail) string {
 
 	if len(detail.RelatedExecutions) > 0 {
 		sb.WriteString("## Related Executions\n\n")
-		sb.WriteString("| Request ID | Display Name | Status | Duration | Executed At |\n")
-		sb.WriteString("|------------|--------------|--------|----------|-------------|\n")
+		sb.WriteString("| ID | Display Name | Status | Duration | Executed At |\n")
+		sb.WriteString("|----|--------------|--------|----------|-------------|\n")
 		for _, exec := range detail.RelatedExecutions {
-			sb.WriteString(fmt.Sprintf("| %s | %s | %d | %.2fms | %s |\n",
-				exec.RequestIDHeader,
+			sb.WriteString(fmt.Sprintf("| %d | %s | %d | %.2fms | %s |\n",
+				exec.ID,
 				exec.DisplayName,
 				exec.StatusCode,
 				exec.DurationMS,

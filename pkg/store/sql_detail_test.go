@@ -31,22 +31,20 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 
 	// Create test executions
 	exec1ID, err := store.CreateRequest(&Request{
-		SampleID:        ptrUint(uint(sampleID)),
-		ServerID:        ptrUint(uint(serverID)),
-		RequestIDHeader: "req-1",
-		StatusCode:      200,
-		DurationMS:      100,
+		SampleID:   ptrUint(uint(sampleID)),
+		ServerID:   ptrUint(uint(serverID)),
+		StatusCode: 200,
+		DurationMS: 100,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create execution 1: %v", err)
 	}
 
 	exec2ID, err := store.CreateRequest(&Request{
-		SampleID:        ptrUint(uint(sampleID)),
-		ServerID:        ptrUint(uint(serverID)),
-		RequestIDHeader: "req-2",
-		StatusCode:      200,
-		DurationMS:      150,
+		SampleID:   ptrUint(uint(sampleID)),
+		ServerID:   ptrUint(uint(serverID)),
+		StatusCode: 200,
+		DurationMS: 150,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create execution 2: %v", err)
@@ -56,7 +54,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 	testHash := "test-hash-123"
 	queries := []SQLQuery{
 		{
-			ExecutionID:     uint(exec1ID),
+			RequestID:       uint(exec1ID),
 			Query:           "SELECT * FROM users WHERE id = $1",
 			NormalizedQuery: "SELECT * FROM users WHERE id = ?",
 			QueryHash:       testHash,
@@ -67,7 +65,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 			ExplainPlan:     `[{"Node Type": "Seq Scan"}]`,
 		},
 		{
-			ExecutionID:     uint(exec2ID),
+			RequestID:       uint(exec2ID),
 			Query:           "SELECT * FROM users WHERE id = $1",
 			NormalizedQuery: "SELECT * FROM users WHERE id = ?",
 			QueryHash:       testHash,
@@ -152,7 +150,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 	foundReq1 := false
 	foundReq2 := false
 	for _, exec := range detail.RelatedExecutions {
-		if exec.RequestIDHeader == "req-1" {
+		if exec.ID == int64(exec1ID) {
 			foundReq1 = true
 			if exec.StatusCode != 200 {
 				t.Errorf("Expected status code 200 for req-1, got %d", exec.StatusCode)
@@ -161,7 +159,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 				t.Errorf("Expected duration 10.5ms for req-1, got %f", exec.DurationMS)
 			}
 		}
-		if exec.RequestIDHeader == "req-2" {
+		if exec.ID == int64(exec2ID) {
 			foundReq2 = true
 			if exec.StatusCode != 200 {
 				t.Errorf("Expected status code 200 for req-2, got %d", exec.StatusCode)
