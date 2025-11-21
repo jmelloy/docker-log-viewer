@@ -27,6 +27,7 @@ import (
 	"docker-log-parser/pkg/sqlutil"
 	"docker-log-parser/pkg/store"
 
+	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/jomei/notionapi"
 	"github.com/lmittmann/tint"
@@ -1469,9 +1470,9 @@ func (wa *WebApp) handleRequestDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract ID from path
-	path := strings.TrimPrefix(r.URL.Path, "/api/requests/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	// Extract ID from path using mux.Vars
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid request ID", http.StatusBadRequest)
 		return
@@ -1512,10 +1513,9 @@ func (wa *WebApp) handleExecuteRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract ID from path
-	path := strings.TrimPrefix(r.URL.Path, "/api/requests/")
-	path = strings.TrimSuffix(path, "/execute")
-	id, err := strconv.ParseInt(path, 10, 64)
+	// Extract ID from path using mux.Vars
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid request ID", http.StatusBadRequest)
 		return
@@ -1623,16 +1623,9 @@ func (wa *WebApp) handleExecutionDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Extract ID from path
-	path := strings.TrimPrefix(r.URL.Path, "/api/executions/")
-
-	// Check if this is an export-notion request
-	if strings.HasSuffix(path, "/export-notion") {
-		wa.handleExecutionNotionExport(w, r)
-		return
-	}
-
-	id, err := strconv.ParseInt(path, 10, 64)
+	// Extract ID from path using mux.Vars
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid execution ID", http.StatusBadRequest)
 		return
@@ -1658,16 +1651,9 @@ func (wa *WebApp) handleSQLDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract query hash from path
-	path := strings.TrimPrefix(r.URL.Path, "/api/sql/")
-
-	// Check if this is an export-notion request
-	if strings.HasSuffix(path, "/export-notion") {
-		wa.handleSQLNotionExport(w, r)
-		return
-	}
-
-	queryHash := strings.TrimSpace(path)
+	// Extract query hash from path using mux.Vars
+	vars := mux.Vars(r)
+	queryHash := strings.TrimSpace(vars["hash"])
 	if queryHash == "" {
 		http.Error(w, "Invalid query hash", http.StatusBadRequest)
 		return
@@ -1694,10 +1680,9 @@ func (wa *WebApp) handleSQLNotionExport(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Extract query hash from path (remove "/export-notion" suffix)
-	path := strings.TrimPrefix(r.URL.Path, "/api/sql/")
-	queryHash := strings.TrimSuffix(path, "/export-notion")
-	queryHash = strings.TrimSpace(queryHash)
+	// Extract query hash from path using mux.Vars
+	vars := mux.Vars(r)
+	queryHash := strings.TrimSpace(vars["hash"])
 
 	if queryHash == "" {
 		http.Error(w, "Invalid query hash", http.StatusBadRequest)
@@ -1750,10 +1735,9 @@ func (wa *WebApp) handleExecutionNotionExport(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Extract execution ID from path (remove "/export-notion" suffix)
-	path := strings.TrimPrefix(r.URL.Path, "/api/executions/")
-	path = strings.TrimSuffix(path, "/export-notion")
-	id, err := strconv.ParseInt(path, 10, 64)
+	// Extract execution ID from path using mux.Vars
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid execution ID", http.StatusBadRequest)
 		return
@@ -2410,9 +2394,9 @@ func (wa *WebApp) handleServerDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract ID from path
-	path := strings.TrimPrefix(r.URL.Path, "/api/servers/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	// Extract ID from path using mux.Vars
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid server ID", http.StatusBadRequest)
 		return
@@ -2504,9 +2488,9 @@ func (wa *WebApp) handleDatabaseURLDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Extract ID from path
-	path := strings.TrimPrefix(r.URL.Path, "/api/database-urls/")
-	id, err := strconv.ParseInt(path, 10, 64)
+	// Extract ID from path using mux.Vars
+	vars := mux.Vars(r)
+	id, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid database URL ID", http.StatusBadRequest)
 		return
@@ -2728,11 +2712,11 @@ func (wa *WebApp) executeRequestWithOverrides(requestID int64, serverIDOverride 
 	return execID
 }
 
-func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
 
-		next(w, r)
+		next.ServeHTTP(w, r)
 
 		slog.Info(fmt.Sprintf("%s %s", r.Method, r.URL.Path),
 			"method", r.Method,
@@ -2740,7 +2724,7 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			"remote", r.RemoteAddr,
 			"duration_ms", time.Since(startTime).Milliseconds(),
 		)
-	}
+	})
 }
 
 // ============================================================================
@@ -2812,8 +2796,9 @@ func (wa *WebApp) handleRetentionDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Extract container name from path
-	containerName := strings.TrimPrefix(r.URL.Path, "/api/retention/")
+	// Extract container name from path using mux.Vars
+	vars := mux.Vars(r)
+	containerName := vars["containerName"]
 	if containerName == "" {
 		http.Error(w, "Container name required", http.StatusBadRequest)
 		return
@@ -2865,33 +2850,49 @@ func (wa *WebApp) Run(addr string) error {
 		slog.Info("loaded container retentions")
 	}
 
-	http.HandleFunc("/api/containers", loggingMiddleware(wa.handleContainers))
-	http.HandleFunc("/api/logs", loggingMiddleware(wa.handleLogs))
-	http.HandleFunc("/api/ws", loggingMiddleware(wa.handleWebSocket))
-	http.HandleFunc("/api/explain", loggingMiddleware(wa.handleExplain))
-	http.HandleFunc("/api/save-trace", loggingMiddleware(wa.handleSaveTrace))
-	http.HandleFunc("/api/execute", loggingMiddleware(wa.handleExecute))
-	http.HandleFunc("/debug", loggingMiddleware(wa.handleDebug))
+	// Create Gorilla mux router
+	r := mux.NewRouter()
+	
+	// Apply logging middleware to all routes
+	r.Use(loggingMiddleware)
+
+	// Container and log endpoints
+	r.HandleFunc("/api/containers", wa.handleContainers).Methods("GET")
+	r.HandleFunc("/api/logs", wa.handleLogs).Methods("GET")
+	r.HandleFunc("/api/ws", wa.handleWebSocket).Methods("GET")
+	r.HandleFunc("/debug", wa.handleDebug).Methods("GET")
+
+	// SQL and trace endpoints
+	r.HandleFunc("/api/explain", wa.handleExplain).Methods("POST")
+	r.HandleFunc("/api/save-trace", wa.handleSaveTrace).Methods("POST")
+	r.HandleFunc("/api/execute", wa.handleExecute).Methods("POST")
+
+	// Server management endpoints
+	r.HandleFunc("/api/servers", wa.handleServers).Methods("GET", "POST")
+	r.HandleFunc("/api/servers/{id}", wa.handleServerDetail).Methods("GET", "PUT", "DELETE")
+
+	// Database URL endpoints
+	r.HandleFunc("/api/database-urls", wa.handleDatabaseURLs).Methods("GET", "POST")
+	r.HandleFunc("/api/database-urls/{id}", wa.handleDatabaseURLDetail).Methods("GET", "PUT", "DELETE")
 
 	// Request management endpoints
-	http.HandleFunc("/api/servers", loggingMiddleware(wa.handleServers))
-	http.HandleFunc("/api/servers/", loggingMiddleware(wa.handleServerDetail))
-	http.HandleFunc("/api/database-urls", loggingMiddleware(wa.handleDatabaseURLs))
-	http.HandleFunc("/api/database-urls/", loggingMiddleware(wa.handleDatabaseURLDetail))
-	http.HandleFunc("/api/requests", loggingMiddleware(wa.handleRequests))
-	http.HandleFunc("/api/requests/", loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/execute") {
-			wa.handleExecuteRequest(w, r)
-		} else {
-			wa.handleRequestDetail(w, r)
-		}
-	}))
-	http.HandleFunc("/api/executions", loggingMiddleware(wa.handleExecutions))
-	http.HandleFunc("/api/all-executions", loggingMiddleware(wa.handleAllExecutions))
-	http.HandleFunc("/api/executions/", loggingMiddleware(wa.handleExecutionDetail))
-	http.HandleFunc("/api/sql/", loggingMiddleware(wa.handleSQLDetail))
-	http.HandleFunc("/api/retention", loggingMiddleware(wa.handleRetention))
-	http.HandleFunc("/api/retention/", loggingMiddleware(wa.handleRetentionDetail))
+	r.HandleFunc("/api/requests", wa.handleRequests).Methods("GET", "POST")
+	r.HandleFunc("/api/requests/{id}", wa.handleRequestDetail).Methods("GET", "PUT", "DELETE")
+	r.HandleFunc("/api/requests/{id}/execute", wa.handleExecuteRequest).Methods("POST")
+
+	// Execution endpoints
+	r.HandleFunc("/api/executions", wa.handleExecutions).Methods("GET")
+	r.HandleFunc("/api/all-executions", wa.handleAllExecutions).Methods("GET")
+	r.HandleFunc("/api/executions/{id}", wa.handleExecutionDetail).Methods("GET")
+	r.HandleFunc("/api/executions/{id}/export-notion", wa.handleExecutionNotionExport).Methods("POST")
+
+	// SQL endpoints
+	r.HandleFunc("/api/sql/{hash}", wa.handleSQLDetail).Methods("GET")
+	r.HandleFunc("/api/sql/{hash}/export-notion", wa.handleSQLNotionExport).Methods("POST")
+
+	// Retention endpoints
+	r.HandleFunc("/api/retention", wa.handleRetention).Methods("GET", "POST")
+	r.HandleFunc("/api/retention/{containerName}", wa.handleRetentionDetail).Methods("GET", "DELETE")
 
 	// Serve static assets from Vite build output
 	// In production, serve from dist folder built by Vite
@@ -2902,39 +2903,15 @@ func (wa *WebApp) Run(addr string) error {
 		distDir = "./web"
 	}
 
-	// Serve static files with correct MIME types
-	serveFiles := func(prefix, dir string) {
-		fs := http.FileServer(http.Dir(dir))
-		http.Handle(prefix, http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Let http.FileServer handle MIME type detection
-			fs.ServeHTTP(w, r)
-		})))
-	}
-
-	serveFiles("/static/", distDir+"/static")
-	serveFiles("/assets/", distDir+"/assets")
-	serveFiles("/js/", distDir+"/js")
-	serveFiles("/css/", distDir+"/css")
-	serveFiles("/lib/", distDir+"/lib")
+	// Serve static files using mux
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(distDir+"/static"))))
+	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir(distDir+"/assets"))))
+	r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(distDir+"/js"))))
+	r.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(http.Dir(distDir+"/css"))))
+	r.PathPrefix("/lib/").Handler(http.StripPrefix("/lib/", http.FileServer(http.Dir(distDir+"/lib"))))
 
 	// Serve SPA for all non-API and non-static routes
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// If it's an API route, let it 404 naturally
-		if strings.HasPrefix(r.URL.Path, "/api/") {
-			http.NotFound(w, r)
-			return
-		}
-
-		// Serve static files (handled by above handlers)
-		if strings.HasPrefix(r.URL.Path, "/static/") ||
-			strings.HasPrefix(r.URL.Path, "/assets/") ||
-			strings.HasPrefix(r.URL.Path, "/js/") ||
-			strings.HasPrefix(r.URL.Path, "/css/") ||
-			strings.HasPrefix(r.URL.Path, "/lib/") {
-			http.NotFound(w, r)
-			return
-		}
-
+	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// For SPA routes, serve index.html from dist folder for all other paths
 		// This enables Vue Router client-side routing
 		indexPath := filepath.Join(distDir, "index.html")
@@ -2944,7 +2921,7 @@ func (wa *WebApp) Run(addr string) error {
 	// Create HTTP server with graceful shutdown
 	server := &http.Server{
 		Addr:    addr,
-		Handler: nil,
+		Handler: r, // Use the mux router as handler
 	}
 
 	// Set up signal handling for graceful shutdown
