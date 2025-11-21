@@ -91,7 +91,6 @@ func TestStore(t *testing.T) {
 	exec := &Request{
 		SampleID:        &sampleID,
 		ServerID:        &serverIDUint,
-		RequestIDHeader: "test-req-id",
 		RequestBody:     `{"query": "{ test }"}`,
 		StatusCode:      200,
 		DurationMS:      150,

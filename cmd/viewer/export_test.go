@@ -123,12 +123,11 @@ func TestCreateNotionPagePayload(t *testing.T) {
 		ExplainPlan:     `{"Plan": {"Node Type": "Seq Scan"}}`,
 		RelatedExecutions: []store.ExecutionReference{
 			{
-				ID:              1,
-				DisplayName:     "Test Query",
-				RequestIDHeader: "req-123",
-				DurationMS:      5.5,
-				ExecutedAt:      time.Now(),
-				StatusCode:      200,
+				ID:          1,
+				DisplayName: "Test Query",
+				DurationMS:  5.5,
+				ExecutedAt:  time.Now(),
+				StatusCode:  200,
 			},
 		},
 	}

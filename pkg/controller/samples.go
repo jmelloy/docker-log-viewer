@@ -221,7 +221,6 @@ func (c *Controller) HandleExecuteSample(w http.ResponseWriter, r *http.Request)
 	exec := &store.Request{
 		SampleID:            &req.ID,
 		ServerID:            serverID,
-		RequestIDHeader:     requestIDHeader,
 		RequestBody:         requestData,
 		ExecutedAt:          time.Now(),
 		StatusCode:          0,

@@ -83,7 +83,6 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 
 	execution := &store.Request{
 		ServerID:            input.ServerID,
-		RequestIDHeader:     requestIDHeader,
 		RequestBody:         input.RequestData,
 		ExecutedAt:          time.Now(),
 		StatusCode:          0,
@@ -303,7 +302,7 @@ func sortSQLQueries(queries []store.SQLQuery) []store.SQLQuery {
 func createNotionPageForExecution(apiKey, databaseID string, detail *store.RequestDetailResponse) (string, error) {
 	sortedQueries := sortSQLQueries(detail.SQLQueries)
 
-	title := fmt.Sprintf("Execution: %s", detail.Execution.RequestIDHeader)
+	title := "Execution"
 	if detail.Execution.Name != "" {
 		title = fmt.Sprintf("Execution: %s", detail.Execution.Name)
 	}
@@ -312,7 +311,6 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Reque
 	var blocks []blockOrRaw
 
 	blocks = append(blocks, newHeading2Block("Request Information"))
-	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Request ID: %s", detail.Execution.RequestIDHeader)))
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Status Code: %d", detail.Execution.StatusCode)))
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Duration: %dms", detail.Execution.DurationMS)))
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Executed At: %s", detail.Execution.ExecutedAt.Format(time.RFC3339))))
