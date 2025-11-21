@@ -2,7 +2,7 @@ package sqlutil
 
 import (
 	"testing"
-	
+
 	"docker-log-parser/pkg/logs"
 )
 
@@ -56,7 +56,7 @@ func TestExtractSQLQueries(t *testing.T) {
 			expected: 0,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			queries := ExtractSQLQueries(tt.messages)
@@ -87,7 +87,7 @@ func TestInterpolateSQLQuery(t *testing.T) {
 			expected:  "SELECT * FROM users WHERE id = 123",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := InterpolateSQLQuery(tt.query, tt.variables)
@@ -101,11 +101,11 @@ func TestInterpolateSQLQuery(t *testing.T) {
 func TestFormatSQLBasic(t *testing.T) {
 	sql := "SELECT * FROM users WHERE id = 1"
 	formatted := FormatSQLBasic(sql)
-	
+
 	if formatted == "" {
 		t.Error("FormatSQLBasic returned empty string")
 	}
-	
+
 	// Should have newlines before SELECT, FROM, WHERE
 	if len(formatted) < len(sql) {
 		t.Error("Formatted SQL should not be shorter than input")
@@ -134,7 +134,7 @@ func TestConvertVariablesToMap(t *testing.T) {
 			expected: 1,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ConvertVariablesToMap(tt.input)
