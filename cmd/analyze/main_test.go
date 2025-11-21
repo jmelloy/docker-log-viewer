@@ -54,8 +54,8 @@ func TestConvertToQueryWithPlan(t *testing.T) {
 func TestGenerateOutput(t *testing.T) {
 	now := time.Now()
 
-	exec1 := &store.ExecutionDetail{
-		Execution: store.ExecutedRequest{
+	exec1 := &store.RequestDetailResponse{
+		Execution: store.Request{
 			ID:              1,
 			RequestIDHeader: "req-001",
 			DurationMS:      100,
@@ -74,8 +74,8 @@ func TestGenerateOutput(t *testing.T) {
 		},
 	}
 
-	exec2 := &store.ExecutionDetail{
-		Execution: store.ExecutedRequest{
+	exec2 := &store.RequestDetailResponse{
+		Execution: store.Request{
 			ID:              2,
 			RequestIDHeader: "req-002",
 			DurationMS:      150,
@@ -136,8 +136,8 @@ func TestGenerateOutput(t *testing.T) {
 func TestGenerateOutputVerbose(t *testing.T) {
 	now := time.Now()
 
-	exec1 := &store.ExecutionDetail{
-		Execution: store.ExecutedRequest{
+	exec1 := &store.RequestDetailResponse{
+		Execution: store.Request{
 			ID:              1,
 			RequestIDHeader: "req-001",
 			DurationMS:      100,
@@ -156,8 +156,8 @@ func TestGenerateOutputVerbose(t *testing.T) {
 		},
 	}
 
-	exec2 := &store.ExecutionDetail{
-		Execution: store.ExecutedRequest{
+	exec2 := &store.RequestDetailResponse{
+		Execution: store.Request{
 			ID:              2,
 			RequestIDHeader: "req-002",
 			DurationMS:      150,

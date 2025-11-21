@@ -891,18 +891,18 @@ func (wa *WebApp) Run(addr string) error {
 	r.HandleFunc("/api/sql/{hash}/export-notion", ctrl.HandleSQLNotionExport).Methods("POST")
 
 	// Request management endpoints
-	r.HandleFunc("/api/requests", ctrl.HandleListRequests).Methods("GET")
-	r.HandleFunc("/api/requests", ctrl.HandleCreateRequest).Methods("POST")
-	r.HandleFunc("/api/requests/{id}", ctrl.HandleGetRequest).Methods("GET")
-	r.HandleFunc("/api/requests/{id}", ctrl.HandleDeleteRequest).Methods("DELETE")
-	r.HandleFunc("/api/requests/{id}/execute", ctrl.HandleExecuteRequest).Methods("POST")
+	r.HandleFunc("/api/samples/", ctrl.HandleListSampleQueries).Methods("GET")
+	r.HandleFunc("/api/samples/", ctrl.HandleCreateSampleQuery).Methods("POST")
+	r.HandleFunc("/api/samples//{id}", ctrl.HandleGetSampleQuery).Methods("GET")
+	r.HandleFunc("/api/samples//{id}", ctrl.HandleDeleteSampleQuery).Methods("DELETE")
+	r.HandleFunc("/api/samples//{id}/execute", ctrl.HandleExecuteSample).Methods("POST")
 
 	// Execution endpoints
-	r.HandleFunc("/api/execute", ctrl.HandleExecute).Methods("POST")
-	r.HandleFunc("/api/executions", ctrl.HandleListExecutions).Methods("GET")
-	r.HandleFunc("/api/all-executions", ctrl.HandleListAllExecutions).Methods("GET")
-	r.HandleFunc("/api/executions/{id}", ctrl.HandleGetExecutionDetail).Methods("GET")
-	r.HandleFunc("/api/executions/{id}/export-notion", ctrl.HandleExecutionNotionExport).Methods("POST")
+	r.HandleFunc("/api/requests", ctrl.HandleCreateRequest).Methods("POST")
+	// r.HandleFunc("/api/requests", ctrl.HandleListRequestsBySample).Methods("GET")
+	r.HandleFunc("/api/requests", ctrl.HandleListAllRequests).Methods("GET")
+	r.HandleFunc("/api/requests/{id}", ctrl.HandleGetRequestDetail).Methods("GET")
+	r.HandleFunc("/api/requests/{id}/export-notion", ctrl.HandleNotionExportForRequest).Methods("POST")
 
 	// Serve static assets from Vite build output
 	// In production, serve from dist folder built by Vite

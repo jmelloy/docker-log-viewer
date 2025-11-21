@@ -26,8 +26,8 @@ type Store struct {
 	db *gorm.DB
 }
 
-// DatabaseURL represents a database connection configuration for EXPLAIN queries
-type DatabaseURL struct {
+// Database represents a database connection configuration for EXPLAIN queries
+type Database struct {
 	ID               uint           `gorm:"primaryKey" json:"id"`
 	Name             string         `gorm:"not null" json:"name"`
 	ConnectionString string         `gorm:"not null;column:connection_string" json:"connectionString"`
@@ -37,7 +37,7 @@ type DatabaseURL struct {
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-func (DatabaseURL) TableName() string {
+func (Database) TableName() string {
 	return "databases"
 }
 
@@ -50,7 +50,7 @@ type Server struct {
 	DevID             string         `gorm:"column:dev_id" json:"devId,omitempty"`
 	ExperimentalMode  string         `gorm:"column:experimental_mode" json:"experimentalMode,omitempty"`
 	DefaultDatabaseID *uint          `gorm:"column:default_database_id;index" json:"defaultDatabaseId,omitempty"`
-	DefaultDatabase   *DatabaseURL   `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
+	DefaultDatabase   *Database      `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
 	CreatedAt         time.Time      `json:"createdAt"`
 	UpdatedAt         time.Time      `json:"updatedAt"`
 	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
@@ -73,8 +73,8 @@ func (SampleQuery) TableName() string {
 	return "sample_requests"
 }
 
-// ExecutedRequest represents a single execution of a request (executed request)
-type ExecutedRequest struct {
+// Request represents a single request execution
+type Request struct {
 	ID                  uint           `gorm:"primaryKey" json:"id"`
 	SampleID            *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
 	ServerID            *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
@@ -97,12 +97,12 @@ type ExecutedRequest struct {
 	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-func (ExecutedRequest) TableName() string {
+func (Request) TableName() string {
 	return "requests"
 }
 
-// ExecutionLog represents a log entry from an execution
-type ExecutionLog struct {
+// RequestLogMessages represents a log entry from an execution
+type RequestLogMessages struct {
 	ID          uint           `gorm:"primaryKey" json:"id"`
 	ExecutionID uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
 	ContainerID string         `gorm:"not null;column:container_id" json:"containerId"`
@@ -116,7 +116,7 @@ type ExecutionLog struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
-func (ExecutionLog) TableName() string {
+func (RequestLogMessages) TableName() string {
 	return "request_log_messages"
 }
 
@@ -162,11 +162,11 @@ func (SQLQuery) TableName() string {
 	return "request_sql_statements"
 }
 
-// ExecutionDetail includes execution with related logs and SQL analysis
-type ExecutionDetail struct {
-	Execution     ExecutedRequest           `json:"execution"`
+// RequestDetailResponse includes execution with related logs and SQL analysis
+type RequestDetailResponse struct {
+	Execution     Request                   `json:"execution"`
 	Request       *SampleQuery              `json:"request,omitempty"`
-	Logs          []ExecutionLog            `json:"logs"`
+	Logs          []RequestLogMessages      `json:"logs"`
 	SQLQueries    []SQLQuery                `json:"sqlQueries"`
 	SQLAnalysis   *SQLAnalysis              `json:"sqlAnalysis,omitempty"`
 	IndexAnalysis *sqlexplain.IndexAnalysis `json:"indexAnalysis,omitempty"`
@@ -261,8 +261,8 @@ func (s *Store) Close() error {
 	return sqlDB.Close()
 }
 
-// CreateRequest creates a new request template
-func (s *Store) CreateRequest(req *SampleQuery) (int64, error) {
+// CreateSampleQuery creates a new request template
+func (s *Store) CreateSampleQuery(req *SampleQuery) (int64, error) {
 	result := s.db.Create(req)
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to create request: %w", result.Error)
@@ -270,8 +270,8 @@ func (s *Store) CreateRequest(req *SampleQuery) (int64, error) {
 	return int64(req.ID), nil
 }
 
-// GetRequest retrieves a request by ID
-func (s *Store) GetRequest(id int64) (*SampleQuery, error) {
+// GetSampleQuery retrieves a sample query by ID
+func (s *Store) GetSampleQuery(id int64) (*SampleQuery, error) {
 	var req SampleQuery
 	result := s.db.Preload("Server").First(&req, id)
 	if result.Error != nil {
@@ -285,22 +285,22 @@ func (s *Store) GetRequest(id int64) (*SampleQuery, error) {
 	return &req, nil
 }
 
-// ListRequests retrieves all requests
-func (s *Store) ListRequests() ([]SampleQuery, error) {
-	var requests []SampleQuery
-	result := s.db.Preload("Server").Order("updated_at DESC").Find(&requests)
+// ListSampleQueries retrieves all sample queries
+func (s *Store) ListSampleQueries() ([]SampleQuery, error) {
+	var sampleQueries []SampleQuery
+	result := s.db.Preload("Server").Order("updated_at DESC").Find(&sampleQueries)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
+		return nil, fmt.Errorf("failed to list sample queries: %w", result.Error)
 	}
-	// Compute displayName for each request
-	for i := range requests {
-		requests[i].DisplayName = computeDisplayName(requests[i].Name, requests[i].RequestData)
+	// Compute displayName for each sample query
+	for i := range sampleQueries {
+		sampleQueries[i].DisplayName = computeDisplayName(sampleQueries[i].Name, sampleQueries[i].RequestData)
 	}
-	return requests, nil
+	return sampleQueries, nil
 }
 
-// DeleteRequest deletes a request and all its executions
-func (s *Store) DeleteRequest(id int64) error {
+// DeleteSampleQuery deletes a sample query
+func (s *Store) DeleteSampleQuery(id int64) error {
 	result := s.db.Delete(&SampleQuery{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete request: %w", result.Error)
@@ -359,7 +359,7 @@ func (s *Store) DeleteServer(id int64) error {
 }
 
 // CreateDatabaseURL creates a new database URL configuration
-func (s *Store) CreateDatabaseURL(dbURL *DatabaseURL) (int64, error) {
+func (s *Store) CreateDatabaseURL(dbURL *Database) (int64, error) {
 	result := s.db.Create(dbURL)
 	if result.Error != nil {
 		return 0, fmt.Errorf("failed to create database URL: %w", result.Error)
@@ -368,8 +368,8 @@ func (s *Store) CreateDatabaseURL(dbURL *DatabaseURL) (int64, error) {
 }
 
 // GetDatabaseURL retrieves a database URL by ID
-func (s *Store) GetDatabaseURL(id int64) (*DatabaseURL, error) {
-	var dbURL DatabaseURL
+func (s *Store) GetDatabaseURL(id int64) (*Database, error) {
+	var dbURL Database
 	result := s.db.First(&dbURL, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -381,8 +381,8 @@ func (s *Store) GetDatabaseURL(id int64) (*DatabaseURL, error) {
 }
 
 // ListDatabaseURLs retrieves all database URLs
-func (s *Store) ListDatabaseURLs() ([]DatabaseURL, error) {
-	var dbURLs []DatabaseURL
+func (s *Store) ListDatabaseURLs() ([]Database, error) {
+	var dbURLs []Database
 	result := s.db.Order("name").Find(&dbURLs)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to list database URLs: %w", result.Error)
@@ -391,7 +391,7 @@ func (s *Store) ListDatabaseURLs() ([]DatabaseURL, error) {
 }
 
 // UpdateDatabaseURL updates a database URL configuration
-func (s *Store) UpdateDatabaseURL(dbURL *DatabaseURL) error {
+func (s *Store) UpdateDatabaseURL(dbURL *Database) error {
 	result := s.db.Save(dbURL)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update database URL: %w", result.Error)
@@ -401,30 +401,30 @@ func (s *Store) UpdateDatabaseURL(dbURL *DatabaseURL) error {
 
 // DeleteDatabaseURL deletes a database URL
 func (s *Store) DeleteDatabaseURL(id int64) error {
-	result := s.db.Delete(&DatabaseURL{}, id)
+	result := s.db.Delete(&Database{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete database URL: %w", result.Error)
 	}
 	return nil
 }
 
-// CreateExecution creates a new execution record
-func (s *Store) CreateExecution(exec *ExecutedRequest) (int64, error) {
-	result := s.db.Create(exec)
+// CreateRequest creates a new execution record
+func (s *Store) CreateRequest(request *Request) (int64, error) {
+	result := s.db.Create(request)
 	if result.Error != nil {
-		return 0, fmt.Errorf("failed to create execution: %w", result.Error)
+		return 0, fmt.Errorf("failed to create request: %w", result.Error)
 	}
 
 	// Update the SampleQuery's updated_at timestamp if this execution is linked to a sample query
-	if exec.SampleID != nil {
-		s.db.Model(&SampleQuery{}).Where("id = ?", *exec.SampleID).Update("updated_at", time.Now())
+	if request.SampleID != nil {
+		s.db.Model(&SampleQuery{}).Where("id = ?", *request.SampleID).Update("updated_at", time.Now())
 	}
 
-	return int64(exec.ID), nil
+	return int64(request.ID), nil
 }
 
-// UpdateExecution updates an existing execution record
-func (s *Store) UpdateExecution(exec *ExecutedRequest) error {
+// UpdateRequest updates an existing execution record
+func (s *Store) UpdateRequest(exec *Request) error {
 	result := s.db.Save(exec)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update execution: %w", result.Error)
@@ -432,9 +432,9 @@ func (s *Store) UpdateExecution(exec *ExecutedRequest) error {
 	return nil
 }
 
-// GetExecution retrieves an execution by ID
-func (s *Store) GetExecution(id int64) (*ExecutedRequest, error) {
-	var exec ExecutedRequest
+// GetRequest retrieves an execution by ID
+func (s *Store) GetRequest(id int64) (*Request, error) {
+	var exec Request
 	result := s.db.First(&exec, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
@@ -445,20 +445,20 @@ func (s *Store) GetExecution(id int64) (*ExecutedRequest, error) {
 	return &exec, nil
 }
 
-// ListExecutions retrieves all executions for a request
-func (s *Store) ListExecutions(requestID int64) ([]ExecutedRequest, error) {
-	var executions []ExecutedRequest
-	result := s.db.Where("sample_id = ?", requestID).Order("executed_at DESC").Find(&executions)
+// ListRequestsBySample retrieves all executions for a request
+func (s *Store) ListRequestsBySample(sampleID int64) ([]Request, error) {
+	var executions []Request
+	result := s.db.Where("sample_id = ?", sampleID).Order("executed_at DESC").Find(&executions)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to list executions: %w", result.Error)
+		return nil, fmt.Errorf("failed to list requests: %w", result.Error)
 	}
 	return executions, nil
 }
 
-// ListAllExecutions retrieves all executions across all requests
-func (s *Store) ListAllExecutions(limit, offset int, search string, showAll bool) ([]ExecutedRequest, int64, error) {
-	query := s.db.Preload("Server").Model(&ExecutedRequest{})
-	countQuery := s.db.Model(&ExecutedRequest{})
+// ListRequests retrieves all requests
+func (s *Store) ListRequests(limit, offset int, search string, showAll bool) ([]Request, int64, error) {
+	query := s.db.Preload("Server").Model(&Request{})
+	countQuery := s.db.Model(&Request{})
 
 	// Apply search filter to both query and count
 	if search != "" {
@@ -486,33 +486,33 @@ func (s *Store) ListAllExecutions(limit, offset int, search string, showAll bool
 		return nil, 0, fmt.Errorf("failed to count executions: %w", err)
 	}
 
-	// Get executions with filters
-	var executions []ExecutedRequest
-	result := query.Order("executed_at DESC").Limit(limit).Offset(offset).Find(&executions)
+	// Get requests with filters
+	var requests []Request
+	result := query.Order("executed_at DESC").Limit(limit).Offset(offset).Find(&requests)
 	if result.Error != nil {
 		return nil, 0, fmt.Errorf("failed to list all executions: %w", result.Error)
 	}
 
 	// Compute displayName for each execution
-	for i := range executions {
-		displayName := computeDisplayName(executions[i].Name, executions[i].RequestBody)
+	for i := range requests {
+		displayName := computeDisplayName(requests[i].Name, requests[i].RequestBody)
 		// If execution has a sample query, use its name
-		if displayName == "Unknown" && executions[i].SampleID != nil {
-			sampleQuery, err := s.GetRequest(int64(*executions[i].SampleID))
+		if displayName == "Unknown" && requests[i].SampleID != nil {
+			sampleQuery, err := s.GetSampleQuery(int64(*requests[i].SampleID))
 			if err == nil && sampleQuery != nil {
 				displayName = computeDisplayName(sampleQuery.Name, sampleQuery.RequestData)
 			}
 		}
 
-		executions[i].DisplayName = displayName
+		requests[i].DisplayName = displayName
 	}
 
-	return executions, totalCount, nil
+	return requests, totalCount, nil
 }
 
-// SaveExecutionLogs saves log entries for an execution
-func (s *Store) SaveExecutionLogs(executionID int64, logMessages []logs.LogMessage) error {
-	var execLogs []ExecutionLog
+// SaveRequestLogs saves log entries for an execution
+func (s *Store) SaveRequestLogs(requestID int64, logMessages []logs.LogMessage) error {
+	var execLogs []RequestLogMessages
 
 	for _, msg := range logMessages {
 		var level, message, rawLog string
@@ -527,8 +527,8 @@ func (s *Store) SaveExecutionLogs(executionID int64, logMessages []logs.LogMessa
 			}
 		}
 
-		execLogs = append(execLogs, ExecutionLog{
-			ExecutionID: uint(executionID),
+		execLogs = append(execLogs, RequestLogMessages{
+			ExecutionID: uint(requestID),
 			ContainerID: msg.ContainerID,
 			Timestamp:   msg.Timestamp,
 			Level:       level,
@@ -548,12 +548,12 @@ func (s *Store) SaveExecutionLogs(executionID int64, logMessages []logs.LogMessa
 	return nil
 }
 
-// GetExecutionLogs retrieves logs for an execution
-func (s *Store) GetExecutionLogs(executionID int64) ([]ExecutionLog, error) {
-	var logs []ExecutionLog
-	result := s.db.Where("execution_id = ?", executionID).Order("timestamp").Find(&logs)
+// GetRequestLogs retrieves logs for an execution
+func (s *Store) GetRequestLogs(requestID int64) ([]RequestLogMessages, error) {
+	var logs []RequestLogMessages
+	result := s.db.Where("request_id = ?", requestID).Order("timestamp").Find(&logs)
 	if result.Error != nil {
-		return nil, fmt.Errorf("failed to get execution logs: %w", result.Error)
+		return nil, fmt.Errorf("failed to get request logs: %w", result.Error)
 	}
 	return logs, nil
 }
@@ -600,9 +600,9 @@ func (s *Store) GetSQLQueries(executionID int64) ([]SQLQuery, error) {
 	return queries, nil
 }
 
-// GetExecutionDetail retrieves full execution details with logs and SQL analysis
-func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) {
-	exec, err := s.GetExecution(executionID)
+// GetRequestDetail retrieves full execution details with logs and SQL analysis
+func (s *Store) GetRequestDetail(executionID int64) (*RequestDetailResponse, error) {
+	exec, err := s.GetRequest(executionID)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +612,7 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 
 	var req *SampleQuery
 	if exec.SampleID != nil {
-		req, err = s.GetRequest(int64(*exec.SampleID))
+		req, err = s.GetSampleQuery(int64(*exec.SampleID))
 		if err != nil {
 			return nil, err
 		}
@@ -626,7 +626,7 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 		}
 	}
 
-	logs, err := s.GetExecutionLogs(executionID)
+	logs, err := s.GetRequestLogs(executionID)
 	if err != nil {
 		return nil, err
 	}
@@ -647,7 +647,7 @@ func (s *Store) GetExecutionDetail(executionID int64) (*ExecutionDetail, error) 
 	}
 	exec.DisplayName = displayName
 
-	detail := &ExecutionDetail{
+	detail := &RequestDetailResponse{
 		Execution:   *exec,
 		Request:     req,
 		Logs:        logs,
@@ -914,7 +914,7 @@ func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, erro
 	}
 
 	// Fetch execution details
-	var executions []ExecutedRequest
+	var executions []Request
 	if len(executionIDs) > 0 {
 		result = s.db.Where("id IN ?", executionIDs).Order("executed_at DESC").Find(&executions)
 		if result.Error != nil {
@@ -927,7 +927,7 @@ func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, erro
 			// Get sample query to compute display name
 			var displayName string
 			if exec.SampleID != nil {
-				req, err := s.GetRequest(int64(*exec.SampleID))
+				req, err := s.GetSampleQuery(int64(*exec.SampleID))
 				if err == nil && req != nil {
 					displayName = computeDisplayName(req.Name, req.RequestData)
 				}

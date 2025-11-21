@@ -1457,7 +1457,7 @@ export default defineComponent({
     async loadRequestDetail(requestId) {
       try {
         console.log(`Loading request detail for ID: ${requestId}`);
-        this.requestDetail = await API.get<ExecutionDetail>(`/api/executions/${requestId}`);
+        this.requestDetail = await API.get<ExecutionDetail>(`/api/requests/${requestId}`);
         this.loading = false;
         console.log("Request detail loaded successfully:", this.requestDetail);
 
@@ -1495,7 +1495,7 @@ export default defineComponent({
       this.refreshTimer = setTimeout(async () => {
         console.log("Auto-refreshing request details...");
         try {
-          this.requestDetail = await API.get<ExecutionDetail>(`/api/executions/${requestId}`);
+          this.requestDetail = await API.get<ExecutionDetail>(`/api/requests/${requestId}`);
 
           // Check if we should continue refreshing
           const ageMinutes = this.requestAgeMinutes;
@@ -1855,7 +1855,7 @@ export default defineComponent({
           devIdOverride: devId,
         };
 
-        const result = await API.post<ExecuteResponse>("/api/execute", payload);
+        const result = await API.post<ExecuteResponse>("/api/requests", payload);
 
         // Navigate to new execution detail
         if (result.executionId) {
@@ -1891,7 +1891,7 @@ export default defineComponent({
           devIdOverride: this.executeForm.devIdOverride || undefined,
         };
 
-        const result = await API.post<ExecuteResponse>("/api/execute", payload);
+        const result = await API.post<ExecuteResponse>("/api/requests", payload);
 
         // Close modal
         this.showExecuteModal = false;
@@ -2218,7 +2218,7 @@ export default defineComponent({
 
       try {
         const executionId = this.requestDetail.execution.id;
-        const response = await fetch(`/api/executions/${executionId}/export-notion`, {
+        const response = await fetch(`/api/requests/${executionId}/export-notion`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

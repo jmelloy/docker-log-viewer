@@ -14,14 +14,14 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// HandleListRequests lists all saved requests
-func (c *Controller) HandleListRequests(w http.ResponseWriter, r *http.Request) {
+// HandleListSampleQueries lists all saved requests
+func (c *Controller) HandleListSampleQueries(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
 	}
 
-	requests, err := c.store.ListRequests()
+	requests, err := c.store.ListSampleQueries()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -31,8 +31,8 @@ func (c *Controller) HandleListRequests(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(requests)
 }
 
-// HandleCreateRequest creates a new request
-func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request) {
+// HandleCreateSampleQuery creates a new request
+func (c *Controller) HandleCreateSampleQuery(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -78,7 +78,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 		RequestData: input.RequestData,
 	}
 
-	id, err := c.store.CreateRequest(req)
+	id, err := c.store.CreateSampleQuery(req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -88,8 +88,8 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
 }
 
-// HandleGetRequest gets a request by ID
-func (c *Controller) HandleGetRequest(w http.ResponseWriter, r *http.Request) {
+// HandleGetSampleQuery gets a request by ID
+func (c *Controller) HandleGetSampleQuery(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -102,7 +102,7 @@ func (c *Controller) HandleGetRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := c.store.GetRequest(id)
+	req, err := c.store.GetSampleQuery(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -116,8 +116,8 @@ func (c *Controller) HandleGetRequest(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(req)
 }
 
-// HandleDeleteRequest deletes a request
-func (c *Controller) HandleDeleteRequest(w http.ResponseWriter, r *http.Request) {
+// HandleDeleteSampleQuery deletes a request
+func (c *Controller) HandleDeleteSampleQuery(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -130,7 +130,7 @@ func (c *Controller) HandleDeleteRequest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := c.store.DeleteRequest(id); err != nil {
+	if err := c.store.DeleteSampleQuery(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -138,8 +138,8 @@ func (c *Controller) HandleDeleteRequest(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// HandleExecuteRequest executes a saved request
-func (c *Controller) HandleExecuteRequest(w http.ResponseWriter, r *http.Request) {
+// HandleExecuteSample executes a saved request
+func (c *Controller) HandleExecuteSample(w http.ResponseWriter, r *http.Request) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
@@ -165,7 +165,7 @@ func (c *Controller) HandleExecuteRequest(w http.ResponseWriter, r *http.Request
 		slog.Warn("failed to parse execute request overrides", "error", err)
 	}
 
-	req, err := c.store.GetRequest(id)
+	req, err := c.store.GetSampleQuery(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -218,7 +218,7 @@ func (c *Controller) HandleExecuteRequest(w http.ResponseWriter, r *http.Request
 
 	requestIDHeader := httputil.GenerateRequestID()
 
-	exec := &store.ExecutedRequest{
+	exec := &store.Request{
 		SampleID:            &req.ID,
 		ServerID:            serverID,
 		RequestIDHeader:     requestIDHeader,
@@ -229,7 +229,7 @@ func (c *Controller) HandleExecuteRequest(w http.ResponseWriter, r *http.Request
 		DevIDOverride:       input.DevIDOverride,
 	}
 
-	execID, err := c.store.CreateExecution(exec)
+	execID, err := c.store.CreateRequest(exec)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -248,7 +248,7 @@ func (c *Controller) HandleExecuteRequest(w http.ResponseWriter, r *http.Request
 		}
 
 		exec.ID = uint(execID)
-		if err := c.store.UpdateExecution(exec); err != nil {
+		if err := c.store.UpdateRequest(exec); err != nil {
 			slog.Error("failed to update execution", "error", err)
 		}
 	}()

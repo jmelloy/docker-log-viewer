@@ -58,13 +58,13 @@ func TestStore(t *testing.T) {
 		RequestData: `{"query": "{ test }"}`,
 	}
 
-	reqID, err := store.CreateRequest(req)
+	reqID, err := store.CreateSampleQuery(req)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
 	// Test retrieving request
-	retrieved, err := store.GetRequest(reqID)
+	retrieved, err := store.GetSampleQuery(reqID)
 	if err != nil {
 		t.Fatalf("Failed to get request: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestStore(t *testing.T) {
 	}
 
 	// Test listing requests
-	requests, err := store.ListRequests()
+	requests, err := store.ListSampleQueries()
 	if err != nil {
 		t.Fatalf("Failed to list requests: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestStore(t *testing.T) {
 
 	// Test creating execution
 	sampleID := uint(reqID)
-	exec := &ExecutedRequest{
+	exec := &Request{
 		SampleID:        &sampleID,
 		ServerID:        &serverIDUint,
 		RequestIDHeader: "test-req-id",
@@ -100,13 +100,13 @@ func TestStore(t *testing.T) {
 		ExecutedAt:      time.Now(),
 	}
 
-	execID, err := store.CreateExecution(exec)
+	execID, err := store.CreateRequest(exec)
 	if err != nil {
 		t.Fatalf("Failed to create execution: %v", err)
 	}
 
 	// Test retrieving execution
-	retrievedExec, err := store.GetExecution(execID)
+	retrievedExec, err := store.GetRequest(execID)
 	if err != nil {
 		t.Fatalf("Failed to get execution: %v", err)
 	}
@@ -128,13 +128,13 @@ func TestStore(t *testing.T) {
 		},
 	}
 
-	err = store.SaveExecutionLogs(execID, logMessages)
+	err = store.SaveRequestLogs(execID, logMessages)
 	if err != nil {
 		t.Fatalf("Failed to save execution logs: %v", err)
 	}
 
 	// Test retrieving logs
-	retrievedLogs, err := store.GetExecutionLogs(execID)
+	retrievedLogs, err := store.GetRequestLogs(execID)
 	if err != nil {
 		t.Fatalf("Failed to get execution logs: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestStore(t *testing.T) {
 	}
 
 	// Test execution detail
-	detail, err := store.GetExecutionDetail(execID)
+	detail, err := store.GetRequestDetail(execID)
 	if err != nil {
 		t.Fatalf("Failed to get execution detail: %v", err)
 	}
@@ -193,13 +193,13 @@ func TestStore(t *testing.T) {
 	}
 
 	// Test deleting request (should cascade)
-	err = store.DeleteRequest(reqID)
+	err = store.DeleteSampleQuery(reqID)
 	if err != nil {
 		t.Fatalf("Failed to delete request: %v", err)
 	}
 
 	// Verify deletion
-	requests, err = store.ListRequests()
+	requests, err = store.ListSampleQueries()
 	if err != nil {
 		t.Fatalf("Failed to list requests after delete: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestDatabaseURL(t *testing.T) {
 	defer store.Close()
 
 	// Test creating a database URL
-	dbURL := &DatabaseURL{
+	dbURL := &Database{
 		Name:             "Production DB",
 		ConnectionString: "postgresql://user:pass@localhost:5432/prod",
 		DatabaseType:     "postgresql",
