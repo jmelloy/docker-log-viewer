@@ -57,7 +57,6 @@ func (wa *WebApp) handleRetention(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func (wa *WebApp) handleRetentionDetail(w http.ResponseWriter, r *http.Request) {
 	if wa.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
