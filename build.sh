@@ -14,7 +14,7 @@ cd ..
 
 echo ""
 echo "Building Docker Log Viewer..."
-go build -o bin/docker-log-viewer cmd/viewer/main.go
+go build -o bin/docker-log-viewer ./cmd/viewer
 
 echo "Building GraphQL Tester..."
 go build -o bin/graphql-tester cmd/graphql-tester/main.go
