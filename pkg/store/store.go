@@ -551,7 +551,7 @@ func (s *Store) SaveRequestLogs(requestID int64, logMessages []logs.LogMessage) 
 // GetRequestLogs retrieves logs for an execution
 func (s *Store) GetRequestLogs(requestID int64) ([]RequestLogMessages, error) {
 	var logs []RequestLogMessages
-	result := s.db.Where("request_id = ?", requestID).Order("timestamp").Find(&logs)
+	result := s.db.Where("execution_id = ?", requestID).Order("timestamp").Find(&logs)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to get request logs: %w", result.Error)
 	}
