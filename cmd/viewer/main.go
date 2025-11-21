@@ -890,9 +890,19 @@ func (wa *WebApp) Run(addr string) error {
 	r.HandleFunc("/api/sql/{hash}", ctrl.HandleSQLDetail).Methods("GET")
 	r.HandleFunc("/api/sql/{hash}/export-notion", ctrl.HandleSQLNotionExport).Methods("POST")
 
-	// Note: Request and Execution handlers need to be re-implemented
-	// They reference functions that don't exist in the current codebase
-	// TODO: Implement HandleExecute, HandleRequests, HandleExecutions, etc.
+	// Request management endpoints
+	r.HandleFunc("/api/requests", ctrl.HandleListRequests).Methods("GET")
+	r.HandleFunc("/api/requests", ctrl.HandleCreateRequest).Methods("POST")
+	r.HandleFunc("/api/requests/{id}", ctrl.HandleGetRequest).Methods("GET")
+	r.HandleFunc("/api/requests/{id}", ctrl.HandleDeleteRequest).Methods("DELETE")
+	r.HandleFunc("/api/requests/{id}/execute", ctrl.HandleExecuteRequest).Methods("POST")
+
+	// Execution endpoints
+	r.HandleFunc("/api/execute", ctrl.HandleExecute).Methods("POST")
+	r.HandleFunc("/api/executions", ctrl.HandleListExecutions).Methods("GET")
+	r.HandleFunc("/api/all-executions", ctrl.HandleListAllExecutions).Methods("GET")
+	r.HandleFunc("/api/executions/{id}", ctrl.HandleGetExecutionDetail).Methods("GET")
+	r.HandleFunc("/api/executions/{id}/export-notion", ctrl.HandleExecutionNotionExport).Methods("POST")
 
 	// Serve static assets from Vite build output
 	// In production, serve from dist folder built by Vite
