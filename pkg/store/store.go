@@ -79,7 +79,6 @@ type Request struct {
 	SampleID            *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
 	ServerID            *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
 	Server              *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestIDHeader     string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
 	RequestBody         string         `gorm:"column:request_body" json:"requestBody,omitempty"`
 	StatusCode          int            `gorm:"column:status_code" json:"statusCode"`
 	DurationMS          int64          `gorm:"column:duration_ms" json:"durationMs"`
@@ -104,7 +103,7 @@ func (Request) TableName() string {
 // RequestLogMessages represents a log entry from an execution
 type RequestLogMessages struct {
 	ID          uint           `gorm:"primaryKey" json:"id"`
-	ExecutionID uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
+	RequestID   uint           `gorm:"not null;column:request_id;index" json:"requestId"`
 	ContainerID string         `gorm:"not null;column:container_id" json:"containerId"`
 	Timestamp   time.Time      `gorm:"not null" json:"timestamp"`
 	Level       string         `json:"level"`
@@ -137,7 +136,7 @@ func (ContainerRetention) TableName() string {
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
 	ID               uint           `gorm:"primaryKey;autoIncrement" json:"id"`
-	ExecutionID      uint           `gorm:"not null;column:execution_id;index" json:"executionId"`
+	RequestID        uint           `gorm:"not null;column:request_id;index" json:"requestId"`
 	Query            string         `gorm:"not null" json:"query"`
 	NormalizedQuery  string         `gorm:"not null;column:normalized_query" json:"normalizedQuery"`
 	QueryHash        string         `gorm:"column:query_hash;index" json:"queryHash,omitempty"`
@@ -148,7 +147,7 @@ type SQLQuery struct {
 	Variables        string         `gorm:"column:variables" json:"variables,omitempty"` // Stored db.vars for EXPLAIN
 	GraphQLOperation string         `gorm:"column:gql_operation" json:"graphqlOperation,omitempty"`
 	ExplainPlan      string         `gorm:"column:explain_plan" json:"explainPlan,omitempty"`
-	RequestID        string         `gorm:"column:request_id" json:"requestId,omitempty"`
+	LogRequestID     string         `gorm:"column:log_request_id" json:"logRequestId,omitempty"`
 	SpanID           string         `gorm:"column:span_id" json:"spanId,omitempty"`
 	TraceID          string         `gorm:"column:trace_id" json:"traceId,omitempty"`
 	LogFields        string         `gorm:"column:log_fields" json:"logFields,omitempty"` // JSON object of all other log fields
@@ -212,12 +211,11 @@ type SQLQueryDetail struct {
 
 // ExecutionReference represents a minimal reference to an execution
 type ExecutionReference struct {
-	ID              int64     `json:"id"`
-	DisplayName     string    `json:"displayName"`
-	RequestIDHeader string    `json:"requestIdHeader"`
-	DurationMS      float64   `json:"durationMs"`
-	ExecutedAt      time.Time `json:"executedAt"`
-	StatusCode      int       `json:"statusCode"`
+	ID          int64     `json:"id"`
+	DisplayName string    `json:"displayName"`
+	DurationMS  float64   `json:"durationMs"`
+	ExecutedAt  time.Time `json:"executedAt"`
+	StatusCode  int       `json:"statusCode"`
 }
 
 // NewStore creates a new store and initializes the database
@@ -464,13 +462,13 @@ func (s *Store) ListRequests(limit, offset int, search string, showAll bool) ([]
 	if search != "" {
 		searchPattern := "%" + search + "%"
 		searchCondition := s.db.Where(
-			"request_id_header LIKE ? OR request_body LIKE ?",
-			searchPattern, searchPattern,
+			"request_body LIKE ?",
+			searchPattern,
 		)
 		query = query.Where(searchCondition)
 		countQuery = countQuery.Where(
-			"request_id_header LIKE ? OR request_body LIKE ?",
-			searchPattern, searchPattern,
+			"request_body LIKE ?",
+			searchPattern,
 		)
 	}
 
@@ -528,7 +526,7 @@ func (s *Store) SaveRequestLogs(requestID int64, logMessages []logs.LogMessage) 
 		}
 
 		execLogs = append(execLogs, RequestLogMessages{
-			ExecutionID: uint(requestID),
+			RequestID:   uint(requestID),
 			ContainerID: msg.ContainerID,
 			Timestamp:   msg.Timestamp,
 			Level:       level,
@@ -551,7 +549,7 @@ func (s *Store) SaveRequestLogs(requestID int64, logMessages []logs.LogMessage) 
 // GetRequestLogs retrieves logs for an execution
 func (s *Store) GetRequestLogs(requestID int64) ([]RequestLogMessages, error) {
 	var logs []RequestLogMessages
-	result := s.db.Where("execution_id = ?", requestID).Order("timestamp").Find(&logs)
+	result := s.db.Where("request_id = ?", requestID).Order("timestamp").Find(&logs)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to get request logs: %w", result.Error)
 	}
@@ -564,9 +562,9 @@ func (s *Store) SaveSQLQueries(executionID int64, queries []SQLQuery) error {
 		return nil
 	}
 
-	// Set the execution ID for all queries
+	// Set the request ID for all queries
 	for i := range queries {
-		queries[i].ExecutionID = uint(executionID)
+		queries[i].RequestID = uint(executionID)
 	}
 
 	result := s.db.Create(&queries)
@@ -580,7 +578,7 @@ func (s *Store) SaveSQLQueries(executionID int64, queries []SQLQuery) error {
 // UpdateQueryExplainPlan updates the explain plan for a query by its hash
 func (s *Store) UpdateQueryExplainPlan(executionID int64, queryHash string, explainPlan string) error {
 	result := s.db.Model(&SQLQuery{}).
-		Where("execution_id = ? AND query_hash = ?", executionID, queryHash).
+		Where("request_id = ? AND query_hash = ?", executionID, queryHash).
 		Update("explain_plan", explainPlan)
 
 	if result.Error != nil {
@@ -593,7 +591,7 @@ func (s *Store) UpdateQueryExplainPlan(executionID int64, queryHash string, expl
 // GetSQLQueries retrieves SQL queries for an execution
 func (s *Store) GetSQLQueries(executionID int64) ([]SQLQuery, error) {
 	var queries []SQLQuery
-	result := s.db.Where("execution_id = ?", executionID).Order("id").Find(&queries)
+	result := s.db.Where("request_id = ?", executionID).Order("id").Find(&queries)
 	if result.Error != nil {
 		return nil, fmt.Errorf("failed to get SQL queries: %w", result.Error)
 	}
@@ -910,7 +908,7 @@ func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, erro
 	// Get related executions
 	executionIDs := make([]uint, 0, len(queries))
 	for _, q := range queries {
-		executionIDs = append(executionIDs, q.ExecutionID)
+		executionIDs = append(executionIDs, q.RequestID)
 	}
 
 	// Fetch execution details
@@ -942,19 +940,18 @@ func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, erro
 			// Find the duration for this specific query in this execution
 			var queryDuration float64
 			for _, q := range queries {
-				if q.ExecutionID == exec.ID {
+				if q.RequestID == exec.ID {
 					queryDuration = q.DurationMS
 					break
 				}
 			}
 
 			detail.RelatedExecutions = append(detail.RelatedExecutions, ExecutionReference{
-				ID:              int64(exec.ID),
-				DisplayName:     displayName,
-				RequestIDHeader: exec.RequestIDHeader,
-				DurationMS:      queryDuration,
-				ExecutedAt:      exec.ExecutedAt,
-				StatusCode:      exec.StatusCode,
+				ID:          int64(exec.ID),
+				DisplayName: displayName,
+				DurationMS:  queryDuration,
+				ExecutedAt:  exec.ExecutedAt,
+				StatusCode:  exec.StatusCode,
 			})
 		}
 	}

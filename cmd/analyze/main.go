@@ -140,7 +140,6 @@ func generateOutput(exec1, exec2 *store.RequestDetailResponse, comparison *sqlex
 	sb.WriteString("EXECUTION DETAILS\n")
 	sb.WriteString(strings.Repeat("-", 50) + "\n")
 	sb.WriteString(fmt.Sprintf("Execution 1 (ID: %d)\n", exec1.Execution.ID))
-	sb.WriteString(fmt.Sprintf("  Request ID: %s\n", exec1.Execution.RequestIDHeader))
 	sb.WriteString(fmt.Sprintf("  Duration: %dms\n", exec1.Execution.DurationMS))
 	sb.WriteString(fmt.Sprintf("  Status: %d\n", exec1.Execution.StatusCode))
 	sb.WriteString(fmt.Sprintf("  SQL Queries: %d\n", len(exec1.SQLQueries)))
@@ -153,7 +152,6 @@ func generateOutput(exec1, exec2 *store.RequestDetailResponse, comparison *sqlex
 	sb.WriteString("\n")
 
 	sb.WriteString(fmt.Sprintf("Execution 2 (ID: %d)\n", exec2.Execution.ID))
-	sb.WriteString(fmt.Sprintf("  Request ID: %s\n", exec2.Execution.RequestIDHeader))
 	sb.WriteString(fmt.Sprintf("  Duration: %dms\n", exec2.Execution.DurationMS))
 	sb.WriteString(fmt.Sprintf("  Status: %d\n", exec2.Execution.StatusCode))
 	sb.WriteString(fmt.Sprintf("  SQL Queries: %d\n", len(exec2.SQLQueries)))

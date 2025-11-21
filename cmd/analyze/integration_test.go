@@ -35,12 +35,11 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 
 	// Create execution 1
 	exec1 := &store.Request{
-		ServerID:        uintPtr(uint(serverID)),
-		RequestIDHeader: "req-001",
-		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
-		StatusCode:      200,
-		DurationMS:      150,
-		ExecutedAt:      time.Now(),
+		ServerID:    uintPtr(uint(serverID)),
+		RequestBody: `{"query": "{ user(id: 1) { name } }"}`,
+		StatusCode:  200,
+		DurationMS:  150,
+		ExecutedAt:  time.Now(),
 	}
 	exec1ID, err := db.CreateRequest(exec1)
 	if err != nil {
@@ -50,7 +49,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 	// Add SQL queries for execution 1
 	queries1 := []store.SQLQuery{
 		{
-			ExecutionID:     uint(exec1ID),
+			RequestID:       uint(exec1ID),
 			Query:           "SELECT * FROM users WHERE id = $1",
 			NormalizedQuery: "SELECT * FROM users WHERE id = $N",
 			QueryHash:       store.ComputeQueryHash("SELECT * FROM users WHERE id = $N"),
@@ -60,7 +59,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 			Rows:            1,
 		},
 		{
-			ExecutionID:     uint(exec1ID),
+			RequestID:       uint(exec1ID),
 			Query:           "SELECT * FROM posts WHERE user_id = $1",
 			NormalizedQuery: "SELECT * FROM posts WHERE user_id = $N",
 			QueryHash:       store.ComputeQueryHash("SELECT * FROM posts WHERE user_id = $N"),
@@ -76,12 +75,11 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 
 	// Create execution 2 (optimized)
 	exec2 := &store.Request{
-		ServerID:        uintPtr(uint(serverID)),
-		RequestIDHeader: "req-002",
-		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
-		StatusCode:      200,
-		DurationMS:      80,
-		ExecutedAt:      time.Now(),
+		ServerID:    uintPtr(uint(serverID)),
+		RequestBody: `{"query": "{ user(id: 1) { name } }"}`,
+		StatusCode:  200,
+		DurationMS:  80,
+		ExecutedAt:  time.Now(),
 	}
 	exec2ID, err := db.CreateRequest(exec2)
 	if err != nil {
@@ -91,7 +89,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 	// Add SQL queries for execution 2 (faster queries)
 	queries2 := []store.SQLQuery{
 		{
-			ExecutionID:     uint(exec2ID),
+			RequestID:       uint(exec2ID),
 			Query:           "SELECT * FROM users WHERE id = $1",
 			NormalizedQuery: "SELECT * FROM users WHERE id = $N",
 			QueryHash:       store.ComputeQueryHash("SELECT * FROM users WHERE id = $N"),
@@ -101,7 +99,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 			Rows:            1,
 		},
 		{
-			ExecutionID:     uint(exec2ID),
+			RequestID:       uint(exec2ID),
 			Query:           "SELECT * FROM posts WHERE user_id = $1",
 			NormalizedQuery: "SELECT * FROM posts WHERE user_id = $N",
 			QueryHash:       store.ComputeQueryHash("SELECT * FROM posts WHERE user_id = $N"),
