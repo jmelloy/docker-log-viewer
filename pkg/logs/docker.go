@@ -100,6 +100,14 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 	}
 
 	go func() {
+		channelClosed := false
+		defer func() {
+			if r := recover(); r != nil {
+				// Channel was closed, this is expected during shutdown
+				channelClosed = true
+				slog.Debug("Recovered from panic in log stream (likely channel closed)", "container_id", containerID[:12], "panic", r)
+			}
+		}()
 		defer reader.Close()
 		if onStreamEnd != nil {
 			defer onStreamEnd()
@@ -109,18 +117,45 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		var bufferedEntry *LogEntry
 		lineCount := 0
 
-		flushBuffered := func() {
-			if bufferedEntry != nil {
-				// Try to send, but don't block if context is cancelled or channel is closed
+		// safeSend attempts to send a message to the channel, handling closed channel gracefully
+		// Returns true if sent successfully, false if context cancelled or channel closed
+		safeSend := func(msg LogMessage) bool {
+			if channelClosed {
+				return false
+			}
+			// Use a closure with recover to catch panics from closed channel
+			var sent bool
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// Channel was closed, mark it and return false
+						channelClosed = true
+						sent = false
+					}
+				}()
 				select {
 				case <-ctx.Done():
 					// Context cancelled, don't send
-					return
-				case logChan <- LogMessage{
+					sent = false
+				case logChan <- msg:
+					// Successfully sent
+					sent = true
+				default:
+					// Channel is full, don't block
+					sent = false
+				}
+			}()
+			return sent
+		}
+
+		flushBuffered := func() {
+			if bufferedEntry != nil {
+				// Try to send, but don't block if context is cancelled or channel is closed
+				if safeSend(LogMessage{
 					ContainerID: containerID,
 					Timestamp:   time.Now(), // Will be updated below if bufferedEntry has timestamp
 					Entry:       bufferedEntry,
-				}:
+				}) {
 					bufferedEntry = nil
 					lineCount++
 				}
@@ -128,10 +163,18 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 		}
 
 		for {
+			if channelClosed {
+				slog.Info("Container log channel closed, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+				return
+			}
 			select {
 			case <-ctx.Done():
 				flushBuffered()
-				slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+				if channelClosed {
+					slog.Info("Container log channel closed during flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+				} else {
+					slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+				}
 				return
 			default:
 				n, err := reader.Read(buf)
@@ -199,16 +242,16 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 								bufferedEntry = entry
 							} else {
 								// Send immediately, but check context first
-								select {
-								case <-ctx.Done():
-									return
-								case logChan <- LogMessage{
+								if safeSend(LogMessage{
 									ContainerID: containerID,
 									Timestamp:   time.Now(),
 									Entry:       entry,
-								}:
+								}) {
 									lineCount++
 									sentCount++
+								} else {
+									// Context cancelled or channel closed, exit
+									return
 								}
 							}
 						}
@@ -226,12 +269,20 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 
 				if err == io.EOF {
 					flushBuffered()
-					slog.Info("Container reached EOF, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+					if channelClosed {
+						slog.Info("Container log channel closed during EOF flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+					} else {
+						slog.Info("Container reached EOF, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+					}
 					return
 				}
 				if err != nil {
 					flushBuffered()
-					slog.Error("Container log stream error, stopping", "container_id", containerID[:12], "error", err, "linesProcessed", lineCount)
+					if channelClosed {
+						slog.Info("Container log channel closed during error flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+					} else {
+						slog.Error("Container log stream error, stopping", "container_id", containerID[:12], "error", err, "linesProcessed", lineCount)
+					}
 					return
 				}
 			}

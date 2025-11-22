@@ -66,7 +66,9 @@ type WebApp struct {
 	shutdownOnce        sync.Once       // Ensure shutdown happens only once
 	activeStreams       map[string]bool // Tracks which containers have active log streams
 	activeStreamsMutex  sync.RWMutex
-	decoder             *schema.Decoder // For parsing query/form parameters
+	decoder             *schema.Decoder        // For parsing query/form parameters
+	controller          *controller.Controller // Controller for HTTP handlers and WebSocket clients
+	controllerMutex     sync.RWMutex           // Protects controller field
 }
 
 type WSMessage struct {
@@ -543,7 +545,18 @@ func (wa *WebApp) processLogs() {
 				copy(batch, wa.logBatch)
 				wa.logBatch = wa.logBatch[:0]
 				wa.batchMutex.Unlock()
-				wa.broadcastBatch(batch)
+
+				// Use controller's BroadcastBatch if available
+				wa.controllerMutex.RLock()
+				ctrl := wa.controller
+				wa.controllerMutex.RUnlock()
+
+				if ctrl != nil {
+					ctrl.BroadcastBatch(batch)
+				} else {
+					// Fallback to WebApp's broadcastBatch if controller not set yet
+					wa.broadcastBatch(batch)
+				}
 			} else {
 				wa.batchMutex.Unlock()
 			}
@@ -694,7 +707,19 @@ func (wa *WebApp) monitorContainers() {
 
 			if len(containers) != len(wa.containers) || len(currentIDs) != len(previousIDs) {
 				wa.containers = containers
-				wa.broadcastContainerUpdate(containers)
+
+				// Update controller's container list
+				wa.controllerMutex.RLock()
+				ctrl := wa.controller
+				wa.controllerMutex.RUnlock()
+
+				if ctrl != nil {
+					ctrl.SetContainers(containers)
+					ctrl.BroadcastContainerUpdate(containers)
+				} else {
+					// Fallback to WebApp's broadcastContainerUpdate if controller not set yet
+					wa.broadcastContainerUpdate(containers)
+				}
 			}
 
 			previousIDs = currentIDs
@@ -829,17 +854,7 @@ func (wa *WebApp) Run(addr string) error {
 		slog.Info("database connection established for EXPLAIN queries")
 	}
 
-	slog.Info("starting background goroutines")
-	go wa.processLogs()
-	go wa.monitorContainers()
-
-	if err := wa.loadContainerRetentions(); err != nil {
-		slog.Error("failed to load container retentions", "error", err)
-	} else {
-		slog.Info("loaded container retentions")
-	}
-
-	// Create controller instance
+	// Create controller instance before starting goroutines
 	ctrl := controller.NewController(
 		wa.docker,
 		wa.logStore,
@@ -849,6 +864,21 @@ func (wa *WebApp) Run(addr string) error {
 		wa.logChan,
 	)
 	ctrl.SetContainers(wa.containers)
+
+	// Store controller reference in WebApp
+	wa.controllerMutex.Lock()
+	wa.controller = ctrl
+	wa.controllerMutex.Unlock()
+
+	slog.Info("starting background goroutines")
+	go wa.processLogs()
+	go wa.monitorContainers()
+
+	if err := wa.loadContainerRetentions(); err != nil {
+		slog.Error("failed to load container retentions", "error", err)
+	} else {
+		slog.Info("loaded container retentions")
+	}
 
 	// Create Gorilla mux router
 	r := mux.NewRouter()
@@ -860,7 +890,7 @@ func (wa *WebApp) Run(addr string) error {
 	r.HandleFunc("/api/containers", ctrl.HandleContainers).Methods("GET")
 	r.HandleFunc("/api/logs", ctrl.HandleLogs).Methods("GET")
 	r.HandleFunc("/api/ws", ctrl.HandleWebSocket).Methods("GET")
-	r.HandleFunc("/debug", ctrl.HandleDebug).Methods("GET")
+	r.HandleFunc("/api/debug", ctrl.HandleDebug).Methods("GET")
 
 	// SQL and trace endpoints
 	r.HandleFunc("/api/explain", ctrl.HandleExplain).Methods("POST")

@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"docker-log-parser/pkg/httputil"
@@ -259,7 +260,7 @@ func (c *Controller) HandleNotionExportForRequest(w http.ResponseWriter, r *http
 		return
 	}
 
-	pageURL, err := createNotionPageForExecution(notionAPIKey, notionDatabaseID, detail)
+	pageURL, err := createNotionPageForRequest(notionAPIKey, notionDatabaseID, detail)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create Notion page: %v", err), http.StatusInternalServerError)
 		return
@@ -299,87 +300,120 @@ func sortSQLQueries(queries []store.SQLQuery) []store.SQLQuery {
 	return queries
 }
 
-func createNotionPageForExecution(apiKey, databaseID string, detail *store.RequestDetailResponse) (string, error) {
-	sortedQueries := sortSQLQueries(detail.SQLQueries)
-
-	title := "Execution"
-	if detail.Execution.Name != "" {
-		title = fmt.Sprintf("Execution: %s", detail.Execution.Name)
+func createNotionPageForRequest(apiKey, databaseID string, detail *store.RequestDetailResponse) (string, error) {
+	// Build page title
+	title := detail.Execution.Name
+	if title == "" {
+		title = detail.Execution.DisplayName
 	}
 
+	// Create blocks for the page content using jomei/notionapi types
 	type blockOrRaw interface{}
 	var blocks []blockOrRaw
 
-	blocks = append(blocks, newHeading2Block("Request Information"))
+	// Execution Information heading
+	blocks = append(blocks, newHeading2Block("Execution Information"))
+
+	// Metadata as bulleted list
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Status Code: %d", detail.Execution.StatusCode)))
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Duration: %dms", detail.Execution.DurationMS)))
 	blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Executed At: %s", detail.Execution.ExecutedAt.Format(time.RFC3339))))
 
-	if detail.Execution.RequestBody != "" {
-		blocks = append(blocks, newHeading2Block("Request Body"))
-		requestBody := detail.Execution.RequestBody
-		if len(requestBody) > 4000 {
-			requestBody = requestBody[:4000] + "... (truncated)"
-		}
-		blocks = append(blocks, newCodeBlock(requestBody, "graphql"))
-	}
+	// Add SQL Queries section if available
+	if len(detail.SQLQueries) > 0 {
+		blocks = append(blocks, newHeading2Block(fmt.Sprintf("SQL Queries (%d)", len(detail.SQLQueries))))
 
-	if len(detail.Logs) > 0 {
-		blocks = append(blocks, newHeading2Block(fmt.Sprintf("Logs (%d)", len(detail.Logs))))
+		// Add each SQL query
+		for idx, q := range sortSQLQueries(detail.SQLQueries) {
+			// Query header
+			queryTitle := fmt.Sprintf("Query %d: %s on %s", idx+1, q.GraphQLOperation, q.QueriedTable)
+			blocks = append(blocks, newHeading3Block(queryTitle))
 
-		logText := ""
-		for _, log := range detail.Logs {
-			logLine := fmt.Sprintf("[%s] %s\n", log.Timestamp.Format(time.RFC3339), log.Message)
-			if len(logText)+len(logLine) > 1900 {
-				blocks = append(blocks, newCodeBlock(logText, "plain text"))
-				logText = ""
+			// Get the query to display (interpolated if variables exist)
+			displayQuery := q.Query
+			if q.Variables != "" {
+				displayQuery = sqlutil.InterpolateSQLQuery(q.Query, q.Variables)
 			}
-			logText += logLine
-		}
-		if logText != "" {
-			blocks = append(blocks, newCodeBlock(logText, "plain text"))
-		}
-	}
+			formattedQuery := sqlutil.FormatSQLForDisplay(displayQuery)
 
-	if len(sortedQueries) > 0 {
-		blocks = append(blocks, newHeading2Block(fmt.Sprintf("SQL Queries (%d)", len(sortedQueries))))
-
-		for i, query := range sortedQueries {
-			if i >= 20 {
-				blocks = append(blocks, newParagraphBlock(newTextRichText(fmt.Sprintf("... and %d more queries", len(sortedQueries)-20))))
-				break
-			}
-
-			queryHeader := fmt.Sprintf("%s on %s (%.2fms)", query.Operation, query.TableName, query.DurationMS)
-			blocks = append(blocks, newHeading3Block(queryHeader))
-
-			formattedQuery := sqlutil.FormatSQLForDisplay(query.Query)
+			// Add SQL query as code block
 			statement := ""
-			for _, line := range formattedQuery[:min(len(formattedQuery), 2000)] {
-				if len(statement)+1 > 1900 {
+			for _, line := range strings.Split(formattedQuery, "\n") {
+				if len(statement)+len(line) > 2000 {
 					blocks = append(blocks, newCodeBlock(statement, "sql"))
 					statement = ""
 				}
-				statement += string(line)
+				statement += line + "\n"
 			}
 			if statement != "" {
 				blocks = append(blocks, newCodeBlock(statement, "sql"))
 			}
+
+			// Add query metadata
+			blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Duration: %.2fms", q.DurationMS)))
+			blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Rows: %d", q.Rows)))
+
+			logFields := make(map[string]string)
+			if err := json.Unmarshal([]byte(q.LogFields), &logFields); err == nil {
+				for key, value := range logFields {
+					blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("%s: %s", key, value)))
+				}
+			}
+
+			// Add EXPLAIN plan if available
+			if q.ExplainPlan != "" {
+				daliboLink := generateDaliboExplainLink(q.ExplainPlan, formattedQuery, q.DisplayName())
+				slog.Info("dalibo link", "daliboLink", daliboLink)
+				if daliboLink != "" {
+					blocks = append(blocks, newParagraphBlock(
+						newTextRichText("View in Dalibo EXPLAIN: "),
+						newTextRichTextWithLink(q.DisplayName(), daliboLink),
+					))
+				}
+
+				explainText := sqlutil.FormatExplainPlanForNotion(q.ExplainPlan)
+				blocks = append(blocks, newHeading3Block("EXPLAIN Plan"))
+
+				// Add EXPLAIN plan as code block
+				statement = ""
+				for _, line := range strings.Split(explainText, "\n") {
+					if len(statement)+len(line) > 2000 {
+						blocks = append(blocks, newCodeBlock(statement, "json"))
+						statement = ""
+					}
+					statement += line + "\n"
+				}
+				if statement != "" {
+					blocks = append(blocks, newCodeBlock(statement, "json"))
+				}
+			}
+
+			// Add separator between queries
+			if idx < len(detail.SQLQueries)-1 {
+				blocks = append(blocks, newDividerBlock())
+			}
 		}
 	}
 
+	// Convert blocks to notionapi.Block format (mix of notionapi.Block and raw blocks for heading_4)
 	children := make([]notionapi.Block, 0, len(blocks))
+	var heading4Blocks []map[string]interface{}
 	for _, block := range blocks {
 		switch b := block.(type) {
 		case notionapi.Block:
 			children = append(children, b)
+		case map[string]interface{}:
+			// Collect heading_4 blocks to append later
+			heading4Blocks = append(heading4Blocks, b)
 		default:
-			slog.Warn("skipping unsupported block type", "block", b)
+			return "", fmt.Errorf("unknown block type: %T", block)
 		}
 	}
 
+	// Create Notion client
 	client := notionapi.NewClient(notionapi.Token(apiKey))
 
+	// Build page creation request
 	req := &notionapi.PageCreateRequest{
 		Parent: notionapi.Parent{
 			Type:       notionapi.ParentTypeDatabaseID,
@@ -394,9 +428,17 @@ func createNotionPageForExecution(apiKey, databaseID string, detail *store.Reque
 		Children: children,
 	}
 
+	// Create the page
 	page, err := client.Page.Create(context.Background(), req)
 	if err != nil {
 		return "", fmt.Errorf("failed to create Notion page: %w", err)
+	}
+
+	// Append heading_4 blocks if any were collected
+	if len(heading4Blocks) > 0 {
+		// Note: heading_4 blocks would need to be appended using Block.AppendChildren
+		// For now, we'll log a warning since jomei/notionapi doesn't support heading_4
+		slog.Warn("heading_4 blocks are not supported by jomei/notionapi and were skipped", "count", len(heading4Blocks))
 	}
 
 	return page.URL, nil
