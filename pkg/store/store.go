@@ -161,6 +161,10 @@ func (SQLQuery) TableName() string {
 	return "request_sql_statements"
 }
 
+func (q SQLQuery) DisplayName() string {
+	return fmt.Sprintf("%s on %s", q.Operation, q.QueriedTable)
+}
+
 // RequestDetailResponse includes execution with related logs and SQL analysis
 type RequestDetailResponse struct {
 	Execution     Request                   `json:"execution"`

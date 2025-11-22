@@ -254,8 +254,8 @@ func (c *Controller) buildPortToServerMap(containers []logs.Container) map[int]s
 	return portToServerMap
 }
 
-// broadcastContainerUpdate sends container updates to all connected WebSocket clients
-func (c *Controller) broadcastContainerUpdate(containers []logs.Container) {
+// BroadcastContainerUpdate sends container updates to all connected WebSocket clients
+func (c *Controller) BroadcastContainerUpdate(containers []logs.Container) {
 	portToServerMap := c.buildPortToServerMap(containers)
 
 	logCounts := make(map[string]int)

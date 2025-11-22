@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -270,6 +271,7 @@ func FormatSQLForDisplay(sql string) string {
 	sqlFormatterPath := filepath.Join(webDir, "node_modules", ".bin", "sql-formatter")
 	if _, err := os.Stat(sqlFormatterPath); os.IsNotExist(err) {
 		// Fallback: try using npx
+		slog.Error("sql-formatter binary not found", "path", sqlFormatterPath)
 		return formatSQLWithNpx(sql)
 	}
 
@@ -283,12 +285,14 @@ func FormatSQLForDisplay(sql string) string {
 
 	err := cmd.Run()
 	if err != nil {
+		slog.Error("error formatting SQL", "error", err, "sql", sql)
 		// If formatting fails, fall back to basic formatting
 		return FormatSQLBasic(sql)
 	}
 
 	formatted := strings.TrimSpace(out.String())
 	if formatted == "" {
+		slog.Error("formatted SQL is empty", "sql", sql)
 		return FormatSQLBasic(sql)
 	}
 
