@@ -89,7 +89,7 @@ export interface RetentionSettings {
 }
 
 export interface WebSocketMessage {
-  type: "log" | "logs" | "logs_initial" | "containers" | "filter";
+  type: "log" | "logs" | "logs_initial" | "logs_clear" | "containers" | "filter";
   data: any;
 }
 

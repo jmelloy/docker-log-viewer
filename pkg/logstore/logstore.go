@@ -759,3 +759,15 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 	}
 
 }
+
+// Clear removes all messages from the log store
+func (ls *LogStore) Clear() {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	// Clear all indexes
+	ls.messages = list.New()
+	ls.byContainer = make(map[string]*list.List)
+	ls.byField = make(map[string]map[string]*list.List)
+	ls.messageCount = 0
+}

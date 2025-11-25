@@ -35,6 +35,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 		ExperimentalModeOverride string `json:"experimentalModeOverride,omitempty"`
 		RequestData              string `json:"requestData"`
 		Sync                     bool   `json:"sync,omitempty"`
+		SampleID                 *uint  `json:"sampleId,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -90,6 +91,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 		IsSync:              input.Sync,
 		BearerTokenOverride: input.BearerTokenOverride,
 		DevIDOverride:       input.DevIDOverride,
+		SampleID:            input.SampleID,
 	}
 
 	execID, err := c.store.CreateRequest(execution)
@@ -339,7 +341,7 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 			// Add SQL query as code block
 			statement := ""
 			for _, line := range strings.Split(formattedQuery, "\n") {
-				if len(statement)+len(line) > 2000 {
+				if len(statement)+len(line) > 1999 {
 					blocks = append(blocks, newCodeBlock(statement, "sql"))
 					statement = ""
 				}
@@ -377,7 +379,7 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 				// Add EXPLAIN plan as code block
 				statement = ""
 				for _, line := range strings.Split(explainText, "\n") {
-					if len(statement)+len(line) > 2000 {
+					if len(statement)+len(line) > 1999 {
 						blocks = append(blocks, newCodeBlock(statement, "json"))
 						statement = ""
 					}

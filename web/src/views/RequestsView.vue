@@ -189,7 +189,7 @@
         </div>
         <div class="form-group">
           <label for="executeServer">Server: <span style="color: #f85149">*</span></label>
-          <select id="executeServer" v-model="executeForm.serverId" @change="selectSampleQueryForExecution" required>
+          <select id="executeServer" v-model="executeForm.serverId" @change="updateServerDefaults" required>
             <option value="">-- Select Server --</option>
             <option v-for="server in servers" :key="server.id" :value="server.id">
               {{ server.name }} ({{ server.url }})
@@ -804,55 +804,27 @@ export default defineComponent(
           // Determine server
           const serverId = parseInt(this.executeForm.serverId);
 
-          // If we have a sample query ID, use the execute endpoint
-          if (this.selectedSampleQuery && this.selectedSampleQuery.id) {
-            const payload = {
-              serverId: serverId || undefined,
-              bearerTokenOverride: this.executeForm.tokenOverride || undefined,
-              devIdOverride: this.executeForm.devIdOverride || undefined,
-              experimentalModeOverride: this.executeForm.experimentHeaderOverride || undefined,
-              requestDataOverride: requestData,
-            };
+          // No sample query - execute directly using /api/requests endpoint
+          const payload = {
+            serverId: serverId,
+            requestData: requestData,
+            bearerTokenOverride: this.executeForm.tokenOverride || undefined,
+            devIdOverride: this.executeForm.devIdOverride || undefined,
+            experimentalModeOverride: this.executeForm.experimentHeaderOverride || undefined,
+          };
 
-            const result = await API.post<ExecuteResponse>(
-              `/api/samples//${this.selectedSampleQuery.id}/execute`,
-              payload
-            );
+          const result = await API.post<ExecuteResponse>("/api/requests", payload);
 
-            // Reload requests to show new execution
-            await this.loadAllRequests();
+          // Reload requests to show new execution
+          await this.loadAllRequests();
 
-            // Close modal
-            this.showExecuteNewModal = false;
+          // Close modal
+          this.showExecuteNewModal = false;
 
-            // Navigate to execution detail
-            if (result.executionId) {
-              window.history.pushState({}, "", `/requests/${result.executionId}`);
-              window.dispatchEvent(new PopStateEvent("popstate"));
-            }
-          } else {
-            // No sample query - execute directly using /api/requests endpoint
-            const payload = {
-              serverId: serverId,
-              requestData: requestData,
-              bearerTokenOverride: this.executeForm.tokenOverride || undefined,
-              devIdOverride: this.executeForm.devIdOverride || undefined,
-              experimentalModeOverride: this.executeForm.experimentHeaderOverride || undefined,
-            };
-
-            const result = await API.post<ExecuteResponse>("/api/requests", payload);
-
-            // Reload requests to show new execution
-            await this.loadAllRequests();
-
-            // Close modal
-            this.showExecuteNewModal = false;
-
-            // Navigate to execution detail
-            if (result.executionId) {
-              window.history.pushState({}, "", `/requests/${result.executionId}`);
-              window.dispatchEvent(new PopStateEvent("popstate"));
-            }
+          // Navigate to execution detail
+          if (result.executionId) {
+            window.history.pushState({}, "", `/requests/${result.executionId}`);
+            window.dispatchEvent(new PopStateEvent("popstate"));
           }
         } catch (error) {
           console.error("Failed to execute request:", error);
