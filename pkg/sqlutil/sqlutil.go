@@ -73,63 +73,63 @@ func ExtractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
 
 			if msg.Entry.Fields != nil {
 				// These apply to both [sql] and [query] formats
+				excludedFields := map[string]bool{}
+
 				if duration, ok := msg.Entry.Fields["duration"]; ok {
 					var durationVal float64
 					if _, err := strconv.ParseFloat(duration, 64); err == nil {
 						durationVal, _ = strconv.ParseFloat(duration, 64)
 						query.DurationMS = durationVal
+						excludedFields["duration"] = true
 					}
 				}
 				if table, ok := msg.Entry.Fields["db.table"]; ok {
 					query.QueriedTable = table
+					excludedFields["db.table"] = true
 				}
 				if op, ok := msg.Entry.Fields["db.operation"]; ok {
 					query.Operation = op
+					excludedFields["db.operation"] = true
 				}
 				if rows, ok := msg.Entry.Fields["db.rows"]; ok {
 					var rowsVal int
 					if _, err := strconv.Atoi(rows); err == nil {
 						rowsVal, _ = strconv.Atoi(rows)
 						query.Rows = rowsVal
+						excludedFields["db.rows"] = true
 					}
 				}
 				// Store db.vars as JSON for later use in EXPLAIN
 				if vars, ok := msg.Entry.Fields["db.vars"]; ok {
 					query.Variables = vars
+					excludedFields["db.vars"] = true
 				}
-				// Check both gql.operation and gql.operationName for GraphQL operation
-				if gqlOp, ok := msg.Entry.Fields["gql.operation"]; ok {
-					query.GraphQLOperation = gqlOp
-				} else if gqlOp, ok := msg.Entry.Fields["gql.operationName"]; ok {
-					query.GraphQLOperation = gqlOp
+
+				for _, k := range []string{"gql.operation", "gql.operationName", "graphql.operation", "graphql.operation.name"} {
+					if _, ok := msg.Entry.Fields[k]; ok {
+						query.GraphQLOperation = msg.Entry.Fields[k]
+						excludedFields[k] = true
+						break
+					}
 				}
+
 				// Extract trace/request/span IDs
 				if requestID, ok := msg.Entry.Fields["request_id"]; ok {
 					query.LogRequestID = requestID
+					excludedFields["request_id"] = true
 				}
 				if spanID, ok := msg.Entry.Fields["span_id"]; ok {
 					query.SpanID = spanID
+					excludedFields["span_id"] = true
 				}
 				if traceID, ok := msg.Entry.Fields["trace_id"]; ok {
 					query.TraceID = traceID
+					excludedFields["trace_id"] = true
 				}
 
 				// Store all other log fields as JSON for reference
 				otherFields := make(map[string]string)
-				excludedFields := map[string]bool{
-					"duration":          true,
-					"duration_ms":       true,
-					"db.table":          true,
-					"db.operation":      true,
-					"db.rows":           true,
-					"db.vars":           true,
-					"gql.operation":     true,
-					"gql.operationName": true,
-					"request_id":        true,
-					"span_id":           true,
-					"trace_id":          true,
-					"type":              true,
-				}
+
 				for k, v := range msg.Entry.Fields {
 					if !excludedFields[k] {
 						otherFields[k] = v
