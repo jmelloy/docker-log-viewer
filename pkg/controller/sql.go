@@ -52,6 +52,7 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		RequestID          string             `json:"requestId"`
 		Filters            []TraceFilterValue `json:"filters"`
 		SelectedContainers []string           `json:"selectedContainers"`
+		SearchQuery        string             `json:"searchQuery"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -90,9 +91,21 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Convert search query to search terms (split by whitespace and lowercase)
+	searchTerms := []string{}
+	if input.SearchQuery != "" {
+		terms := strings.Fields(input.SearchQuery)
+		for _, term := range terms {
+			if term != "" {
+				searchTerms = append(searchTerms, strings.ToLower(term))
+			}
+		}
+	}
+
 	logMessages := c.logStore.Filter(logstore.FilterOptions{
 		FieldFilters: fieldFilters,
 		ContainerIDs: containerIDs,
+		SearchTerms:  searchTerms,
 	}, 1000)
 
 	messages := make([]logs.LogMessage, 0, len(logMessages))
@@ -427,7 +440,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 	blocks = append(blocks, newHeading2Block("SQL Query"))
 	statement := ""
 	for _, line := range strings.Split(formattedQuery, "\n") {
-		if len(statement)+len(line) > 2000 {
+		if len(statement)+len(line) > 1999 {
 			blocks = append(blocks, newCodeBlock(statement, "sql"))
 			statement = ""
 		}
@@ -452,7 +465,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 
 		statement = ""
 		for _, line := range strings.Split(explainText, "\n") {
-			if len(statement)+len(line) > 2000 {
+			if len(statement)+len(line) > 1999 {
 				blocks = append(blocks, newCodeBlock(statement, "plain text"))
 				statement = ""
 			}

@@ -889,6 +889,7 @@ func (wa *WebApp) Run(addr string) error {
 	// Container and log endpoints
 	r.HandleFunc("/api/containers", ctrl.HandleContainers).Methods("GET")
 	r.HandleFunc("/api/logs", ctrl.HandleLogs).Methods("GET")
+	r.HandleFunc("/api/logs/clear", ctrl.HandleClearLogs).Methods("POST")
 	r.HandleFunc("/api/ws", ctrl.HandleWebSocket).Methods("GET")
 	r.HandleFunc("/api/debug", ctrl.HandleDebug).Methods("GET")
 
@@ -923,9 +924,9 @@ func (wa *WebApp) Run(addr string) error {
 	// Request management endpoints
 	r.HandleFunc("/api/samples/", ctrl.HandleListSampleQueries).Methods("GET")
 	r.HandleFunc("/api/samples/", ctrl.HandleCreateSampleQuery).Methods("POST")
-	r.HandleFunc("/api/samples//{id}", ctrl.HandleGetSampleQuery).Methods("GET")
-	r.HandleFunc("/api/samples//{id}", ctrl.HandleDeleteSampleQuery).Methods("DELETE")
-	r.HandleFunc("/api/samples//{id}/execute", ctrl.HandleExecuteSample).Methods("POST")
+	r.HandleFunc("/api/samples/{id}", ctrl.HandleGetSampleQuery).Methods("GET")
+	r.HandleFunc("/api/samples/{id}", ctrl.HandleDeleteSampleQuery).Methods("DELETE")
+	r.HandleFunc("/api/samples/{id}/execute", ctrl.HandleExecuteSample).Methods("POST")
 
 	// Execution endpoints
 	r.HandleFunc("/api/requests", ctrl.HandleCreateRequest).Methods("POST")

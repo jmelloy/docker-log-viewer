@@ -946,8 +946,13 @@ export default defineComponent({
           this.handleNewLogs(message.data as LogMessage[]);
         } else if (message.type === "logs_initial") {
           this.handleInitialLogs(message.data as LogMessage[]);
+        } else if (message.type === "logs_clear") {
+          this.logs = [];
+          this.recentRequests = [];
         } else if (message.type === "containers") {
           this.handleContainerUpdate(message.data as ContainerData);
+        } else if (message.type === "filter") {
+          // Filter updates are handled by the server, no action needed
         }
       };
 
@@ -1259,13 +1264,15 @@ export default defineComponent({
     },
 
     async saveTrace() {
-      if (this.traceFilters.size === 0) return;
+      if (this.traceFilters.size === 0 && !this.searchQuery) return;
 
       const filterDesc = Array.from(this.traceFilters.entries())
         .map(([k, v]) => `${k}: ${v}`)
         .join(", ");
+      const searchDesc = this.searchQuery ? `search: ${this.searchQuery}` : "";
+      const fullDesc = [filterDesc, searchDesc].filter(Boolean).join(", ");
 
-      const name = prompt(`Save trace as:`, filterDesc);
+      const name = prompt(`Save trace as:`, fullDesc);
       if (!name) return;
 
       try {
@@ -1274,6 +1281,7 @@ export default defineComponent({
           requestId: this.traceFilters.get("request_id") || null,
           filters: Array.from(this.traceFilters.entries()).map(([type, value]) => ({ type, value })),
           selectedContainers: Array.from(this.selectedContainers.values()),
+          searchQuery: this.searchQuery || null,
           name: name,
         };
 
@@ -1763,9 +1771,16 @@ export default defineComponent({
       }
     },
 
-    clearLogs() {
-      this.logs = [];
-      this.recentRequests = [];
+    async clearLogs() {
+      try {
+        await API.post("/api/logs/clear", {});
+        this.logs = [];
+        this.recentRequests = [];
+      } catch (error) {
+        console.error("Error clearing logs:", error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        alert(`Failed to clear logs: ${errorMessage}`);
+      }
     },
 
     async showDebugInfo() {

@@ -43,6 +43,40 @@ func (c *Controller) HandleLogs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(logMessages)
 }
 
+// HandleClearLogs clears all logs from the log store
+func (c *Controller) HandleClearLogs(w http.ResponseWriter, r *http.Request) {
+	c.logStore.Clear()
+	slog.Info("cleared all logs from log store")
+
+	// Broadcast a clear message to all WebSocket clients
+	c.clientsMutex.RLock()
+	clients := make([]*Client, 0, len(c.clients))
+	for client := range c.clients {
+		clients = append(clients, client)
+	}
+	c.clientsMutex.RUnlock()
+
+	clearMsg := WSMessage{
+		Type: "logs_clear",
+		Data: json.RawMessage("[]"),
+	}
+
+	for _, client := range clients {
+		if err := client.conn.WriteJSON(clearMsg); err != nil {
+			slog.Error("failed to send clear message", "error", err)
+			client.conn.Close()
+			c.clientsMutex.Lock()
+			delete(c.clients, client)
+			c.clientsMutex.Unlock()
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Logs cleared successfully",
+	})
+}
+
 // HandleWebSocket manages WebSocket connections for real-time log streaming
 func (c *Controller) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := c.upgrader.Upgrade(w, r, nil)
