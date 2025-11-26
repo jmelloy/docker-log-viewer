@@ -317,7 +317,8 @@
         <button @click="showLogModal = false">✕</button>
       </div>
       <div v-if="selectedLog" class="modal-body">
-        <div class="modal-section">
+        <!-- Show Raw Log first if it's NOT JSON -->
+        <div v-if="!isRawLogJson(selectedLog)" class="modal-section">
           <h4>Raw Log</h4>
           <pre
             style="white-space: pre-wrap"
@@ -418,6 +419,15 @@
               <div v-else class="parsed-field-value">{{ value }}</div>
             </div>
           </div>
+        </div>
+        <!-- Show Raw Log last if it IS JSON -->
+        <div v-if="isRawLogJson(selectedLog)" class="modal-section">
+          <h4>Raw Log</h4>
+          <pre
+            class="hljs"
+            style="white-space: pre-wrap"
+            v-html="formatAndHighlightJson(selectedLog.entry?.raw || '')"
+          ></pre>
         </div>
       </div>
     </div>
@@ -989,7 +999,11 @@ export default defineComponent({
       // Replace all logs with initial filtered set
       console.log(`Received ${logs.length} initial filtered logs`);
       this.logs = logs;
-      logs.forEach((log) => this.updateRecentRequests(log));
+      // Only update recent requests if no trace filter is active
+      // This preserves the recent requests list when filtering by a trace
+      if (this.traceFilters.size === 0) {
+        logs.forEach((log) => this.updateRecentRequests(log));
+      }
       this.$nextTick(() => this.scrollToBottom());
     },
 
@@ -999,7 +1013,7 @@ export default defineComponent({
       const operationName =
         log.entry?.fields?.operation_name ||
         log.entry?.fields?.operationName ||
-        log.entry?.fields?.["gql.operationName"];
+        log.entry?.fields?.["graphql.operation"];
       const method = log.entry?.fields?.method;
       const statusCode = log.entry?.fields?.status_code || log.entry?.fields?.statusCode;
       const latency =
@@ -1058,12 +1072,12 @@ export default defineComponent({
         }
       }
 
-      // Also check recent logs for this request_id to find gql.operationName
+      // Also check recent logs for this request_id to find graphql.operation
       if (requestId && !operationName) {
         const recentLogs = this.logs.slice(-100); // Check last 100 logs
         for (const recentLog of recentLogs) {
           if (recentLog.entry?.fields?.request_id === requestId) {
-            const gqlOp = recentLog.entry?.fields?.["gql.operationName"];
+            const gqlOp = recentLog.entry?.fields?.["graphql.operation"];
             if (gqlOp) {
               const idx = this.recentRequests.findIndex((r) => r.requestId === requestId);
               if (idx !== -1 && !this.recentRequests[idx].operations.includes(gqlOp)) {
@@ -1751,6 +1765,27 @@ export default defineComponent({
 
     isJsonField(value) {
       return value.trim().startsWith("{") || value.trim().startsWith("[");
+    },
+
+    isRawLogJson(log) {
+      const raw = log?.entry?.raw;
+      if (!raw) return false;
+      const trimmed = raw.trim();
+      return trimmed.startsWith("{") || trimmed.startsWith("[");
+    },
+
+    formatAndHighlightJson(raw: string) {
+      try {
+        const parsed = JSON.parse(raw);
+        const formatted = JSON.stringify(parsed, null, 2);
+        if (typeof window !== "undefined" && window.hljs) {
+          const highlighted = window.hljs.highlight(formatted, { language: "json" });
+          return highlighted.value;
+        }
+        return formatted;
+      } catch {
+        return raw.replaceAll("\\n", "\n").replaceAll("\\t", "    ");
+      }
     },
 
     formatJsonField(value) {

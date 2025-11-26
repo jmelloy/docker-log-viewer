@@ -2146,7 +2146,7 @@ export default defineComponent({
 
         try {
           fields = JSON.parse(q.logFields);
-          parts.push(fields?.experimental_type);
+          parts.push(fields?.experiment_type);
           experiment = fields?.experiment;
         } catch (e) {
           console.error("Error parsing log fields:", e);
