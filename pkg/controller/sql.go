@@ -414,6 +414,19 @@ func newDividerBlock() notionapi.Block {
 	}
 }
 
+func newToggleBlock(title string, children []notionapi.Block) notionapi.Block {
+	return &notionapi.ToggleBlock{
+		BasicBlock: notionapi.BasicBlock{
+			Object: notionapi.ObjectTypeBlock,
+			Type:   notionapi.BlockTypeToggle,
+		},
+		Toggle: notionapi.Toggle{
+			RichText: []notionapi.RichText{newTextRichText(title)},
+			Children: children,
+		},
+	}
+}
+
 func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (string, error) {
 	formattedQuery := sqlutil.FormatSQLForDisplay(detail.Query)
 

@@ -351,15 +351,15 @@
               </div>
             </div>
 
-            <!-- request_id, trace_id, and gql.operationName on same line -->
+            <!-- request_id, trace_id, and graphql.operation on same line -->
             <div
-              v-if="selectedLog.entry?.fields?.['trace_id'] || selectedLog.entry?.fields?.['gql.operationName']"
+              v-if="selectedLog.entry?.fields?.['trace_id'] || selectedLog.entry?.fields?.['graphql.operation']"
               class="parsed-field"
               style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap"
             >
-              <div v-if="selectedLog.entry?.fields?.['gql.operationName']" style="display: flex; gap: 0.5rem">
-                <div class="parsed-field-key">gql.operationName</div>
-                <div class="parsed-field-value">{{ selectedLog.entry.fields["gql.operationName"] }}</div>
+              <div v-if="selectedLog.entry?.fields?.['graphql.operation']" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">graphql.operation</div>
+                <div class="parsed-field-value">{{ selectedLog.entry.fields["graphql.operation"] }}</div>
               </div>
               <div v-if="selectedLog.entry?.fields?.['trace_id']" style="display: flex; gap: 0.5rem">
                 <div class="parsed-field-key">trace_id</div>
@@ -1492,7 +1492,7 @@ export default defineComponent({
 
     getRemainingFields(fields) {
       if (!fields) return [];
-      const excluded = new Set(["request_id", "trace_id", "gql.operationName", "db.rows", "db.table", "duration"]);
+      const excluded = new Set(["request_id", "trace_id", "graphql.operation", "db.rows", "db.table", "duration"]);
       return Object.entries(fields).filter(([key]) => !excluded.has(key));
     },
 
@@ -1525,12 +1525,12 @@ export default defineComponent({
           enhancedMetadata.requestId = requestId;
         }
 
-        // Try to find gql.operationName from recent logs matching the request_id
+        // Try to find graphql.operation from recent logs matching the request_id
         if (requestId) {
           const recentLogs = this.logs.slice(-100);
           for (const log of recentLogs) {
             if (log.entry?.fields?.request_id === requestId) {
-              const gqlOp = log.entry?.fields?.["gql.operationName"];
+              const gqlOp = log.entry?.fields?.["graphql.operation"];
               if (gqlOp) {
                 enhancedMetadata.operationName = gqlOp;
                 break;
@@ -1657,7 +1657,7 @@ export default defineComponent({
         form.action = "https://explain.dalibo.com/new";
         form.target = "_blank";
 
-        // Build hierarchical title: request_id / db.table / gql.operationName
+        // Build hierarchical title: request_id / db.table / graphql.operation
         let title = "Query Plan from Logseidon";
         if (this.explainData.metadata) {
           const parts = [];
@@ -1673,9 +1673,9 @@ export default defineComponent({
             parts.push(this.explainData.metadata.table);
           }
 
-          // Add gql.operationName if available
-          if (this.explainData.metadata.operationName) {
-            parts.push(this.explainData.metadata.operationName);
+          // Add graphql.operation if available
+          if (this.explainData.metadata.graphqlOperation) {
+            parts.push(this.explainData.metadata.graphqlOperation);
           }
 
           if (parts.length > 0) {
