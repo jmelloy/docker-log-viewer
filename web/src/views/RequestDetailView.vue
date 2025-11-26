@@ -1596,7 +1596,7 @@ export default defineComponent({
         form.action = "https://explain.dalibo.com/new";
         form.target = "_blank";
 
-        // Build hierarchical title: request_id / db.table / gql.operationName
+        // Build hierarchical title: request_id / db.table / graphql.operation
         let title = "Query Plan from Logseidon";
         if (this.explainPlanData.metadata) {
           const parts = [];
@@ -1611,7 +1611,7 @@ export default defineComponent({
             parts.push(this.explainPlanData.metadata.table);
           }
 
-          // Add gql.operationName if available
+          // Add graphql.operation if available
           if (this.explainPlanData.metadata.operationName) {
             parts.push(this.explainPlanData.metadata.operationName);
           }

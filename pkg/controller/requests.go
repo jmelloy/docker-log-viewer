@@ -303,6 +303,59 @@ func sortSQLQueries(queries []store.SQLQuery) []store.SQLQuery {
 	return queries
 }
 
+type experimentGroup struct {
+	ExperimentID string
+	Title        string
+	Queries      []store.SQLQuery
+}
+
+func groupQueriesByExperimentID(queries []store.SQLQuery) []experimentGroup {
+	// First sort queries
+	sortedQueries := sortSQLQueries(queries)
+
+	// Group by experiment_id, skipping queries without an experiment_id
+	groupMap := make(map[string]*experimentGroup)
+	var groupOrder []string
+
+	for _, q := range sortedQueries {
+		experimentID := ""
+		experimentType := ""
+
+		logFields := make(map[string]string)
+		if err := json.Unmarshal([]byte(q.LogFields), &logFields); err == nil {
+			experimentID = logFields["experiment_id"]
+			experimentType = logFields["experimental_type"]
+		}
+
+		// Skip queries without an experiment_id
+		if experimentID == "" {
+			continue
+		}
+
+		if _, exists := groupMap[experimentID]; !exists {
+			title := fmt.Sprintf("Experiment: %s", experimentID)
+			if experimentType != "" {
+				title = fmt.Sprintf("%s (%s)", title, experimentType)
+			}
+			groupMap[experimentID] = &experimentGroup{
+				ExperimentID: experimentID,
+				Title:        title,
+				Queries:      []store.SQLQuery{},
+			}
+			groupOrder = append(groupOrder, experimentID)
+		}
+		groupMap[experimentID].Queries = append(groupMap[experimentID].Queries, q)
+	}
+
+	// Convert map to slice maintaining order
+	var groups []experimentGroup
+	for _, key := range groupOrder {
+		groups = append(groups, *groupMap[key])
+	}
+
+	return groups
+}
+
 func createNotionPageForRequest(apiKey, databaseID string, detail *store.RequestDetailResponse) (string, error) {
 	// Build page title
 	title := detail.Execution.Name
@@ -326,75 +379,86 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 	if len(detail.SQLQueries) > 0 {
 		blocks = append(blocks, newHeading2Block(fmt.Sprintf("SQL Queries (%d)", len(detail.SQLQueries))))
 
-		// Add each SQL query
-		for idx, q := range sortSQLQueries(detail.SQLQueries) {
-			// Query header
-			queryTitle := fmt.Sprintf("Query %d: %s on %s", idx+1, q.GraphQLOperation, q.QueriedTable)
-			blocks = append(blocks, newHeading3Block(queryTitle))
+		// Group queries by experiment_id
+		experimentGroups := groupQueriesByExperimentID(detail.SQLQueries)
 
-			// Get the query to display (interpolated if variables exist)
-			displayQuery := q.Query
-			if q.Variables != "" {
-				displayQuery = sqlutil.InterpolateSQLQuery(q.Query, q.Variables)
-			}
-			formattedQuery := sqlutil.FormatSQLForDisplay(displayQuery)
+		for _, group := range experimentGroups {
+			// Build toggle children for this experiment group
+			var toggleChildren []notionapi.Block
 
-			// Add SQL query as code block
-			statement := ""
-			for _, line := range strings.Split(formattedQuery, "\n") {
-				if len(statement)+len(line) > 1999 {
-					blocks = append(blocks, newCodeBlock(statement, "sql"))
-					statement = ""
+			for idx, q := range group.Queries {
+				// Query header
+				queryTitle := fmt.Sprintf("Query %d: %s on %s", idx+1, q.GraphQLOperation, q.QueriedTable)
+				toggleChildren = append(toggleChildren, newHeading3Block(queryTitle))
+
+				// Get the query to display (interpolated if variables exist)
+				displayQuery := q.Query
+				if q.Variables != "" {
+					displayQuery = sqlutil.InterpolateSQLQuery(q.Query, q.Variables)
 				}
-				statement += line + "\n"
-			}
-			if statement != "" {
-				blocks = append(blocks, newCodeBlock(statement, "sql"))
-			}
+				formattedQuery := sqlutil.FormatSQLForDisplay(displayQuery)
 
-			// Add query metadata
-			blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Duration: %.2fms", q.DurationMS)))
-			blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("Rows: %d", q.Rows)))
-
-			logFields := make(map[string]string)
-			if err := json.Unmarshal([]byte(q.LogFields), &logFields); err == nil {
-				for key, value := range logFields {
-					blocks = append(blocks, newBulletedListItemBlock(fmt.Sprintf("%s: %s", key, value)))
-				}
-			}
-
-			// Add EXPLAIN plan if available
-			if q.ExplainPlan != "" {
-				daliboLink := generateDaliboExplainLink(q.ExplainPlan, formattedQuery, q.DisplayName())
-				slog.Info("dalibo link", "daliboLink", daliboLink)
-				if daliboLink != "" {
-					blocks = append(blocks, newParagraphBlock(
-						newTextRichText("View in Dalibo EXPLAIN: "),
-						newTextRichTextWithLink(q.DisplayName(), daliboLink),
-					))
-				}
-
-				explainText := sqlutil.FormatExplainPlanForNotion(q.ExplainPlan)
-				blocks = append(blocks, newHeading3Block("EXPLAIN Plan"))
-
-				// Add EXPLAIN plan as code block
-				statement = ""
-				for _, line := range strings.Split(explainText, "\n") {
+				// Add SQL query as code block
+				statement := ""
+				for _, line := range strings.Split(formattedQuery, "\n") {
 					if len(statement)+len(line) > 1999 {
-						blocks = append(blocks, newCodeBlock(statement, "json"))
+						toggleChildren = append(toggleChildren, newCodeBlock(statement, "sql"))
 						statement = ""
 					}
 					statement += line + "\n"
 				}
 				if statement != "" {
-					blocks = append(blocks, newCodeBlock(statement, "json"))
+					toggleChildren = append(toggleChildren, newCodeBlock(statement, "sql"))
+				}
+
+				// Add query metadata
+				toggleChildren = append(toggleChildren, newBulletedListItemBlock(fmt.Sprintf("Duration: %.2fms", q.DurationMS)))
+				toggleChildren = append(toggleChildren, newBulletedListItemBlock(fmt.Sprintf("Rows: %d", q.Rows)))
+
+				logFields := make(map[string]string)
+				if err := json.Unmarshal([]byte(q.LogFields), &logFields); err == nil {
+					for key, value := range logFields {
+						toggleChildren = append(toggleChildren, newBulletedListItemBlock(fmt.Sprintf("%s: %s", key, value)))
+					}
+				}
+
+				// Add EXPLAIN plan if available
+				if q.ExplainPlan != "" {
+					daliboLink := generateDaliboExplainLink(q.ExplainPlan, formattedQuery, q.DisplayName())
+					slog.Info("dalibo link", "daliboLink", daliboLink)
+					if daliboLink != "" {
+						toggleChildren = append(toggleChildren, newParagraphBlock(
+							newTextRichText("View in Dalibo EXPLAIN: "),
+							newTextRichTextWithLink(q.DisplayName(), daliboLink),
+						))
+					}
+
+					explainText := sqlutil.FormatExplainPlanForNotion(q.ExplainPlan)
+					toggleChildren = append(toggleChildren, newHeading3Block("EXPLAIN Plan"))
+
+					// Add EXPLAIN plan as code block
+					statement = ""
+					for _, line := range strings.Split(explainText, "\n") {
+						if len(statement)+len(line) > 1999 {
+							toggleChildren = append(toggleChildren, newCodeBlock(statement, "json"))
+							statement = ""
+						}
+						statement += line + "\n"
+					}
+					if statement != "" {
+						toggleChildren = append(toggleChildren, newCodeBlock(statement, "json"))
+					}
+				}
+
+				// Add separator between queries within the toggle
+				if idx < len(group.Queries)-1 {
+					toggleChildren = append(toggleChildren, newDividerBlock())
 				}
 			}
 
-			// Add separator between queries
-			if idx < len(detail.SQLQueries)-1 {
-				blocks = append(blocks, newDividerBlock())
-			}
+			// Create toggle block for this experiment group
+			toggleTitle := fmt.Sprintf("%s (%d queries)", group.Title, len(group.Queries))
+			blocks = append(blocks, newToggleBlock(toggleTitle, toggleChildren))
 		}
 	}
 
