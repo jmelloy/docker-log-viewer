@@ -31,20 +31,22 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 
 	// Create test executions
 	exec1ID, err := store.CreateRequest(&Request{
-		SampleID:   ptrUint(uint(sampleID)),
-		ServerID:   ptrUint(uint(serverID)),
-		StatusCode: 200,
-		DurationMS: 100,
+		SampleID:        ptrUint(uint(sampleID)),
+		ServerID:        ptrUint(uint(serverID)),
+		RequestIDHeader: "req-exec-001",
+		StatusCode:      200,
+		DurationMS:      100,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create execution 1: %v", err)
 	}
 
 	exec2ID, err := store.CreateRequest(&Request{
-		SampleID:   ptrUint(uint(sampleID)),
-		ServerID:   ptrUint(uint(serverID)),
-		StatusCode: 200,
-		DurationMS: 150,
+		SampleID:        ptrUint(uint(sampleID)),
+		ServerID:        ptrUint(uint(serverID)),
+		RequestIDHeader: "req-exec-002",
+		StatusCode:      200,
+		DurationMS:      150,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create execution 2: %v", err)

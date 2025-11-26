@@ -91,6 +91,7 @@ func TestStore(t *testing.T) {
 	exec := &Request{
 		SampleID:        &sampleID,
 		ServerID:        &serverIDUint,
+		RequestIDHeader: "test-req-123",
 		RequestBody:     `{"query": "{ test }"}`,
 		StatusCode:      200,
 		DurationMS:      150,
@@ -111,6 +112,9 @@ func TestStore(t *testing.T) {
 	}
 	if retrievedExec.StatusCode != exec.StatusCode {
 		t.Errorf("Expected status code %d, got %d", exec.StatusCode, retrievedExec.StatusCode)
+	}
+	if retrievedExec.RequestIDHeader != exec.RequestIDHeader {
+		t.Errorf("Expected request ID header %s, got %s", exec.RequestIDHeader, retrievedExec.RequestIDHeader)
 	}
 
 	// Test saving logs

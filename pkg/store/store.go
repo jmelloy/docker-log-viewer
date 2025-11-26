@@ -79,6 +79,7 @@ type Request struct {
 	SampleID            *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
 	ServerID            *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
 	Server              *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestIDHeader     string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
 	RequestBody         string         `gorm:"column:request_body" json:"requestBody,omitempty"`
 	StatusCode          int            `gorm:"column:status_code" json:"statusCode"`
 	DurationMS          int64          `gorm:"column:duration_ms" json:"durationMs"`
@@ -215,11 +216,12 @@ type SQLQueryDetail struct {
 
 // ExecutionReference represents a minimal reference to an execution
 type ExecutionReference struct {
-	ID          int64     `json:"id"`
-	DisplayName string    `json:"displayName"`
-	DurationMS  float64   `json:"durationMs"`
-	ExecutedAt  time.Time `json:"executedAt"`
-	StatusCode  int       `json:"statusCode"`
+	ID              int64     `json:"id"`
+	DisplayName     string    `json:"displayName"`
+	RequestIDHeader string    `json:"requestIdHeader"`
+	DurationMS      float64   `json:"durationMs"`
+	ExecutedAt      time.Time `json:"executedAt"`
+	StatusCode      int       `json:"statusCode"`
 }
 
 // NewStore creates a new store and initializes the database
@@ -466,13 +468,13 @@ func (s *Store) ListRequests(limit, offset int, search string, showAll bool) ([]
 	if search != "" {
 		searchPattern := "%" + search + "%"
 		searchCondition := s.db.Where(
-			"request_body LIKE ?",
-			searchPattern,
+			"request_id_header LIKE ? OR request_body LIKE ?",
+			searchPattern, searchPattern,
 		)
 		query = query.Where(searchCondition)
 		countQuery = countQuery.Where(
-			"request_body LIKE ?",
-			searchPattern,
+			"request_id_header LIKE ? OR request_body LIKE ?",
+			searchPattern, searchPattern,
 		)
 	}
 
@@ -951,11 +953,12 @@ func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, erro
 			}
 
 			detail.RelatedExecutions = append(detail.RelatedExecutions, ExecutionReference{
-				ID:          int64(exec.ID),
-				DisplayName: displayName,
-				DurationMS:  queryDuration,
-				ExecutedAt:  exec.ExecutedAt,
-				StatusCode:  exec.StatusCode,
+				ID:              int64(exec.ID),
+				DisplayName:     displayName,
+				RequestIDHeader: exec.RequestIDHeader,
+				DurationMS:      queryDuration,
+				ExecutedAt:      exec.ExecutedAt,
+				StatusCode:      exec.StatusCode,
 			})
 		}
 	}
