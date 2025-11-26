@@ -35,11 +35,12 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 
 	// Create execution 1
 	exec1 := &store.Request{
-		ServerID:    uintPtr(uint(serverID)),
-		RequestBody: `{"query": "{ user(id: 1) { name } }"}`,
-		StatusCode:  200,
-		DurationMS:  150,
-		ExecutedAt:  time.Now(),
+		ServerID:        uintPtr(uint(serverID)),
+		RequestIDHeader: "req-001",
+		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
+		StatusCode:      200,
+		DurationMS:      150,
+		ExecutedAt:      time.Now(),
 	}
 	exec1ID, err := db.CreateRequest(exec1)
 	if err != nil {
@@ -75,11 +76,12 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 
 	// Create execution 2 (optimized)
 	exec2 := &store.Request{
-		ServerID:    uintPtr(uint(serverID)),
-		RequestBody: `{"query": "{ user(id: 1) { name } }"}`,
-		StatusCode:  200,
-		DurationMS:  80,
-		ExecutedAt:  time.Now(),
+		ServerID:        uintPtr(uint(serverID)),
+		RequestIDHeader: "req-002",
+		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
+		StatusCode:      200,
+		DurationMS:      80,
+		ExecutedAt:      time.Now(),
 	}
 	exec2ID, err := db.CreateRequest(exec2)
 	if err != nil {

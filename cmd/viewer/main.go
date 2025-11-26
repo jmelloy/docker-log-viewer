@@ -926,7 +926,6 @@ func (wa *WebApp) Run(addr string) error {
 	r.HandleFunc("/api/samples/", ctrl.HandleCreateSampleQuery).Methods("POST")
 	r.HandleFunc("/api/samples/{id}", ctrl.HandleGetSampleQuery).Methods("GET")
 	r.HandleFunc("/api/samples/{id}", ctrl.HandleDeleteSampleQuery).Methods("DELETE")
-	r.HandleFunc("/api/samples/{id}/execute", ctrl.HandleExecuteSample).Methods("POST")
 
 	// Execution endpoints
 	r.HandleFunc("/api/requests", ctrl.HandleCreateRequest).Methods("POST")

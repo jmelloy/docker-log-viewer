@@ -160,11 +160,12 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	exec := &store.Request{
-		RequestBody: requestBody,
-		StatusCode:  statusCode,
-		DurationMS:  durationMS,
-		ExecutedAt:  time.Now(),
-		Name:        input.Name,
+		RequestIDHeader: requestIDHeader,
+		RequestBody:     requestBody,
+		StatusCode:      statusCode,
+		DurationMS:      durationMS,
+		ExecutedAt:      time.Now(),
+		Name:            input.Name,
 	}
 
 	id, err := c.store.CreateRequest(exec)

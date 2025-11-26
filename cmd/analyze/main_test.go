@@ -56,9 +56,10 @@ func TestGenerateOutput(t *testing.T) {
 
 	exec1 := &store.RequestDetailResponse{
 		Execution: store.Request{
-			ID:         1,
-			DurationMS: 100,
-			StatusCode: 200,
+			ID:              1,
+			RequestIDHeader: "req-001",
+			DurationMS:      100,
+			StatusCode:      200,
 		},
 		SQLQueries: []store.SQLQuery{
 			{
@@ -75,9 +76,10 @@ func TestGenerateOutput(t *testing.T) {
 
 	exec2 := &store.RequestDetailResponse{
 		Execution: store.Request{
-			ID:         2,
-			DurationMS: 150,
-			StatusCode: 200,
+			ID:              2,
+			RequestIDHeader: "req-002",
+			DurationMS:      150,
+			StatusCode:      200,
 		},
 		SQLQueries: []store.SQLQuery{
 			{

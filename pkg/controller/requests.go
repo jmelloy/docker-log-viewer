@@ -85,6 +85,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 
 	execution := &store.Request{
 		ServerID:            input.ServerID,
+		RequestIDHeader:     requestIDHeader,
 		RequestBody:         input.RequestData,
 		ExecutedAt:          time.Now(),
 		StatusCode:          0,
