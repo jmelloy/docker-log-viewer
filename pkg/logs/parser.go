@@ -49,6 +49,10 @@ func IsLikelyNewLogEntry(line string) bool {
 		return false
 	}
 
+	if json.Valid([]byte(line)) {
+		return true
+	}
+
 	// Check if line starts with ANSI escape code (common for new log entries)
 	if startsWithANSI(line) {
 		return true

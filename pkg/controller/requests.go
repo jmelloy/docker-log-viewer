@@ -290,7 +290,7 @@ func sortSQLQueries(queries []store.SQLQuery) []store.SQLQuery {
 				logFieldsJ := make(map[string]string)
 				if err := json.Unmarshal([]byte(queries[j].LogFields), &logFieldsJ); err == nil {
 					if logFieldsI["experiment_id"] == logFieldsJ["experiment_id"] {
-						if logFieldsI["experimental_type"] == "experimental" {
+						if logFieldsI["experiment_type"] == "experimental" {
 							return true
 						}
 						return false
@@ -324,7 +324,7 @@ func groupQueriesByExperimentID(queries []store.SQLQuery) []experimentGroup {
 		logFields := make(map[string]string)
 		if err := json.Unmarshal([]byte(q.LogFields), &logFields); err == nil {
 			experimentID = logFields["experiment_id"]
-			experimentType = logFields["experimental_type"]
+			experimentType = logFields["experiment_type"]
 		}
 
 		// Skip queries without an experiment_id
@@ -350,7 +350,30 @@ func groupQueriesByExperimentID(queries []store.SQLQuery) []experimentGroup {
 	// Convert map to slice maintaining order
 	var groups []experimentGroup
 	for _, key := range groupOrder {
-		groups = append(groups, *groupMap[key])
+		g := *groupMap[key]
+		// Sort queries within each group: experiment_type=experimental first
+		sort.Slice(g.Queries, func(i, j int) bool {
+			typeI := ""
+			typeJ := ""
+			logFieldsI := make(map[string]string)
+			if err := json.Unmarshal([]byte(g.Queries[i].LogFields), &logFieldsI); err == nil {
+				typeI = logFieldsI["experiment_type"]
+			}
+			logFieldsJ := make(map[string]string)
+			if err := json.Unmarshal([]byte(g.Queries[j].LogFields), &logFieldsJ); err == nil {
+				typeJ = logFieldsJ["experiment_type"]
+			}
+			// experimental comes first
+			if typeI == "experimental" && typeJ != "experimental" {
+				return true
+			}
+			if typeI != "experimental" && typeJ == "experimental" {
+				return false
+			}
+			// If same type, maintain creation order
+			return g.Queries[i].CreatedAt.Before(g.Queries[j].CreatedAt)
+		})
+		groups = append(groups, g)
 	}
 
 	return groups
