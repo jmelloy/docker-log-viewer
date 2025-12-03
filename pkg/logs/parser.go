@@ -430,8 +430,14 @@ func ParseLogLine(line string) *LogEntry {
 			if msg, ok := entry.JSONFields[key].(string); ok {
 				entry.Message = msg
 				extractedFields = append(extractedFields, key)
+				if query, ok := entry.JSONFields["query"].(string); ok {
+					entry.Message = fmt.Sprintf("[sql]: %s", query)
+					extractedFields = append(extractedFields, "query")
+					break
+				}
 				break
 			}
+
 		}
 
 		for _, key := range []string{"caller", "source"} {
@@ -559,6 +565,37 @@ func ParseLogLine(line string) *LogEntry {
 		if len(fields) > 0 {
 			entry.Message = remaining
 			maps.Copy(entry.Fields, fields)
+		}
+	}
+
+	// Parse db.vars if it's an encoded JSON string
+	if vars, ok := entry.Fields["db.vars"]; ok && vars != "" {
+		// Check if it's a JSON-encoded string (starts and ends with quotes)
+		if len(vars) >= 2 && vars[0] == '"' && vars[len(vars)-1] == '"' {
+			// Try to unquote it (handles escaped quotes properly)
+			var unquoted string
+			if err := json.Unmarshal([]byte(vars), &unquoted); err == nil {
+				// If unquoted successfully, check if it's valid JSON
+				if json.Valid([]byte(unquoted)) {
+					// Parse the JSON to validate and normalize it
+					var parsedJSON interface{}
+					if err := json.Unmarshal([]byte(unquoted), &parsedJSON); err == nil {
+						// Store the parsed JSON as a properly formatted JSON string
+						if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
+							entry.Fields["db.vars"] = string(jsonBytes)
+						}
+					}
+				}
+			}
+		} else if json.Valid([]byte(vars)) {
+			// If it's already valid JSON (not quoted), just normalize it
+			var parsedJSON interface{}
+			if err := json.Unmarshal([]byte(vars), &parsedJSON); err == nil {
+				// Store the parsed JSON as a properly formatted JSON string
+				if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
+					entry.Fields["db.vars"] = string(jsonBytes)
+				}
+			}
 		}
 	}
 
