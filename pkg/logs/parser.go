@@ -26,7 +26,7 @@ type LogEntry struct {
 var (
 	timestampRegex = regexp.MustCompile(`(\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+(?:\.\d+)?|\[\d{2}:\d{2}:\d{2}\.\d+\]|\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d+[-/]\d+[-/]\d+\s+\d+:\d+:\d+(?:\.\d+)?|\b\d{10,13}\b)`)
 	levelRegex     = regexp.MustCompile(`\b(FATAL|DEBUG|INFO|ERROR|DBG|TRC|INF|WARNING|WARN|WRN|ERR)\b`)
-	fileRegex      = regexp.MustCompile(`\s+([\w/]+\.go:\d+)\s+`)
+	fileRegex      = regexp.MustCompile(`\b([\w/]+\.go:\d+)`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
 	ansiStartRegex = regexp.MustCompile(`^\x1b\[`)
 )
@@ -37,10 +37,41 @@ func startsWithANSI(s string) bool {
 	return ansiStartRegex.MatchString(s)
 }
 
+// tryNormalizeJSON attempts to normalize a value that may be double-encoded JSON.
+// Returns the normalized JSON string, or empty string if the value is not JSON.
+func tryNormalizeJSON(val string) string {
+	// Check if it's a JSON-encoded string (starts and ends with quotes)
+	if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+		var unquoted string
+		if err := json.Unmarshal([]byte(val), &unquoted); err == nil {
+			if json.Valid([]byte(unquoted)) {
+				var parsedJSON interface{}
+				if err := json.Unmarshal([]byte(unquoted), &parsedJSON); err == nil {
+					if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
+						return string(jsonBytes)
+					}
+				}
+			}
+		}
+	} else if len(val) >= 2 && (val[0] == '{' || val[0] == '[') && json.Valid([]byte(val)) {
+		// If it's already valid JSON (object or array), normalize it
+		var parsedJSON interface{}
+		if err := json.Unmarshal([]byte(val), &parsedJSON); err == nil {
+			if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
+				return string(jsonBytes)
+			}
+		}
+	}
+	return ""
+}
+
 // hasANSICodes checks if a string contains any ANSI escape codes
 func hasANSICodes(s string) bool {
 	return ansiRegex.MatchString(s)
 }
+
+// bracketedPrefixRegex matches common log prefixes like [info], [discovery], [4:56:24 PM]
+var bracketedPrefixRegex = regexp.MustCompile(`^\[[\w\s:\.]+\]`)
 
 // IsLikelyNewLogEntry determines if a line is likely the start of a new log entry
 // using multiple heuristics including ANSI escape codes, timestamps, and log levels
@@ -78,6 +109,12 @@ func IsLikelyNewLogEntry(line string) bool {
 			if match != nil && match[0] < 10 {
 				return true
 			}
+		}
+
+		// Check for bracketed prefix at start like [info], [discovery], [4:56:24 PM], etc.
+		// This is common in TypeScript/Node.js loggers
+		if bracketedPrefixRegex.MatchString(trimmed) {
+			return true
 		}
 	}
 
@@ -378,12 +415,8 @@ func extractRequestFields(line string) (map[string]string, string) {
 						fields["responseTime"] = strconv.FormatFloat(responseTime, 'f', -1, 64)
 					}
 
-					if len(jsonFields) > 1 {
-						fields["ctx"] = jsonPart
-					} else if len(jsonFields) == 1 {
-						for k, data := range jsonFields {
-							fields[k] = data.(string)
-						}
+					for k, data := range jsonFields {
+						fields[k] = data.(string)
 					}
 
 					return fields, jsonPart
@@ -394,91 +427,94 @@ func extractRequestFields(line string) (map[string]string, string) {
 	return nil, ""
 }
 
-func ParseLogLine(line string) *LogEntry {
+func parseJSONFields(line string) *LogEntry {
+	if !json.Valid([]byte(line)) {
+		return nil
+	}
+
+	entry := &LogEntry{
+		Raw:        line,
+		Fields:     make(map[string]string),
+		IsJSON:     true,
+		JSONFields: make(map[string]interface{}),
+	}
+
+	json.Unmarshal([]byte(line), &entry.JSONFields)
+
+	extractedFields := []string{}
+	// Try multiple common timestamp field names
+	for _, key := range []string{"timestamp", "@timestamp", "time", "ts", "datetime", "date"} {
+		if ts, ok := entry.JSONFields[key].(string); ok {
+			entry.Timestamp = ts
+			tsTime, err := time.Parse(time.RFC3339Nano, ts)
+			if err == nil {
+				entry.Timestamp = tsTime.Format(time.RFC3339Nano)
+			}
+			extractedFields = append(extractedFields, key)
+			break
+		}
+	}
+
+	// Try multiple common level field names
+	for _, key := range []string{"level", "severity", "log_level", "loglevel", "lvl"} {
+		if lvl, ok := entry.JSONFields[key].(string); ok {
+			entry.Level = lvl
+			if parsedLevel, ok := ParseLevel(lvl); ok {
+				entry.Level = parsedLevel
+			}
+			extractedFields = append(extractedFields, key)
+			break
+		}
+	}
+
+	// Try multiple common message field names
+	for _, key := range []string{"message", "msg", "text", "log", "event"} {
+		if msg, ok := entry.JSONFields[key].(string); ok {
+			entry.Message = msg
+			extractedFields = append(extractedFields, key)
+			break
+		}
+
+	}
+
+	for _, key := range []string{"caller", "source"} {
+		if caller, ok := entry.JSONFields[key].(string); ok {
+			if _, ok := ParseFile(caller); ok {
+				entry.File = caller
+				extractedFields = append(extractedFields, key)
+				break
+			}
+		}
+	}
+
+	// Populate fields map with all JSON fields (excluding already extracted ones)
+	for key, value := range entry.JSONFields {
+		// Skip the ones we already extracted into dedicated fields
+		if slices.Contains(extractedFields, key) {
+			continue
+		}
+
+		// Convert value to string for fields map
+		switch v := value.(type) {
+		case string:
+			entry.Fields[key] = v
+		case nil:
+			entry.Fields[key] = ""
+		default:
+			// Convert complex types to JSON string
+			if jsonBytes, err := json.Marshal(v); err == nil {
+				entry.Fields[key] = string(jsonBytes)
+			}
+		}
+	}
+
+	return entry
+}
+
+func parseANSIFields(line string) (*LogEntry, string) {
 	entry := &LogEntry{
 		Raw:    line,
 		Fields: make(map[string]string),
-	}
-
-	if strings.TrimSpace(line) == "" {
-		return entry
-	}
-
-	// Keep original line with ANSI codes for field boundary detection
-
-	if json.Valid([]byte(line)) {
-		entry.IsJSON = true
-		entry.JSONFields = make(map[string]interface{})
-		json.Unmarshal([]byte(line), &entry.JSONFields)
-
-		extractedFields := []string{}
-		// Try multiple common timestamp field names
-		for _, key := range []string{"timestamp", "@timestamp", "time", "ts", "datetime", "date"} {
-			if ts, ok := entry.JSONFields[key].(string); ok {
-				entry.Timestamp = ts
-				tsTime, err := time.Parse(time.RFC3339Nano, ts)
-				if err == nil {
-					entry.Timestamp = tsTime.Format(time.RFC3339Nano)
-				}
-				extractedFields = append(extractedFields, key)
-				break
-			}
-		}
-
-		// Try multiple common level field names
-		for _, key := range []string{"level", "severity", "log_level", "loglevel", "lvl"} {
-			if lvl, ok := entry.JSONFields[key].(string); ok {
-				entry.Level = lvl
-				if parsedLevel, ok := ParseLevel(lvl); ok {
-					entry.Level = parsedLevel
-				}
-				extractedFields = append(extractedFields, key)
-				break
-			}
-		}
-
-		// Try multiple common message field names
-		for _, key := range []string{"message", "msg", "text", "log", "event"} {
-			if msg, ok := entry.JSONFields[key].(string); ok {
-				entry.Message = msg
-				extractedFields = append(extractedFields, key)
-				break
-			}
-
-		}
-
-		for _, key := range []string{"caller", "source"} {
-			if caller, ok := entry.JSONFields[key].(string); ok {
-				if _, ok := ParseFile(caller); ok {
-					entry.File = caller
-					extractedFields = append(extractedFields, key)
-					break
-				}
-			}
-		}
-
-		// Populate fields map with all JSON fields (excluding already extracted ones)
-		for key, value := range entry.JSONFields {
-			// Skip the ones we already extracted into dedicated fields
-			if slices.Contains(extractedFields, key) {
-				continue
-			}
-
-			// Convert value to string for fields map
-			switch v := value.(type) {
-			case string:
-				entry.Fields[key] = v
-			case nil:
-				entry.Fields[key] = ""
-			default:
-				// Convert complex types to JSON string
-				if jsonBytes, err := json.Marshal(v); err == nil {
-					entry.Fields[key] = string(jsonBytes)
-				}
-			}
-		}
-
-		return entry
 	}
 
 	originalLine := line
@@ -518,7 +554,7 @@ func ParseLogLine(line string) *LogEntry {
 
 		if file, ok := ParseFile(block.Text); ok {
 			entry.File = file
-			linesToStrip = append(linesToStrip, file)
+			linesToStrip = append(linesToStrip, block.Text)
 			continue
 		}
 
@@ -532,6 +568,24 @@ func ParseLogLine(line string) *LogEntry {
 		line = strings.Replace(line, lineToStrip, "", 1)
 	}
 	line = strings.TrimSpace(line)
+
+	return entry, line
+}
+
+func ParseLogLine(line string) *LogEntry {
+	if strings.TrimSpace(line) == "" {
+		return &LogEntry{
+			Raw:    line,
+			Fields: make(map[string]string),
+		}
+	}
+
+	// Keep original line with ANSI codes for field boundary detection
+	if json.Valid([]byte(line)) {
+		return parseJSONFields(line)
+	}
+
+	entry, line := parseANSIFields(line)
 
 	if strings.HasSuffix(line, "}") {
 		jsonFields, jsonPart := extractRequestFields(line)
@@ -583,34 +637,13 @@ func ParseLogLine(line string) *LogEntry {
 		}
 	}
 
-	// Parse db.vars if it's an encoded JSON string
-	if vars, ok := entry.Fields["db.vars"]; ok && vars != "" {
-		// Check if it's a JSON-encoded string (starts and ends with quotes)
-		if len(vars) >= 2 && vars[0] == '"' && vars[len(vars)-1] == '"' {
-			// Try to unquote it (handles escaped quotes properly)
-			var unquoted string
-			if err := json.Unmarshal([]byte(vars), &unquoted); err == nil {
-				// If unquoted successfully, check if it's valid JSON
-				if json.Valid([]byte(unquoted)) {
-					// Parse the JSON to validate and normalize it
-					var parsedJSON interface{}
-					if err := json.Unmarshal([]byte(unquoted), &parsedJSON); err == nil {
-						// Store the parsed JSON as a properly formatted JSON string
-						if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
-							entry.Fields["db.vars"] = string(jsonBytes)
-						}
-					}
-				}
-			}
-		} else if json.Valid([]byte(vars)) {
-			// If it's already valid JSON (not quoted), just normalize it
-			var parsedJSON interface{}
-			if err := json.Unmarshal([]byte(vars), &parsedJSON); err == nil {
-				// Store the parsed JSON as a properly formatted JSON string
-				if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
-					entry.Fields["db.vars"] = string(jsonBytes)
-				}
-			}
+	// Check all fields for double-encoded JSON and normalize them
+	for key, val := range entry.Fields {
+		if val == "" {
+			continue
+		}
+		if normalized := tryNormalizeJSON(val); normalized != "" {
+			entry.Fields[key] = normalized
 		}
 	}
 
@@ -733,10 +766,11 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 		t, err := time.Parse(format, timestampStr)
 		if err == nil {
 			// For formats without year/date, add current year/date
-			if format == "Jan  2 15:04:05.000000" || format == "Jan _2 15:04:05.000000" {
+			switch format {
+			case "Jan  2 15:04:05.000000", "Jan _2 15:04:05.000000":
 				now := time.Now()
 				t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
-			} else if format == "[15:04:05.000]" || format == "15:04:05.000000" || format == "15:04:05.000" || format == "15:04:05" || format == "15:04PM" {
+			case "[15:04:05.000]", "15:04:05.000000", "15:04:05.000", "15:04:05", "15:04PM":
 				now := time.Now()
 				t = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 			}
