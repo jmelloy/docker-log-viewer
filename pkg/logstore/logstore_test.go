@@ -433,9 +433,11 @@ func TestSetMaxMessages(t *testing.T) {
 }
 
 func TestIndexConsistency(t *testing.T) {
-	store := NewLogStore(5, 1*time.Hour)
+	// maxMessages is per-container, so with limit=3 and 2 containers, we can have up to 6 messages
+	store := NewLogStore(3, 1*time.Hour)
 
-	// Add messages that will be evicted
+	// Add 10 messages across 2 containers (5 per container)
+	// With per-container limit of 3, each container will keep only the last 3
 	for i := 0; i < 10; i++ {
 		store.Add(&LogMessage{
 			Timestamp:   time.Now(),
@@ -447,28 +449,30 @@ func TestIndexConsistency(t *testing.T) {
 		})
 	}
 
-	// Verify count
-	if store.Count() != 5 {
-		t.Errorf("Expected count 5, got %d", store.Count())
+	// With 2 containers and limit 3 per container, total should be 6
+	// container0: messages 4, 6, 8 (last 3)
+	// container1: messages 5, 7, 9 (last 3)
+	if store.Count() != 6 {
+		t.Errorf("Expected count 6, got %d", store.Count())
 	}
 
-	// Verify container index
+	// Verify container index - each container should have 3 messages
 	container0Results := store.SearchByContainer("container0", 10)
 	container1Results := store.SearchByContainer("container1", 10)
 
-	totalContainerResults := 0
-	if container0Results != nil {
-		totalContainerResults += len(container0Results)
+	if len(container0Results) != 3 {
+		t.Errorf("Expected 3 results for container0, got %d", len(container0Results))
 	}
-	if container1Results != nil {
-		totalContainerResults += len(container1Results)
-	}
-
-	if totalContainerResults != 5 {
-		t.Errorf("Expected 5 total container results, got %d", totalContainerResults)
+	if len(container1Results) != 3 {
+		t.Errorf("Expected 3 results for container1, got %d", len(container1Results))
 	}
 
-	// Verify field index
+	totalContainerResults := len(container0Results) + len(container1Results)
+	if totalContainerResults != 6 {
+		t.Errorf("Expected 6 total container results, got %d", totalContainerResults)
+	}
+
+	// Verify field index is consistent with actual stored messages
 	req0Results := store.SearchByField("request_id", "req0", 10)
 	req1Results := store.SearchByField("request_id", "req1", 10)
 	req2Results := store.SearchByField("request_id", "req2", 10)
@@ -484,8 +488,9 @@ func TestIndexConsistency(t *testing.T) {
 		totalFieldResults += len(req2Results)
 	}
 
-	if totalFieldResults != 5 {
-		t.Errorf("Expected 5 total field results, got %d", totalFieldResults)
+	// Total field results should match total message count
+	if totalFieldResults != 6 {
+		t.Errorf("Expected 6 total field results, got %d", totalFieldResults)
 	}
 }
 

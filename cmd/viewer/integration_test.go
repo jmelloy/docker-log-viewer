@@ -13,7 +13,7 @@ func TestTimestampUsageIntegration(t *testing.T) {
 	// Simulate a sequence of log messages with timestamps
 	testLogs := []struct {
 		raw          string
-		timestamp    string
+		timestamp    string // Expected RFC3339Nano format after parsing
 		expectParsed bool
 		expectedHour int
 		expectedMin  int
@@ -21,7 +21,7 @@ func TestTimestampUsageIntegration(t *testing.T) {
 	}{
 		{
 			raw:          "Oct  3 19:57:52.076536 INFO Starting service",
-			timestamp:    "Oct  3 19:57:52.076536",
+			timestamp:    "2025-10-03T19:57:52.076536Z",
 			expectParsed: true,
 			expectedHour: 19,
 			expectedMin:  57,
@@ -37,7 +37,7 @@ func TestTimestampUsageIntegration(t *testing.T) {
 		},
 		{
 			raw:          "Oct  3 19:58:10.123456 INFO Request received",
-			timestamp:    "Oct  3 19:58:10.123456",
+			timestamp:    "2025-10-03T19:58:10.123456Z",
 			expectParsed: true,
 			expectedHour: 19,
 			expectedMin:  58,

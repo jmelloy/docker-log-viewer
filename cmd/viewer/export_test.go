@@ -74,7 +74,7 @@ func TestFormatExplainPlanForNotion(t *testing.T) {
 	}{
 		{
 			name:     "valid JSON",
-			input:    `{"Plan": {"Node Type": "Seq Scan"}}`,
+			input:    `{"Plan": {"Node Type": "Seq Scan", "Plans": [{"Node Type": "Index Scan"}]}}`,
 			hasJSON:  true,
 			hasError: false,
 		},
