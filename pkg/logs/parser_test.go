@@ -203,9 +203,9 @@ func TestMultilineSQLParsing(t *testing.T) {
 		t.Errorf("Expected level TRC, got %s", entry.Level)
 	}
 
-	// Should have timestamp extracted
-	if entry.Timestamp != "Oct  6 18:09:28.984986" {
-		t.Errorf("Expected timestamp 'Oct  6 18:09:28.984986', got '%s'", entry.Timestamp)
+	// Should have timestamp extracted (converted to RFC3339Nano)
+	if entry.Timestamp != "2025-10-06T18:09:28.984986Z" {
+		t.Errorf("Expected timestamp '2025-10-06T18:09:28.984986Z', got '%s'", entry.Timestamp)
 	}
 
 	// Should contain the SQL UNION statement

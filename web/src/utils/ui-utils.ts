@@ -139,6 +139,7 @@ export function convertAnsiToHtml(text: string): string {
   const ansiMap: Record<number, string> = {
     0: "",
     1: "ansi-bold",
+    2: "ansi-dim",
     30: "ansi-gray",
     31: "ansi-red",
     32: "ansi-green",
