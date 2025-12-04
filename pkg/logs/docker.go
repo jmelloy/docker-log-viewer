@@ -84,15 +84,24 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 }
 
 func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logChan chan<- LogMessage, onStreamEnd func()) error {
+	return dc.StreamLogsSince(ctx, containerID, logChan, onStreamEnd, time.Time{})
+}
+
+func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string, logChan chan<- LogMessage, onStreamEnd func(), since time.Time) error {
 	options := types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,
 		Timestamps: false,
-		Tail:       "10000",
 	}
 
-	slog.Info("Starting log stream for container", "container_id", containerID[:12], "tail", options.Tail)
+	if since.IsZero() {
+		options.Tail = "10000"
+		slog.Info("Starting log stream for container", "container_id", containerID[:12], "tail", options.Tail)
+	} else {
+		options.Since = since.Format(time.RFC3339Nano)
+		slog.Info("Resuming log stream for container", "container_id", containerID[:12], "since", options.Since)
+	}
 
 	reader, err := dc.cli.ContainerLogs(ctx, containerID, options)
 	if err != nil {

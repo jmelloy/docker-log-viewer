@@ -665,11 +665,15 @@ func (wa *WebApp) monitorContainers() {
 						wa.activeStreamsMutex.Unlock()
 					}
 				} else if !activeStreams[c.ID] {
-					// Container is running but stream ended (e.g., EOF) - restart it
+					// Container is running but stream ended (e.g., EOF) - restart it using Since
 					// Remove from previousIDs so it will be checked again
 					delete(previousIDs, c.ID)
 
-					slog.Info("container stream ended, restarting stream", "container_id", c.ID[:12], "container_name", c.Name)
+					wa.lastTimestampsMutex.RLock()
+					since := wa.lastTimestamps[c.ID]
+					wa.lastTimestampsMutex.RUnlock()
+
+					slog.Info("container stream ended, resuming stream", "container_id", c.ID[:12], "container_name", c.Name, "since", since)
 					containerID := c.ID
 					onStreamEnd := func() {
 						wa.activeStreamsMutex.Lock()
@@ -680,7 +684,7 @@ func (wa *WebApp) monitorContainers() {
 					wa.activeStreamsMutex.Lock()
 					wa.activeStreams[c.ID] = true
 					wa.activeStreamsMutex.Unlock()
-					if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan, onStreamEnd); err != nil {
+					if err := wa.docker.StreamLogsSince(wa.ctx, c.ID, wa.logChan, onStreamEnd, since); err != nil {
 						slog.Error("failed to restart stream for container", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
 						wa.activeStreamsMutex.Lock()
 						delete(wa.activeStreams, c.ID)
