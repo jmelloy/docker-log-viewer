@@ -5,7 +5,31 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"docker-log-parser/pkg/logs"
 )
+
+func newTestMessage(containerID, message string, fields map[string]string) *logs.ContainerMessage {
+	return &logs.ContainerMessage{
+		Timestamp:   time.Now(),
+		ContainerID: containerID,
+		Entry: &logs.LogEntry{
+			Message: message,
+			Fields:  fields,
+		},
+	}
+}
+
+func newTestMessageWithTime(containerID, message string, fields map[string]string, ts time.Time) *logs.ContainerMessage {
+	return &logs.ContainerMessage{
+		Timestamp:   ts,
+		ContainerID: containerID,
+		Entry: &logs.LogEntry{
+			Message: message,
+			Fields:  fields,
+		},
+	}
+}
 
 func TestNewLogStore(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
@@ -26,19 +50,8 @@ func TestNewLogStore(t *testing.T) {
 func TestAddAndGetRecent(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
 
-	msg1 := &LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "Test message 1",
-		Fields:      map[string]string{"request_id": "req1"},
-	}
-
-	msg2 := &LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container2",
-		Message:     "Test message 2",
-		Fields:      map[string]string{"request_id": "req2"},
-	}
+	msg1 := newTestMessage("container1", "Test message 1", map[string]string{"request_id": "req1"})
+	msg2 := newTestMessage("container2", "Test message 2", map[string]string{"request_id": "req2"})
 
 	store.Add(msg1)
 	store.Add(msg2)
@@ -53,8 +66,8 @@ func TestAddAndGetRecent(t *testing.T) {
 	}
 
 	// Most recent should be first (msg2)
-	if recent[0].Message != "Test message 2" {
-		t.Errorf("Expected most recent message first, got %s", recent[0].Message)
+	if recent[0].Entry.Message != "Test message 2" {
+		t.Errorf("Expected most recent message first, got %s", recent[0].Entry.Message)
 	}
 }
 
@@ -63,12 +76,7 @@ func TestEvictionByCount(t *testing.T) {
 
 	// Add 10 messages
 	for i := 0; i < 10; i++ {
-		msg := &LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     fmt.Sprintf("Message %d", i),
-			Fields:      map[string]string{"index": fmt.Sprintf("%d", i)},
-		}
+		msg := newTestMessage("container1", fmt.Sprintf("Message %d", i), map[string]string{"index": fmt.Sprintf("%d", i)})
 		store.Add(msg)
 	}
 
@@ -83,11 +91,11 @@ func TestEvictionByCount(t *testing.T) {
 	}
 
 	// Should have messages 9, 8, 7, 6, 5 (most recent first)
-	if recent[0].Message != "Message 9" {
-		t.Errorf("Expected 'Message 9', got %s", recent[0].Message)
+	if recent[0].Entry.Message != "Message 9" {
+		t.Errorf("Expected 'Message 9', got %s", recent[0].Entry.Message)
 	}
-	if recent[4].Message != "Message 5" {
-		t.Errorf("Expected 'Message 5' as oldest, got %s", recent[4].Message)
+	if recent[4].Entry.Message != "Message 5" {
+		t.Errorf("Expected 'Message 5' as oldest, got %s", recent[4].Entry.Message)
 	}
 }
 
@@ -99,12 +107,7 @@ func TestEvictionByAge(t *testing.T) {
 	// Add old messages (200ms before base time)
 	oldTime := baseTime.Add(-200 * time.Millisecond)
 	for i := 0; i < 3; i++ {
-		msg := &LogMessage{
-			Timestamp:   oldTime,
-			ContainerID: "container1",
-			Message:     fmt.Sprintf("Old message %d", i),
-			Fields:      map[string]string{},
-		}
+		msg := newTestMessageWithTime("container1", fmt.Sprintf("Old message %d", i), map[string]string{}, oldTime)
 		store.Add(msg)
 	}
 
@@ -112,12 +115,7 @@ func TestEvictionByAge(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Add a new message which should trigger eviction of old messages
-	newMsg := &LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "New message",
-		Fields:      map[string]string{},
-	}
+	newMsg := newTestMessage("container1", "New message", map[string]string{})
 	store.Add(newMsg)
 
 	// Old messages should be evicted (they are now >100ms old)
@@ -126,7 +124,7 @@ func TestEvictionByAge(t *testing.T) {
 	}
 
 	recent := store.GetRecent(10)
-	if len(recent) != 1 || recent[0].Message != "New message" {
+	if len(recent) != 1 || recent[0].Entry.Message != "New message" {
 		t.Error("Expected only new message to remain")
 	}
 }
@@ -136,21 +134,11 @@ func TestSearchByContainer(t *testing.T) {
 
 	// Add messages for different containers
 	for i := 0; i < 5; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     fmt.Sprintf("Container1 message %d", i),
-			Fields:      map[string]string{},
-		})
+		store.Add(newTestMessage("container1", fmt.Sprintf("Container1 message %d", i), map[string]string{}))
 	}
 
 	for i := 0; i < 3; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: "container2",
-			Message:     fmt.Sprintf("Container2 message %d", i),
-			Fields:      map[string]string{},
-		})
+		store.Add(newTestMessage("container2", fmt.Sprintf("Container2 message %d", i), map[string]string{}))
 	}
 
 	// Search for container1
@@ -177,21 +165,11 @@ func TestSearchByField(t *testing.T) {
 
 	// Add messages with different field values
 	for i := 0; i < 3; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     fmt.Sprintf("Message with req1: %d", i),
-			Fields:      map[string]string{"request_id": "req1"},
-		})
+		store.Add(newTestMessage("container1", fmt.Sprintf("Message with req1: %d", i), map[string]string{"request_id": "req1"}))
 	}
 
 	for i := 0; i < 2; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     fmt.Sprintf("Message with req2: %d", i),
-			Fields:      map[string]string{"request_id": "req2"},
-		})
+		store.Add(newTestMessage("container1", fmt.Sprintf("Message with req2: %d", i), map[string]string{"request_id": "req2"}))
 	}
 
 	// Search for request_id=req1
@@ -216,26 +194,9 @@ func TestSearchByField(t *testing.T) {
 func TestSearchByText(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
 
-	store.Add(&LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "Error processing request",
-		Fields:      map[string]string{},
-	})
-
-	store.Add(&LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "Successfully processed request",
-		Fields:      map[string]string{},
-	})
-
-	store.Add(&LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "Starting server",
-		Fields:      map[string]string{},
-	})
+	store.Add(newTestMessage("container1", "Error processing request", map[string]string{}))
+	store.Add(newTestMessage("container1", "Successfully processed request", map[string]string{}))
+	store.Add(newTestMessage("container1", "Starting server", map[string]string{}))
 
 	// Search for "request"
 	results := store.SearchByText("request", 10)
@@ -260,38 +221,23 @@ func TestSearchByFields(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
 
 	// Add messages with multiple fields
-	store.Add(&LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "Message 1",
-		Fields: map[string]string{
-			"request_id": "req1",
-			"user_id":    "user1",
-			"action":     "create",
-		},
-	})
+	store.Add(newTestMessage("container1", "Message 1", map[string]string{
+		"request_id": "req1",
+		"user_id":    "user1",
+		"action":     "create",
+	}))
 
-	store.Add(&LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "Message 2",
-		Fields: map[string]string{
-			"request_id": "req1",
-			"user_id":    "user2",
-			"action":     "create",
-		},
-	})
+	store.Add(newTestMessage("container1", "Message 2", map[string]string{
+		"request_id": "req1",
+		"user_id":    "user2",
+		"action":     "create",
+	}))
 
-	store.Add(&LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "container1",
-		Message:     "Message 3",
-		Fields: map[string]string{
-			"request_id": "req2",
-			"user_id":    "user1",
-			"action":     "delete",
-		},
-	})
+	store.Add(newTestMessage("container1", "Message 3", map[string]string{
+		"request_id": "req2",
+		"user_id":    "user1",
+		"action":     "delete",
+	}))
 
 	// Search for request_id=req1 AND user_id=user1
 	filters := []FieldFilter{
@@ -302,8 +248,8 @@ func TestSearchByFields(t *testing.T) {
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result matching both filters, got %d", len(results))
 	}
-	if len(results) > 0 && results[0].Message != "Message 1" {
-		t.Errorf("Expected 'Message 1', got %s", results[0].Message)
+	if len(results) > 0 && results[0].Entry.Message != "Message 1" {
+		t.Errorf("Expected 'Message 1', got %s", results[0].Entry.Message)
 	}
 
 	// Search for action=create
@@ -333,35 +279,20 @@ func TestSearchComplex(t *testing.T) {
 	past := now.Add(-1 * time.Hour)
 
 	// Add various messages
-	store.Add(&LogMessage{
-		Timestamp:   past,
-		ContainerID: "container1",
-		Message:     "Old message with error",
-		Fields: map[string]string{
-			"request_id": "req1",
-			"level":      "error",
-		},
-	})
+	store.Add(newTestMessageWithTime("container1", "Old message with error", map[string]string{
+		"request_id": "req1",
+		"level":      "error",
+	}, past))
 
-	store.Add(&LogMessage{
-		Timestamp:   now,
-		ContainerID: "container1",
-		Message:     "Recent message with error",
-		Fields: map[string]string{
-			"request_id": "req2",
-			"level":      "error",
-		},
-	})
+	store.Add(newTestMessageWithTime("container1", "Recent message with error", map[string]string{
+		"request_id": "req2",
+		"level":      "error",
+	}, now))
 
-	store.Add(&LogMessage{
-		Timestamp:   now,
-		ContainerID: "container2",
-		Message:     "Recent message with info",
-		Fields: map[string]string{
-			"request_id": "req3",
-			"level":      "info",
-		},
-	})
+	store.Add(newTestMessageWithTime("container2", "Recent message with info", map[string]string{
+		"request_id": "req3",
+		"level":      "info",
+	}, now))
 
 	// Search for container1 + level=error + containing "error"
 	afterTime := past.Add(-1 * time.Minute)
@@ -403,12 +334,7 @@ func TestSetMaxMessages(t *testing.T) {
 
 	// Add 10 messages
 	for i := 0; i < 10; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     fmt.Sprintf("Message %d", i),
-			Fields:      map[string]string{},
-		})
+		store.Add(newTestMessage("container1", fmt.Sprintf("Message %d", i), map[string]string{}))
 	}
 
 	if store.Count() != 10 {
@@ -427,8 +353,8 @@ func TestSetMaxMessages(t *testing.T) {
 	if len(recent) != 5 {
 		t.Errorf("Expected 5 messages, got %d", len(recent))
 	}
-	if recent[0].Message != "Message 9" {
-		t.Errorf("Expected most recent message 'Message 9', got %s", recent[0].Message)
+	if recent[0].Entry.Message != "Message 9" {
+		t.Errorf("Expected most recent message 'Message 9', got %s", recent[0].Entry.Message)
 	}
 }
 
@@ -439,14 +365,11 @@ func TestIndexConsistency(t *testing.T) {
 	// Add 10 messages across 2 containers (5 per container)
 	// With per-container limit of 3, each container will keep only the last 3
 	for i := 0; i < 10; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: fmt.Sprintf("container%d", i%2),
-			Message:     fmt.Sprintf("Message %d", i),
-			Fields: map[string]string{
-				"request_id": fmt.Sprintf("req%d", i%3),
-			},
-		})
+		store.Add(newTestMessage(
+			fmt.Sprintf("container%d", i%2),
+			fmt.Sprintf("Message %d", i),
+			map[string]string{"request_id": fmt.Sprintf("req%d", i%3)},
+		))
 	}
 
 	// With 2 containers and limit 3 per container, total should be 6
@@ -504,14 +427,11 @@ func TestConcurrentAccess(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				store.Add(&LogMessage{
-					Timestamp:   time.Now(),
-					ContainerID: fmt.Sprintf("container%d", id),
-					Message:     fmt.Sprintf("Writer %d message %d", id, j),
-					Fields: map[string]string{
-						"writer": fmt.Sprintf("%d", id),
-					},
-				})
+				store.Add(newTestMessage(
+					fmt.Sprintf("container%d", id),
+					fmt.Sprintf("Writer %d message %d", id, j),
+					map[string]string{"writer": fmt.Sprintf("%d", id)},
+				))
 			}
 		}(i)
 	}
@@ -574,12 +494,7 @@ func TestLimitParameter(t *testing.T) {
 
 	// Add 20 messages
 	for i := 0; i < 20; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     fmt.Sprintf("Message %d", i),
-			Fields:      map[string]string{"field": "value"},
-		})
+		store.Add(newTestMessage("container1", fmt.Sprintf("Message %d", i), map[string]string{"field": "value"}))
 	}
 
 	// Test limit with GetRecent
@@ -605,59 +520,67 @@ func TestFilter(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
 
 	// Add test messages with various attributes
-	messages := []*LogMessage{
-		{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     "Error in authentication",
+	store.Add(&logs.ContainerMessage{
+		Timestamp:   time.Now(),
+		ContainerID: "container1",
+		Entry: &logs.LogEntry{
+			Message: "Error in authentication",
+			Level:   "ERR",
 			Fields: map[string]string{
-				"_level":     "ERR",
 				"request_id": "req1",
 				"user_id":    "user123",
 			},
 		},
-		{
-			Timestamp:   time.Now(),
-			ContainerID: "container1",
-			Message:     "Debug message for user",
+	})
+
+	store.Add(&logs.ContainerMessage{
+		Timestamp:   time.Now(),
+		ContainerID: "container1",
+		Entry: &logs.LogEntry{
+			Message: "Debug message for user",
+			Level:   "DBG",
 			Fields: map[string]string{
-				"_level":     "DBG",
 				"request_id": "req2",
 				"user_id":    "user123",
 			},
 		},
-		{
-			Timestamp:   time.Now(),
-			ContainerID: "container2",
-			Message:     "Info: Processing request",
+	})
+
+	store.Add(&logs.ContainerMessage{
+		Timestamp:   time.Now(),
+		ContainerID: "container2",
+		Entry: &logs.LogEntry{
+			Message: "Info: Processing request",
+			Level:   "INF",
 			Fields: map[string]string{
-				"_level":     "INF",
 				"request_id": "req1",
 				"service":    "api",
 			},
 		},
-		{
-			Timestamp:   time.Now(),
-			ContainerID: "container2",
-			Message:     "Warning: High memory usage",
+	})
+
+	store.Add(&logs.ContainerMessage{
+		Timestamp:   time.Now(),
+		ContainerID: "container2",
+		Entry: &logs.LogEntry{
+			Message: "Warning: High memory usage",
+			Level:   "WRN",
 			Fields: map[string]string{
-				"_level":  "WRN",
 				"service": "api",
 			},
 		},
-		{
-			Timestamp:   time.Now(),
-			ContainerID: "container3",
-			Message:     "No level message",
+	})
+
+	store.Add(&logs.ContainerMessage{
+		Timestamp:   time.Now(),
+		ContainerID: "container3",
+		Entry: &logs.LogEntry{
+			Message: "No level message",
 			Fields: map[string]string{
 				"request_id": "req3",
 			},
 		},
-	}
-
-	for _, msg := range messages {
-		store.Add(msg)
-	}
+	})
 
 	// Test 1: Filter by container only
 	opts := FilterOptions{
@@ -706,8 +629,8 @@ func TestFilter(t *testing.T) {
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for container1 + ERR, got %d", len(results))
 	}
-	if len(results) > 0 && results[0].Message != "Error in authentication" {
-		t.Errorf("Expected 'Error in authentication', got %s", results[0].Message)
+	if len(results) > 0 && results[0].Entry.Message != "Error in authentication" {
+		t.Errorf("Expected 'Error in authentication', got %s", results[0].Entry.Message)
 	}
 
 	// Test 6: Multiple search terms (AND logic)
@@ -766,22 +689,12 @@ func TestContainerRetentionByTime(t *testing.T) {
 
 	// Add 120 old messages (older than 5 seconds) to exceed the minimum of 100
 	for i := 0; i < 120; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   now.Add(-10 * time.Second),
-			ContainerID: containerID,
-			Message:     fmt.Sprintf("Old message %d", i),
-			Fields:      map[string]string{},
-		})
+		store.Add(newTestMessageWithTime(containerID, fmt.Sprintf("Old message %d", i), map[string]string{}, now.Add(-10*time.Second)))
 	}
 
 	// Add 5 recent messages (within last second)
 	for i := 0; i < 5; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   now.Add(-1 * time.Second),
-			ContainerID: containerID,
-			Message:     fmt.Sprintf("Recent message %d", i),
-			Fields:      map[string]string{},
-		})
+		store.Add(newTestMessageWithTime(containerID, fmt.Sprintf("Recent message %d", i), map[string]string{}, now.Add(-1*time.Second)))
 	}
 
 	// Verify we have 125 messages total
@@ -803,9 +716,6 @@ func TestContainerRetentionByTime(t *testing.T) {
 	if count != 100 {
 		t.Errorf("Expected 100 messages after time-based retention (minimum kept), got %d", count)
 	}
-
-	// Verify we removed 25 old messages (125 - 100 = 25)
-	// The remaining 100 should be: 5 recent + 95 oldest of the old messages
 }
 
 func TestContainerRetentionByCount(t *testing.T) {
@@ -815,12 +725,7 @@ func TestContainerRetentionByCount(t *testing.T) {
 
 	// Add 20 messages
 	for i := 0; i < 20; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   time.Now(),
-			ContainerID: containerID,
-			Message:     fmt.Sprintf("Message %d", i),
-			Fields:      map[string]string{},
-		})
+		store.Add(newTestMessage(containerID, fmt.Sprintf("Message %d", i), map[string]string{}))
 	}
 
 	// Verify we have 20 messages
@@ -847,12 +752,12 @@ func TestContainerRetentionByCount(t *testing.T) {
 		t.Errorf("Expected 10 results, got %d", len(results))
 	}
 	// Most recent should be "Message 19"
-	if results[0].Message != "Message 19" {
-		t.Errorf("Expected most recent message 'Message 19', got %s", results[0].Message)
+	if results[0].Entry.Message != "Message 19" {
+		t.Errorf("Expected most recent message 'Message 19', got %s", results[0].Entry.Message)
 	}
 	// Oldest should be "Message 10"
-	if results[9].Message != "Message 10" {
-		t.Errorf("Expected oldest remaining message 'Message 10', got %s", results[9].Message)
+	if results[9].Entry.Message != "Message 10" {
+		t.Errorf("Expected oldest remaining message 'Message 10', got %s", results[9].Entry.Message)
 	}
 }
 
@@ -864,12 +769,7 @@ func TestContainerRetentionMinKeep(t *testing.T) {
 
 	// Add 150 old messages (all older than cutoff)
 	for i := 0; i < 150; i++ {
-		store.Add(&LogMessage{
-			Timestamp:   now.Add(-20 * time.Second),
-			ContainerID: containerID,
-			Message:     fmt.Sprintf("Old message %d", i),
-			Fields:      map[string]string{},
-		})
+		store.Add(newTestMessageWithTime(containerID, fmt.Sprintf("Old message %d", i), map[string]string{}, now.Add(-20*time.Second)))
 	}
 
 	// Set time-based retention with very short time

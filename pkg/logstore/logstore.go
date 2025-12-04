@@ -2,19 +2,12 @@ package logstore
 
 import (
 	"container/list"
+	"docker-log-parser/pkg/logs"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 )
-
-// LogMessage represents a single log entry
-type LogMessage struct {
-	Timestamp   time.Time
-	ContainerID string
-	Message     string
-	Fields      map[string]string // Dynamic fields like request_id, etc.
-}
 
 // LogStore provides efficient storage and search for log messages
 type LogStore struct {
@@ -58,7 +51,7 @@ func NewLogStore(maxMessages int, maxAge time.Duration) *LogStore {
 }
 
 // Add inserts a new log message and maintains size/age constraints
-func (ls *LogStore) Add(msg *LogMessage) {
+func (ls *LogStore) Add(msg *logs.ContainerMessage) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
@@ -73,7 +66,7 @@ func (ls *LogStore) Add(msg *LogMessage) {
 	ls.byContainer[msg.ContainerID].PushFront(elem)
 
 	// Index by dynamic fields
-	for k, v := range msg.Fields {
+	for k, v := range msg.Entry.Fields {
 		if ls.byField[k] == nil {
 			ls.byField[k] = make(map[string]*list.List)
 		}
@@ -94,7 +87,7 @@ func (ls *LogStore) Add(msg *LogMessage) {
 			e := containerList.Back()
 			if e != nil {
 				elem := e.Value.(*list.Element)
-				msg := elem.Value.(*LogMessage)
+				msg := elem.Value.(*logs.ContainerMessage)
 				ls.removeMessage(elem, msg)
 			}
 		}
@@ -114,7 +107,7 @@ func (ls *LogStore) evictOldestFromContainer(containerID string) {
 	e := containerList.Back()
 	if e != nil {
 		elem := e.Value.(*list.Element)
-		msg := elem.Value.(*LogMessage)
+		msg := elem.Value.(*logs.ContainerMessage)
 		ls.removeMessage(elem, msg)
 	}
 }
@@ -129,7 +122,7 @@ func (ls *LogStore) evictExpired() {
 			break
 		}
 
-		msg := elem.Value.(*LogMessage)
+		msg := elem.Value.(*logs.ContainerMessage)
 		if msg.Timestamp.After(cutoff) {
 			break
 		}
@@ -139,7 +132,7 @@ func (ls *LogStore) evictExpired() {
 }
 
 // removeMessage removes a message from all indexes
-func (ls *LogStore) removeMessage(elem *list.Element, msg *LogMessage) {
+func (ls *LogStore) removeMessage(elem *list.Element, msg *logs.ContainerMessage) {
 	// Remove from main list
 	ls.messages.Remove(elem)
 	ls.messageCount--
@@ -158,7 +151,7 @@ func (ls *LogStore) removeMessage(elem *list.Element, msg *LogMessage) {
 	}
 
 	// Remove from field indexes
-	for k, v := range msg.Fields {
+	for k, v := range msg.Entry.Fields {
 		if fieldMap := ls.byField[k]; fieldMap != nil {
 			if valueList := fieldMap[v]; valueList != nil {
 				for e := valueList.Front(); e != nil; e = e.Next() {
@@ -179,7 +172,7 @@ func (ls *LogStore) removeMessage(elem *list.Element, msg *LogMessage) {
 }
 
 // SearchByContainer returns all messages for a specific container
-func (ls *LogStore) SearchByContainer(containerID string, limit int) []*LogMessage {
+func (ls *LogStore) SearchByContainer(containerID string, limit int) []*logs.ContainerMessage {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
@@ -188,12 +181,12 @@ func (ls *LogStore) SearchByContainer(containerID string, limit int) []*LogMessa
 		return nil
 	}
 
-	results := make([]*LogMessage, 0, min(limit, containerList.Len()))
+	results := make([]*logs.ContainerMessage, 0, min(limit, containerList.Len()))
 	count := 0
 
 	for e := containerList.Front(); e != nil && count < limit; e = e.Next() {
 		elem := e.Value.(*list.Element)
-		results = append(results, elem.Value.(*LogMessage))
+		results = append(results, elem.Value.(*logs.ContainerMessage))
 		count++
 	}
 
@@ -201,7 +194,7 @@ func (ls *LogStore) SearchByContainer(containerID string, limit int) []*LogMessa
 }
 
 // SearchByField returns messages matching a specific field value
-func (ls *LogStore) SearchByField(fieldName, fieldValue string, limit int) []*LogMessage {
+func (ls *LogStore) SearchByField(fieldName, fieldValue string, limit int) []*logs.ContainerMessage {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
@@ -215,12 +208,12 @@ func (ls *LogStore) SearchByField(fieldName, fieldValue string, limit int) []*Lo
 		return nil
 	}
 
-	results := make([]*LogMessage, 0, min(limit, valueList.Len()))
+	results := make([]*logs.ContainerMessage, 0, min(limit, valueList.Len()))
 	count := 0
 
 	for e := valueList.Front(); e != nil && count < limit; e = e.Next() {
 		elem := e.Value.(*list.Element)
-		results = append(results, elem.Value.(*LogMessage))
+		results = append(results, elem.Value.(*logs.ContainerMessage))
 		count++
 	}
 
@@ -228,16 +221,16 @@ func (ls *LogStore) SearchByField(fieldName, fieldValue string, limit int) []*Lo
 }
 
 // SearchByText performs a substring search in message text
-func (ls *LogStore) SearchByText(substring string, limit int) []*LogMessage {
+func (ls *LogStore) SearchByText(substring string, limit int) []*logs.ContainerMessage {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
-	results := make([]*LogMessage, 0, limit)
+	results := make([]*logs.ContainerMessage, 0, limit)
 	count := 0
 
 	for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
-		msg := e.Value.(*LogMessage)
-		if strings.Contains(msg.Message, substring) {
+		msg := e.Value.(*logs.ContainerMessage)
+		if strings.Contains(msg.Entry.Message, substring) {
 			results = append(results, msg)
 			count++
 		}
@@ -253,17 +246,17 @@ type FieldFilter struct {
 }
 
 // SearchByFields returns messages matching ALL specified field filters (AND operation)
-func (ls *LogStore) SearchByFields(filters []FieldFilter, limit int) []*LogMessage {
+func (ls *LogStore) SearchByFields(filters []FieldFilter, limit int) []*logs.ContainerMessage {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
 	if len(filters) == 0 {
 		// Inline GetRecent logic to avoid deadlock
-		results := make([]*LogMessage, 0, min(limit, ls.messageCount))
+		results := make([]*logs.ContainerMessage, 0, min(limit, ls.messageCount))
 		count := 0
 
 		for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
-			results = append(results, e.Value.(*LogMessage))
+			results = append(results, e.Value.(*logs.ContainerMessage))
 			count++
 		}
 
@@ -297,12 +290,12 @@ func (ls *LogStore) SearchByFields(filters []FieldFilter, limit int) []*LogMessa
 	startFilter := filters[smallestIdx]
 	valueList := ls.byField[startFilter.Name][startFilter.Value]
 
-	results := make([]*LogMessage, 0, min(limit, valueList.Len()))
+	results := make([]*logs.ContainerMessage, 0, min(limit, valueList.Len()))
 	count := 0
 
 	for e := valueList.Front(); e != nil && count < limit; e = e.Next() {
 		elem := e.Value.(*list.Element)
-		msg := elem.Value.(*LogMessage)
+		msg := elem.Value.(*logs.ContainerMessage)
 
 		// Check if message matches all other filters
 		if ls.matchesAllFilters(msg, filters) {
@@ -315,9 +308,9 @@ func (ls *LogStore) SearchByFields(filters []FieldFilter, limit int) []*LogMessa
 }
 
 // matchesAllFilters checks if a message matches all field filters
-func (ls *LogStore) matchesAllFilters(msg *LogMessage, filters []FieldFilter) bool {
+func (ls *LogStore) matchesAllFilters(msg *logs.ContainerMessage, filters []FieldFilter) bool {
 	for _, filter := range filters {
-		if msg.Fields[filter.Name] != filter.Value {
+		if msg.Entry.Fields[filter.Name] != filter.Value {
 			return false
 		}
 	}
@@ -334,11 +327,11 @@ type SearchCriteria struct {
 }
 
 // SearchComplex performs a search with multiple criteria combined
-func (ls *LogStore) SearchComplex(criteria SearchCriteria, limit int) []*LogMessage {
+func (ls *LogStore) SearchComplex(criteria SearchCriteria, limit int) []*logs.ContainerMessage {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
-	results := make([]*LogMessage, 0, limit)
+	results := make([]*logs.ContainerMessage, 0, limit)
 	count := 0
 
 	// Determine starting point for iteration
@@ -377,7 +370,7 @@ func (ls *LogStore) SearchComplex(criteria SearchCriteria, limit int) []*LogMess
 	// Iterate and apply all filters
 	if useMainList {
 		for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
-			msg := e.Value.(*LogMessage)
+			msg := e.Value.(*logs.ContainerMessage)
 			if ls.matchesCriteria(msg, criteria) {
 				results = append(results, msg)
 				count++
@@ -386,7 +379,7 @@ func (ls *LogStore) SearchComplex(criteria SearchCriteria, limit int) []*LogMess
 	} else {
 		for e := startList.Front(); e != nil && count < limit; e = e.Next() {
 			elem := e.Value.(*list.Element)
-			msg := elem.Value.(*LogMessage)
+			msg := elem.Value.(*logs.ContainerMessage)
 			if ls.matchesCriteria(msg, criteria) {
 				results = append(results, msg)
 				count++
@@ -398,7 +391,7 @@ func (ls *LogStore) SearchComplex(criteria SearchCriteria, limit int) []*LogMess
 }
 
 // matchesCriteria checks if a message matches all search criteria
-func (ls *LogStore) matchesCriteria(msg *LogMessage, criteria SearchCriteria) bool {
+func (ls *LogStore) matchesCriteria(msg *logs.ContainerMessage, criteria SearchCriteria) bool {
 	// Check container
 	if criteria.ContainerID != "" && msg.ContainerID != criteria.ContainerID {
 		return false
@@ -406,13 +399,13 @@ func (ls *LogStore) matchesCriteria(msg *LogMessage, criteria SearchCriteria) bo
 
 	// Check field filters
 	for _, filter := range criteria.Fields {
-		if msg.Fields[filter.Name] != filter.Value {
+		if msg.Entry.Fields[filter.Name] != filter.Value {
 			return false
 		}
 	}
 
 	// Check text search
-	if criteria.TextSearch != "" && !strings.Contains(msg.Message, criteria.TextSearch) {
+	if criteria.TextSearch != "" && !strings.Contains(msg.Entry.Message, criteria.TextSearch) {
 		return false
 	}
 
@@ -428,15 +421,15 @@ func (ls *LogStore) matchesCriteria(msg *LogMessage, criteria SearchCriteria) bo
 }
 
 // GetRecent returns the N most recent messages
-func (ls *LogStore) GetRecent(limit int) []*LogMessage {
+func (ls *LogStore) GetRecent(limit int) []*logs.ContainerMessage {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
-	results := make([]*LogMessage, 0, min(limit, ls.messageCount))
+	results := make([]*logs.ContainerMessage, 0, min(limit, ls.messageCount))
 	count := 0
 
 	for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
-		results = append(results, e.Value.(*LogMessage))
+		results = append(results, e.Value.(*logs.ContainerMessage))
 		count++
 	}
 
@@ -485,11 +478,11 @@ type FilterOptions struct {
 }
 
 // Filter returns messages matching all filter criteria with a limit
-func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
+func (ls *LogStore) Filter(opts FilterOptions, limit int) []*logs.ContainerMessage {
 	ls.mu.RLock()
 	defer ls.mu.RUnlock()
 
-	results := make([]*LogMessage, 0, limit)
+	results := make([]*logs.ContainerMessage, 0, limit)
 	count := 0
 
 	// Priority: FieldFilters > Single Container > Multiple Containers > All Messages
@@ -519,7 +512,7 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 		// Use field index for iteration
 		for e := fieldIndexList.Front(); e != nil && count < limit; e = e.Next() {
 			elem := e.Value.(*list.Element)
-			msg := elem.Value.(*LogMessage)
+			msg := elem.Value.(*logs.ContainerMessage)
 			if ls.matchesFilterOptions(msg, opts) {
 				results = append(results, msg)
 				count++
@@ -537,7 +530,7 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 
 		for e := containerList.Front(); e != nil && count < limit; e = e.Next() {
 			elem := e.Value.(*list.Element)
-			msg := elem.Value.(*LogMessage)
+			msg := elem.Value.(*logs.ContainerMessage)
 			if ls.matchesFilterOptions(msg, opts) {
 				results = append(results, msg)
 				count++
@@ -549,7 +542,7 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 	// Multiple containers - collect all matching logs and interleave by timestamp
 	if len(opts.ContainerIDs) > 1 {
 		// Collect all matching logs from all selected containers
-		candidateResults := make([]*LogMessage, 0)
+		candidateResults := make([]*logs.ContainerMessage, 0)
 		for _, containerID := range opts.ContainerIDs {
 			containerList := ls.byContainer[containerID]
 			if containerList == nil {
@@ -558,7 +551,7 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 
 			for e := containerList.Front(); e != nil; e = e.Next() {
 				elem := e.Value.(*list.Element)
-				msg := elem.Value.(*LogMessage)
+				msg := elem.Value.(*logs.ContainerMessage)
 				if ls.matchesFilterOptions(msg, opts) {
 					candidateResults = append(candidateResults, msg)
 				}
@@ -581,7 +574,7 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 
 	// No indexes to use, search main list
 	for e := ls.messages.Front(); e != nil && count < limit; e = e.Next() {
-		msg := e.Value.(*LogMessage)
+		msg := e.Value.(*logs.ContainerMessage)
 		if ls.matchesFilterOptions(msg, opts) {
 			results = append(results, msg)
 			count++
@@ -592,7 +585,7 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*LogMessage {
 }
 
 // matchesFilterOptions checks if a message matches all filter criteria
-func (ls *LogStore) matchesFilterOptions(msg *LogMessage, opts FilterOptions) bool {
+func (ls *LogStore) matchesFilterOptions(msg *logs.ContainerMessage, opts FilterOptions) bool {
 	// Container filter
 	if len(opts.ContainerIDs) > 0 {
 		found := false
@@ -609,7 +602,7 @@ func (ls *LogStore) matchesFilterOptions(msg *LogMessage, opts FilterOptions) bo
 
 	// Level filter
 	if len(opts.Levels) > 0 {
-		level := msg.Fields["_level"]
+		level := msg.Entry.Level
 		if level == "" {
 			// No level parsed - check if NONE is selected
 			found := false
@@ -645,22 +638,20 @@ func (ls *LogStore) matchesFilterOptions(msg *LogMessage, opts FilterOptions) bo
 			found := false
 
 			// Search in message
-			if strings.Contains(strings.ToLower(msg.Message), query) {
+			if strings.Contains(strings.ToLower(msg.Entry.Message), query) {
 				found = true
 			}
 
 			// Search in raw log
 			if !found {
-				if raw, ok := msg.Fields["_raw"]; ok {
-					if strings.Contains(strings.ToLower(raw), query) {
-						found = true
-					}
+				if strings.Contains(strings.ToLower(msg.Entry.Raw), query) {
+					found = true
 				}
 			}
 
 			// Search in fields
 			if !found {
-				for key, value := range msg.Fields {
+				for key, value := range msg.Entry.Fields {
 					if strings.Contains(strings.ToLower(key), query) || strings.Contains(strings.ToLower(value), query) {
 						found = true
 						break
@@ -677,7 +668,7 @@ func (ls *LogStore) matchesFilterOptions(msg *LogMessage, opts FilterOptions) bo
 
 	// Field filters - all must match
 	for _, filter := range opts.FieldFilters {
-		if msg.Fields[filter.Name] != filter.Value {
+		if msg.Entry.Fields[filter.Name] != filter.Value {
 			return false
 		}
 	}
@@ -729,7 +720,7 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 				e := containerList.Back()
 				if e != nil {
 					elem := e.Value.(*list.Element)
-					msg := elem.Value.(*LogMessage)
+					msg := elem.Value.(*logs.ContainerMessage)
 					ls.removeMessage(elem, msg)
 				}
 			}
@@ -746,7 +737,7 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 			// Save the previous element before potentially removing current one
 			prev := e.Prev()
 			elem := e.Value.(*list.Element)
-			msg := elem.Value.(*LogMessage)
+			msg := elem.Value.(*logs.ContainerMessage)
 
 			// Only remove if the message is old AND we have more than minimum to keep
 			if msg.Timestamp.Before(cutoff) && count > minToKeep {

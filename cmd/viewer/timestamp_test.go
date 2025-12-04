@@ -2,8 +2,6 @@ package main
 
 import (
 	"docker-log-parser/pkg/logs"
-	"docker-log-parser/pkg/logstore"
-	"strings"
 	"testing"
 	"time"
 )
@@ -204,100 +202,4 @@ func TestTimestampInterpolation(t *testing.T) {
 	}
 }
 
-func TestSerializeLogEntry(t *testing.T) {
-	entry := &logs.LogEntry{
-		Raw:       "Oct  3 19:57:52.076536 INFO Test message",
-		Timestamp: "Oct  3 19:57:52.076536",
-		Message:   "Test message",
-		Level:     "INFO",
-		File:      "test.go:123",
-		Fields: map[string]string{
-			"request_id": "req-123",
-			"user_id":    "user-456",
-		},
-		IsJSON: false,
-	}
 
-	message, fields := serializeLogEntry(entry)
-
-	if message != "Test message" {
-		t.Errorf("Expected message 'Test message', got '%s'", message)
-	}
-
-	expectedFields := map[string]string{
-		"_raw":       "Oct  3 19:57:52.076536 INFO Test message",
-		"_timestamp": "Oct  3 19:57:52.076536",
-		"_level":     "INFO",
-		"_file":      "test.go:123",
-		"request_id": "req-123",
-		"user_id":    "user-456",
-	}
-
-	for key, expectedValue := range expectedFields {
-		if fields[key] != expectedValue {
-			t.Errorf("Expected field %s='%s', got '%s'", key, expectedValue, fields[key])
-		}
-	}
-
-	if len(fields) != len(expectedFields) {
-		t.Errorf("Expected %d fields, got %d", len(expectedFields), len(fields))
-	}
-}
-
-func TestDeserializeLogEntry(t *testing.T) {
-	storeMsg := &logstore.LogMessage{
-		Timestamp:   time.Now(),
-		ContainerID: "test-container",
-		Message:     "Test message",
-		Fields: map[string]string{
-			"_raw":       "Oct  3 19:57:52.076536 INFO Test message",
-			"_timestamp": "Oct  3 19:57:52.076536",
-			"_level":     "INFO",
-			"_file":      "test.go:123",
-			"_is_json":   "true",
-			"request_id": "req-123",
-			"user_id":    "user-456",
-		},
-	}
-
-	entry := deserializeLogEntry(storeMsg)
-
-	if entry.Message != "Test message" {
-		t.Errorf("Expected message 'Test message', got '%s'", entry.Message)
-	}
-
-	if entry.Raw != "Oct  3 19:57:52.076536 INFO Test message" {
-		t.Errorf("Expected raw log line, got '%s'", entry.Raw)
-	}
-
-	if entry.Timestamp != "Oct  3 19:57:52.076536" {
-		t.Errorf("Expected timestamp string, got '%s'", entry.Timestamp)
-	}
-
-	if entry.Level != "INFO" {
-		t.Errorf("Expected level 'INFO', got '%s'", entry.Level)
-	}
-
-	if entry.File != "test.go:123" {
-		t.Errorf("Expected file 'test.go:123', got '%s'", entry.File)
-	}
-
-	if !entry.IsJSON {
-		t.Error("Expected IsJSON to be true")
-	}
-
-	if entry.Fields["request_id"] != "req-123" {
-		t.Errorf("Expected request_id='req-123', got '%s'", entry.Fields["request_id"])
-	}
-
-	if entry.Fields["user_id"] != "user-456" {
-		t.Errorf("Expected user_id='user-456', got '%s'", entry.Fields["user_id"])
-	}
-
-	// Should not include special fields (those starting with _)
-	for key := range entry.Fields {
-		if strings.HasPrefix(key, "_") {
-			t.Errorf("Field '%s' should not be in entry.Fields", key)
-		}
-	}
-}

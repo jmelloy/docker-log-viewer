@@ -94,82 +94,6 @@ type LogWSMessage struct {
 	Entry       *logs.LogEntry `json:"entry"`
 }
 
-// Helper functions to convert between logs.LogMessage and logstore.LogMessage
-
-// serializeLogEntry converts a logs.LogEntry into fields for logstore
-func serializeLogEntry(entry *logs.LogEntry) (message string, fields map[string]string) {
-	if entry == nil {
-		return "", make(map[string]string)
-	}
-
-	fields = make(map[string]string)
-	message = entry.Message
-
-	// Store the raw log line as a field
-	if entry.Raw != "" {
-		fields["_raw"] = entry.Raw
-	}
-	if entry.Timestamp != "" {
-		fields["_timestamp"] = entry.Timestamp
-	}
-	if entry.Level != "" {
-		fields["_level"] = entry.Level
-	}
-	if entry.File != "" {
-		fields["_file"] = entry.File
-	}
-
-	// Copy all parsed fields
-	for k, v := range entry.Fields {
-		fields[k] = v
-	}
-
-	// Store JSON flag
-	if entry.IsJSON {
-		fields["_is_json"] = "true"
-	}
-
-	return message, fields
-}
-
-// deserializeLogEntry reconstructs a logs.LogEntry from logstore.LogMessage
-func deserializeLogEntry(msg *logstore.LogMessage) *logs.LogEntry {
-	if msg == nil {
-		return nil
-	}
-
-	entry := &logs.LogEntry{
-		Message: msg.Message,
-		Fields:  make(map[string]string),
-	}
-
-	// Extract special fields
-	if raw, ok := msg.Fields["_raw"]; ok {
-		entry.Raw = raw
-	}
-	if timestamp, ok := msg.Fields["_timestamp"]; ok {
-		entry.Timestamp = timestamp
-	}
-	if level, ok := msg.Fields["_level"]; ok {
-		entry.Level = level
-	}
-	if file, ok := msg.Fields["_file"]; ok {
-		entry.File = file
-	}
-	if isJSON, ok := msg.Fields["_is_json"]; ok {
-		entry.IsJSON = isJSON == "true"
-	}
-
-	// Copy non-special fields
-	for k, v := range msg.Fields {
-		if !strings.HasPrefix(k, "_") {
-			entry.Fields[k] = v
-		}
-	}
-
-	return entry
-}
-
 func NewWebApp() (*WebApp, error) {
 	logLevel := slog.LevelInfo
 	if os.Getenv("DEBUG") != "" {
@@ -276,7 +200,7 @@ func (wa *WebApp) sendInitialLogs(client *Client) {
 		filteredLogs = append(filteredLogs, LogWSMessage{
 			ContainerID: storeMsg.ContainerID,
 			Timestamp:   storeMsg.Timestamp,
-			Entry:       deserializeLogEntry(storeMsg),
+			Entry:       storeMsg.Entry,
 		})
 	}
 
@@ -496,15 +420,12 @@ func (wa *WebApp) processLogs() {
 			wa.lastTimestamps[msg.ContainerID] = logTimestamp
 			wa.lastTimestampsMutex.Unlock()
 
-			// Convert logs.LogMessage to logstore.LogMessage and add to store
-			message, fields := serializeLogEntry(msg.Entry)
-			storeMsg := &logstore.LogMessage{
+			// Add to log store directly
+			wa.logStore.Add(&logs.ContainerMessage{
 				Timestamp:   logTimestamp,
 				ContainerID: msg.ContainerID,
-				Message:     message,
-				Fields:      fields,
-			}
-			wa.logStore.Add(storeMsg)
+				Entry:       msg.Entry,
+			})
 			logCount++
 
 			// if receivedCount%100 == 0 {
