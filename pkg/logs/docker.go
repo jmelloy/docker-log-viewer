@@ -13,6 +13,12 @@ import (
 	"github.com/docker/docker/client"
 )
 
+type ContainerMessage struct {
+	ContainerID string
+	Timestamp   time.Time
+	Entry       *LogEntry
+}
+
 var dockerTimestampRegex = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s+(.*)$`)
 
 func parseDockerTimestamp(line string) (time.Time, string) {
@@ -98,11 +104,11 @@ func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container,
 	return result, nil
 }
 
-func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logChan chan<- LogMessage, onStreamEnd func()) error {
+func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logChan chan<- ContainerMessage, onStreamEnd func()) error {
 	return dc.StreamLogsSince(ctx, containerID, logChan, onStreamEnd, time.Time{})
 }
 
-func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string, logChan chan<- LogMessage, onStreamEnd func(), since time.Time) error {
+func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string, logChan chan<- ContainerMessage, onStreamEnd func(), since time.Time) error {
 	options := types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -144,7 +150,7 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 
 		// safeSend attempts to send a message to the channel, handling closed channel gracefully
 		// Returns true if sent successfully, false if context cancelled or channel closed
-		safeSend := func(msg LogMessage) bool {
+		safeSend := func(msg ContainerMessage) bool {
 			if channelClosed {
 				return false
 			}
@@ -180,7 +186,7 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 					ts = time.Now()
 				}
 				// Try to send, but don't block if context is cancelled or channel is closed
-				if safeSend(LogMessage{
+				if safeSend(ContainerMessage{
 					ContainerID: containerID,
 					Timestamp:   ts,
 					Entry:       bufferedEntry,
@@ -284,7 +290,7 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 								bufferedTimestamp = ts
 							} else {
 								// Send immediately, but check context first
-								if safeSend(LogMessage{
+								if safeSend(ContainerMessage{
 									ContainerID: containerID,
 									Timestamp:   ts,
 									Entry:       entry,
@@ -339,10 +345,4 @@ func (dc *DockerClient) Close() error {
 		return dc.cli.Close()
 	}
 	return nil
-}
-
-type LogMessage struct {
-	ContainerID string
-	Timestamp   time.Time
-	Entry       *LogEntry
 }

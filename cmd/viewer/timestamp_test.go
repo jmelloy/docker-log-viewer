@@ -25,7 +25,7 @@ func TestTimestampInterpolation(t *testing.T) {
 		Fields:    make(map[string]string),
 	}
 
-	msg1 := logs.LogMessage{
+	msg1 := logs.ContainerMessage{
 		ContainerID: containerID,
 		Timestamp:   time.Now(), // This is what docker.go sets
 		Entry:       entry1,
@@ -62,7 +62,7 @@ func TestTimestampInterpolation(t *testing.T) {
 		Fields:    make(map[string]string),
 	}
 
-	msg2 := logs.LogMessage{
+	msg2 := logs.ContainerMessage{
 		ContainerID: containerID,
 		Timestamp:   time.Now(),
 		Entry:       entry2,
@@ -101,7 +101,7 @@ func TestTimestampInterpolation(t *testing.T) {
 	}
 
 	now := time.Now()
-	msg3 := logs.LogMessage{
+	msg3 := logs.ContainerMessage{
 		ContainerID: newContainerID,
 		Timestamp:   now,
 		Entry:       entry3,
@@ -138,7 +138,7 @@ func TestTimestampInterpolation(t *testing.T) {
 		Fields:    make(map[string]string),
 	}
 
-	msg4 := logs.LogMessage{
+	msg4 := logs.ContainerMessage{
 		ContainerID: containerID,
 		Timestamp:   time.Now(),
 		Entry:       entry4,
@@ -174,7 +174,7 @@ func TestTimestampInterpolation(t *testing.T) {
 		Fields:    make(map[string]string),
 	}
 
-	msg5 := logs.LogMessage{
+	msg5 := logs.ContainerMessage{
 		ContainerID: containerID,
 		Timestamp:   time.Now(),
 		Entry:       entry5,

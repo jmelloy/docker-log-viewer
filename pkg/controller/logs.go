@@ -207,7 +207,7 @@ func (c *Controller) clientFilterToLogStoreFilter(filter ClientFilter) logstore.
 }
 
 // matchesFilter checks if a log matches the client's filter criteria
-func (c *Controller) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
+func (c *Controller) matchesFilter(msg logs.ContainerMessage, filter ClientFilter) bool {
 	if len(filter.SelectedContainers) > 0 {
 		c.containerMutex.RLock()
 		containerName := c.containerIDNames[msg.ContainerID]
@@ -281,7 +281,7 @@ func (c *Controller) matchesFilter(msg logs.LogMessage, filter ClientFilter) boo
 }
 
 // BroadcastBatch sends a batch of logs to all connected WebSocket clients
-func (c *Controller) BroadcastBatch(batch []logs.LogMessage) {
+func (c *Controller) BroadcastBatch(batch []logs.ContainerMessage) {
 	c.clientsMutex.RLock()
 	clients := make([]*Client, 0, len(c.clients))
 	for client := range c.clients {

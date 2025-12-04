@@ -9,17 +9,17 @@ import (
 func TestExtractSQLQueries(t *testing.T) {
 	tests := []struct {
 		name     string
-		messages []logs.LogMessage
+		messages []logs.ContainerMessage
 		expected int
 	}{
 		{
 			name:     "empty messages",
-			messages: []logs.LogMessage{},
+			messages: []logs.ContainerMessage{},
 			expected: 0,
 		},
 		{
 			name: "message with sql format",
-			messages: []logs.LogMessage{
+			messages: []logs.ContainerMessage{
 				{
 					Entry: &logs.LogEntry{
 						Message: "[sql]: SELECT * FROM users",
@@ -31,7 +31,7 @@ func TestExtractSQLQueries(t *testing.T) {
 		},
 		{
 			name: "message with query type",
-			messages: []logs.LogMessage{
+			messages: []logs.ContainerMessage{
 				{
 					Entry: &logs.LogEntry{
 						Message: "SELECT * FROM users",
@@ -45,7 +45,7 @@ func TestExtractSQLQueries(t *testing.T) {
 		},
 		{
 			name: "non-SQL message",
-			messages: []logs.LogMessage{
+			messages: []logs.ContainerMessage{
 				{
 					Entry: &logs.LogEntry{
 						Message: "regular log message",

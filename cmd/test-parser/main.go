@@ -126,7 +126,7 @@ func readFromDockerContainer(containerID string, skip int, follow bool, debug bo
 	}
 
 	// Create log channel
-	logChan := make(chan logs.LogMessage, 1000)
+	logChan := make(chan logs.ContainerMessage, 1000)
 
 	// Start streaming logs
 	err = dockerClient.StreamLogs(ctx, containerID, logChan, nil)

@@ -101,7 +101,7 @@ Oct  6 19:24:05.450809 TRC pkg/repository/threadparticipant/repository.go:425 > 
 	// Create a mock docker client that returns our sample data
 	mockReader := &mockReadCloser{data: dockerData.Bytes()}
 
-	logChan := make(chan LogMessage, 100)
+	logChan := make(chan ContainerMessage, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -116,7 +116,7 @@ Oct  6 19:24:05.450809 TRC pkg/repository/threadparticipant/repository.go:425 > 
 			if bufferedLog.Len() > 0 {
 				logText := bufferedLog.String()
 				entry := ParseLogLine(logText)
-				logChan <- LogMessage{
+				logChan <- ContainerMessage{
 					ContainerID: "test-container",
 					Timestamp:   time.Now(),
 					Entry:       entry,
@@ -184,7 +184,7 @@ Oct  6 19:24:05.450809 TRC pkg/repository/threadparticipant/repository.go:425 > 
 							} else {
 								flushLog()
 								entry := ParseLogLine(string(trimmed))
-								logChan <- LogMessage{
+								logChan <- ContainerMessage{
 									ContainerID: "test-container",
 									Timestamp:   time.Now(),
 									Entry:       entry,
@@ -209,7 +209,7 @@ Oct  6 19:24:05.450809 TRC pkg/repository/threadparticipant/repository.go:425 > 
 	}()
 
 	// Collect all log messages
-	var messages []LogMessage
+	var messages []ContainerMessage
 	for msg := range logChan {
 		messages = append(messages, msg)
 	}

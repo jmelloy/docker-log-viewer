@@ -118,7 +118,7 @@ func TestStore(t *testing.T) {
 	}
 
 	// Test saving logs
-	logMessages := []logs.LogMessage{
+	logMessages := []logs.ContainerMessage{
 		{
 			ContainerID: "container1",
 			Timestamp:   time.Now(),
