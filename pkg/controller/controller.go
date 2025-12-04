@@ -23,9 +23,9 @@ type Controller struct {
 	containerMutex      sync.RWMutex
 	clients             map[*Client]bool
 	clientsMutex        sync.RWMutex
-	logChan             chan logs.LogMessage
+	logChan             chan logs.ContainerMessage
 	batchChan           chan struct{}
-	logBatch            []logs.LogMessage
+	logBatch            []logs.ContainerMessage
 	batchMutex          sync.Mutex
 	ctx                 context.Context
 	cancel              context.CancelFunc
@@ -67,7 +67,7 @@ func NewController(
 	store *store.Store,
 	ctx context.Context,
 	cancel context.CancelFunc,
-	logChan chan logs.LogMessage,
+	logChan chan logs.ContainerMessage,
 ) *Controller {
 	decoder := schema.NewDecoder()
 	decoder.IgnoreUnknownKeys(true)
@@ -80,7 +80,7 @@ func NewController(
 		cancel:           cancel,
 		logChan:          logChan,
 		batchChan:        make(chan struct{}),
-		logBatch:         make([]logs.LogMessage, 0, 100),
+		logBatch:         make([]logs.ContainerMessage, 0, 100),
 		containerIDNames: make(map[string]string),
 		clients:          make(map[*Client]bool),
 		upgrader: websocket.Upgrader{

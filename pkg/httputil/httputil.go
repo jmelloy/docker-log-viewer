@@ -65,7 +65,7 @@ func MakeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, exp
 }
 
 // CollectLogsForRequest searches the log store for logs matching the given request ID
-func CollectLogsForRequest(requestID string, logStore *logstore.LogStore, timeout time.Duration) []logs.LogMessage {
+func CollectLogsForRequest(requestID string, logStore *logstore.LogStore, timeout time.Duration) []logs.ContainerMessage {
 	// Wait for logs to arrive
 	time.Sleep(timeout)
 
@@ -76,10 +76,10 @@ func CollectLogsForRequest(requestID string, logStore *logstore.LogStore, timeou
 	storeResults := logStore.SearchByFields(filters, 100000)
 
 	// Convert back to logs.LogMessage
-	collected := make([]logs.LogMessage, 0, len(storeResults))
+	collected := make([]logs.ContainerMessage, 0, len(storeResults))
 	for _, storeMsg := range storeResults {
 		entry := deserializeLogEntry(storeMsg)
-		collected = append(collected, logs.LogMessage{
+		collected = append(collected, logs.ContainerMessage{
 			ContainerID: storeMsg.ContainerID,
 			Timestamp:   storeMsg.Timestamp,
 			Entry:       entry,

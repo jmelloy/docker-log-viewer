@@ -19,7 +19,7 @@ import (
 )
 
 // ExtractSQLQueries extracts SQL queries from log messages and returns them as store.SQLQuery objects
-func ExtractSQLQueries(logMessages []logs.LogMessage) []store.SQLQuery {
+func ExtractSQLQueries(logMessages []logs.ContainerMessage) []store.SQLQuery {
 	queries := []store.SQLQuery{}
 
 	for _, msg := range logMessages {

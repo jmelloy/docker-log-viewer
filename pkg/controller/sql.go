@@ -108,9 +108,9 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		SearchTerms:  searchTerms,
 	}, 1000)
 
-	messages := make([]logs.LogMessage, 0, len(logMessages))
+	messages := make([]logs.ContainerMessage, 0, len(logMessages))
 	for _, msg := range logMessages {
-		messages = append(messages, logs.LogMessage{
+		messages = append(messages, logs.ContainerMessage{
 			Timestamp:   msg.Timestamp,
 			ContainerID: msg.ContainerID,
 			Entry:       deserializeLogEntry(msg),

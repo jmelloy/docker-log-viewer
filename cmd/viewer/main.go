@@ -53,9 +53,9 @@ type WebApp struct {
 	containerMutex      sync.RWMutex
 	clients             map[*Client]bool
 	clientsMutex        sync.RWMutex
-	logChan             chan logs.LogMessage
+	logChan             chan logs.ContainerMessage
 	batchChan           chan struct{}
-	logBatch            []logs.LogMessage
+	logBatch            []logs.ContainerMessage
 	batchMutex          sync.Mutex
 	ctx                 context.Context
 	cancel              context.CancelFunc
@@ -203,9 +203,9 @@ func NewWebApp() (*WebApp, error) {
 		logStore:         logstore.NewLogStore(10000, 2*time.Hour),
 		containerIDNames: make(map[string]string),
 		clients:          make(map[*Client]bool),
-		logChan:          make(chan logs.LogMessage, 1000),
+		logChan:          make(chan logs.ContainerMessage, 1000),
 		batchChan:        make(chan struct{}),
-		logBatch:         make([]logs.LogMessage, 0, 100),
+		logBatch:         make([]logs.ContainerMessage, 0, 100),
 		ctx:              ctx,
 		cancel:           cancel,
 		upgrader: websocket.Upgrader{
@@ -334,7 +334,7 @@ func (wa *WebApp) clientFilterToLogStoreFilter(filter ClientFilter) logstore.Fil
 }
 
 // matchesFilter checks if a log matches the client's filter criteria (including container filter)
-func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
+func (wa *WebApp) matchesFilter(msg logs.ContainerMessage, filter ClientFilter) bool {
 	// Container filter
 	if len(filter.SelectedContainers) > 0 {
 		wa.containerMutex.RLock()
@@ -419,7 +419,7 @@ func (wa *WebApp) matchesFilter(msg logs.LogMessage, filter ClientFilter) bool {
 	return true
 }
 
-func (wa *WebApp) broadcastBatch(batch []logs.LogMessage) {
+func (wa *WebApp) broadcastBatch(batch []logs.ContainerMessage) {
 	wa.clientsMutex.RLock()
 	defer wa.clientsMutex.RUnlock()
 
@@ -520,7 +520,7 @@ func (wa *WebApp) processLogs() {
 			// Send batch if non-empty
 			wa.batchMutex.Lock()
 			if len(wa.logBatch) > 0 {
-				batch := make([]logs.LogMessage, len(wa.logBatch))
+				batch := make([]logs.ContainerMessage, len(wa.logBatch))
 				copy(batch, wa.logBatch)
 				wa.logBatch = wa.logBatch[:0]
 				wa.batchMutex.Unlock()

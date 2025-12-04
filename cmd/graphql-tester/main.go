@@ -307,7 +307,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	ctx := context.Background()
 
 	// Start log collection
-	logChan := make(chan logs.LogMessage, 10000)
+	logChan := make(chan logs.ContainerMessage, 10000)
 	containers, err := docker.ListRunningContainers(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list containers: %w", err)
@@ -383,8 +383,8 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	return nil
 }
 
-func collectLogs(requestID string, logChan <-chan logs.LogMessage, timeout time.Duration) []logs.LogMessage {
-	collected := []logs.LogMessage{}
+func collectLogs(requestID string, logChan <-chan logs.ContainerMessage, timeout time.Duration) []logs.ContainerMessage {
+	collected := []logs.ContainerMessage{}
 	deadline := time.After(timeout)
 
 	for {
@@ -399,7 +399,7 @@ func collectLogs(requestID string, logChan <-chan logs.LogMessage, timeout time.
 	}
 }
 
-func matchesRequestID(msg logs.LogMessage, requestID string) bool {
+func matchesRequestID(msg logs.ContainerMessage, requestID string) bool {
 	if msg.Entry == nil || msg.Entry.Fields == nil {
 		return false
 	}

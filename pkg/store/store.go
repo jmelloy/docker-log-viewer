@@ -515,7 +515,7 @@ func (s *Store) ListRequests(limit, offset int, search string, showAll bool) ([]
 }
 
 // SaveRequestLogs saves log entries for an execution
-func (s *Store) SaveRequestLogs(requestID int64, logMessages []logs.LogMessage) error {
+func (s *Store) SaveRequestLogs(requestID int64, logMessages []logs.ContainerMessage) error {
 	var execLogs []RequestLogMessages
 
 	for _, msg := range logMessages {
