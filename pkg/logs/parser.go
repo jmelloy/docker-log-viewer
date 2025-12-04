@@ -330,8 +330,8 @@ func extractBracketed(s string, i int, open, close byte) (string, int) {
 	return s[start:], len(s)
 }
 
-func extractRequestFields(line string) (map[string]string, bool) {
-	requestFields := make(map[string]string)
+func extractRequestFields(line string) (map[string]string, string) {
+	fields := make(map[string]string)
 	if strings.HasSuffix(line, "}") {
 		// try to extract chunk of json
 		for i := len(line) - 1; i >= 0; i-- {
@@ -341,45 +341,57 @@ func extractRequestFields(line string) (map[string]string, bool) {
 					var jsonFields map[string]interface{}
 					err := json.Unmarshal([]byte(jsonPart), &jsonFields)
 					if err != nil {
-						return nil, false
+						return nil, ""
 					}
 					if req, ok := jsonFields["req"].(map[string]interface{}); ok {
 						if id, ok := req["id"]; ok {
-							requestFields["request_id"] = fmt.Sprintf("%v", id)
+							fields["request_id"] = fmt.Sprintf("%v", id)
 						}
 						if method, ok := req["method"].(string); ok {
-							requestFields["method"] = method
+							fields["method"] = method
 						}
 						if headers, ok := req["headers"].(map[string]interface{}); ok {
 							if contentLength, ok := headers["content-length"].(string); ok {
-								requestFields["content-length"] = contentLength
+								fields["content-length"] = contentLength
 							}
 							if baggage, ok := headers["baggage"].(string); ok {
 								// Parse baggage for sentry-trace_id
 								for _, pair := range strings.Split(baggage, ",") {
 									kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
 									if len(kv) == 2 && kv[0] == "sentry-trace_id" {
-										requestFields["trace_id"] = kv[1]
+										fields["trace_id"] = kv[1]
 										break
 									}
 								}
 							}
 						}
+						if url, ok := req["url"].(string); ok {
+							fields["path"] = url
+						}
 					}
 					if res, ok := jsonFields["res"].(map[string]interface{}); ok {
 						if statusCode, ok := res["statusCode"].(float64); ok {
-							requestFields["status"] = strconv.Itoa(int(statusCode))
+							fields["status"] = strconv.Itoa(int(statusCode))
 						}
 					}
 					if responseTime, ok := jsonFields["responseTime"].(float64); ok {
-						requestFields["responseTime"] = strconv.FormatFloat(responseTime, 'f', -1, 64)
+						fields["responseTime"] = strconv.FormatFloat(responseTime, 'f', -1, 64)
 					}
-					return requestFields, true
+
+					if len(jsonFields) > 1 {
+						fields["ctx"] = jsonPart
+					} else if len(jsonFields) == 1 {
+						for k, data := range jsonFields {
+							fields[k] = data.(string)
+						}
+					}
+
+					return fields, jsonPart
 				}
 			}
 		}
 	}
-	return nil, false
+	return nil, ""
 }
 
 func ParseLogLine(line string) *LogEntry {
@@ -430,11 +442,6 @@ func ParseLogLine(line string) *LogEntry {
 			if msg, ok := entry.JSONFields[key].(string); ok {
 				entry.Message = msg
 				extractedFields = append(extractedFields, key)
-				if query, ok := entry.JSONFields["query"].(string); ok {
-					entry.Message = fmt.Sprintf("[sql]: %s", query)
-					extractedFields = append(extractedFields, "query")
-					break
-				}
 				break
 			}
 
@@ -514,6 +521,11 @@ func ParseLogLine(line string) *LogEntry {
 			linesToStrip = append(linesToStrip, file)
 			continue
 		}
+
+		if block.Text == "[query]" && entry.Fields["type"] == "" {
+			entry.Fields["type"] = block.Text[1 : len(block.Text)-1]
+			continue
+		}
 	}
 
 	for _, lineToStrip := range linesToStrip {
@@ -522,9 +534,12 @@ func ParseLogLine(line string) *LogEntry {
 	line = strings.TrimSpace(line)
 
 	if strings.HasSuffix(line, "}") {
-		jsonFields, ok := extractRequestFields(line)
-		if ok && len(jsonFields) > 0 {
+		jsonFields, jsonPart := extractRequestFields(line)
+		if len(jsonFields) > 0 {
 			maps.Copy(entry.Fields, jsonFields)
+			if jsonPart != "" {
+				line = strings.Replace(line, jsonPart, "", 1)
+			}
 		}
 	}
 
