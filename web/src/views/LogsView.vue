@@ -290,7 +290,7 @@
       <main class="log-viewer">
         <div ref="logsContainer" class="logs">
           <div v-for="(log, index) in filteredLogs" :key="index" class="log-line" @click="openLogDetails(log)">
-            <span class="log-container">{{ getShortContainerName(log.containerId) }}</span>
+            <span class="log-container" :title="log.timestamp">{{ getShortContainerName(log.containerId) }}</span>
             <span v-if="log.entry?.timestamp" class="log-timestamp">{{ formatTimestamp(log.entry.timestamp) }}</span>
             <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
             <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
@@ -1500,7 +1500,7 @@ export default defineComponent({
       return message;
     },
 
-    isSQLMessage(message) {
+    isSQLMessage(message: string) {
       return message && message.includes("[sql]");
     },
 
