@@ -47,6 +47,14 @@
               >
                 📘 Export to Notion
               </button>
+              <button
+                @click="exportSQLFilesPerExperiment"
+                class="btn-secondary"
+                style="padding: 0.5rem 1rem; font-size: 0.875rem"
+                title="Export SQL files grouped by experiment_id"
+              >
+                📁 Export SQL Files
+              </button>
             </div>
           </div>
 
@@ -1076,6 +1084,7 @@ import type { Server, ExecutionDetail, ExplainResponse, ExplainData, ExecuteResp
 import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
 import LogStream from "@/components/LogStream.vue";
 import { formatExplainPlanAsText } from "@/utils/ui-utils";
+import JSZip from "jszip";
 
 export default defineComponent({
   components: {
@@ -2207,6 +2216,79 @@ export default defineComponent({
       const a = document.createElement("a");
       a.href = url;
       a.download = `req-${Date.now()}-${experiment || this.requestDetail?.displayName || this.requestDetail.execution.requestIdHeader || "export"}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+
+    async exportSQLFilesPerExperiment() {
+      if (!this.requestDetail?.sqlQueries || this.filteredSQLQueries.length === 0) {
+        alert("No SQL queries to export");
+        return;
+      }
+
+      const queries = this.filteredSQLQueries;
+      const queriesByExperiment: Record<string, { query: string; name: string }[]> = {};
+      const experimentNames: Record<string, string> = {};
+
+      queries.forEach((q) => {
+        let experimentId = "unknown";
+        try {
+          const fields = JSON.parse(q.logFields);
+          experimentId = fields?.experiment_id || fields?.experiment || "unknown";
+          experimentNames[experimentId] = fields?.experiment || "unknown";
+        } catch (e) {
+          // ignore
+        }
+
+        let displayQuery = q.query;
+        if (q.variables) {
+          try {
+            const vars = typeof q.variables === "string" ? JSON.parse(q.variables) : q.variables;
+            if (vars && Object.keys(vars).length > 0) {
+              displayQuery = this.interpolateSQLQuery(q.query, vars);
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        if (!queriesByExperiment[experimentId]) {
+          queriesByExperiment[experimentId] = [];
+        }
+
+        const parts = [q.operationName, q.tableName, q.graphqlOperation].filter(Boolean);
+        const queryName = parts.join("_") || `query_${queriesByExperiment[experimentId].length + 1}`;
+
+        queriesByExperiment[experimentId].push({
+          query: formatSQLUtil(displayQuery),
+          name: queryName,
+        });
+      });
+
+      const zip = new JSZip();
+      const entries = Object.entries(queriesByExperiment);
+
+      for (const [experimentId, expQueries] of entries) {
+        let sql = `-- Experiment: ${experimentId}\n`;
+        sql += `-- Total Queries: ${expQueries.length}\n`;
+        sql += `-- Experiment Name: ${experimentNames[experimentId]}\n`;
+        sql += `-- Exported: ${new Date().toISOString()}\n\n`;
+
+        expQueries.forEach((q, idx) => {
+          sql += `-- Query ${idx + 1}: ${q.name}\n`;
+          sql += `${q.query};\n\n`;
+        });
+
+        zip.file(`experiment-${experimentId}.sql`, sql);
+      }
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${this.requestDetail?.displayName || this.requestDetail.execution.requestIdHeader || "export"}-sql-${Date.now()}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
