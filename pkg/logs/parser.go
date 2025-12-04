@@ -262,7 +262,6 @@ func findStructuredDataStart(s string) int {
 	if match := re.FindStringIndex(s); match != nil {
 		return match[0]
 	}
-
 	return -1
 }
 
@@ -274,21 +273,23 @@ func extractValue(s string, i int) (string, int) {
 
 	start := i
 
-	// Handle quoted string
+	// Handle quoted string - return unquoted value
 	if s[i] == '"' {
 		i++
+		valueStart := i
 		for i < len(s) {
 			if s[i] == '\\' && i+1 < len(s) {
 				i += 2
 				continue
 			}
 			if s[i] == '"' {
+				value := s[valueStart:i]
 				i++
-				return s[start:i], i
+				return value, i
 			}
 			i++
 		}
-		return s[start:], len(s)
+		return s[valueStart:], len(s)
 	}
 
 	// Handle JSON object
@@ -627,12 +628,13 @@ func ParseLogLine(line string) *LogEntry {
 		}
 	}
 
+	line = strings.TrimSpace(line)
 	entry.Message = line
 	// Fall back to regular parsing if ANSI-aware parsing didn't yield results
 	if len(entry.Fields) == 0 {
 		fields, remaining := ParseKeyValues(line)
 		if len(fields) > 0 {
-			entry.Message = remaining
+			entry.Message = strings.TrimSpace(remaining)
 			maps.Copy(entry.Fields, fields)
 		}
 	}
