@@ -117,6 +117,22 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 		if err := c.store.UpdateRequest(execution); err != nil {
 			slog.Error("failed to update execution", "error", err)
 		}
+
+		// Collect and save logs for this request
+		collectedLogs := httputil.CollectLogsForRequest(requestIDHeader, c.logStore, 500*time.Millisecond)
+		if len(collectedLogs) > 0 {
+			if err := c.store.SaveRequestLogs(execID, collectedLogs); err != nil {
+				slog.Error("failed to save request logs", "error", err)
+			}
+
+			// Extract and save SQL queries from logs
+			sqlQueries := sqlutil.ExtractSQLQueries(collectedLogs)
+			if len(sqlQueries) > 0 {
+				if err := c.store.SaveSQLQueries(execID, sqlQueries); err != nil {
+					slog.Error("failed to save SQL queries", "error", err)
+				}
+			}
+		}
 	}
 
 	if input.Sync {
