@@ -487,35 +487,14 @@ func (wa *WebApp) processLogs() {
 			// 	slog.Debug("processLogs received message", "receivedCount", receivedCount, "containerID", msg.ContainerID[:12])
 			// }
 
-			// Determine the timestamp to use for this log entry
-			var logTimestamp time.Time
+			// Use Docker's timestamp (msg.Timestamp) as the authoritative timestamp
+			// This is set from Docker's log stream timestamps (RFC3339Nano format)
+			logTimestamp := msg.Timestamp
 
-			// Try to parse the timestamp from the log entry
-			if msg.Entry != nil && msg.Entry.Timestamp != "" {
-				if parsedTime, ok := logs.ParseTimestamp(msg.Entry.Timestamp); ok {
-					logTimestamp = parsedTime
-
-					// Update last timestamp for this container
-					wa.lastTimestampsMutex.Lock()
-					wa.lastTimestamps[msg.ContainerID] = parsedTime
-					wa.lastTimestampsMutex.Unlock()
-				}
-			}
-
-			// If we couldn't parse a timestamp, check if we have a last timestamp for this container
-			if logTimestamp.IsZero() {
-				wa.lastTimestampsMutex.RLock()
-				lastTS, hasLastTS := wa.lastTimestamps[msg.ContainerID]
-				wa.lastTimestampsMutex.RUnlock()
-
-				if hasLastTS {
-					// Use the last timestamp for this container (interpolation)
-					logTimestamp = lastTS
-				} else {
-					// No timestamp available, fall back to time.Now()
-					logTimestamp = msg.Timestamp
-				}
-			}
+			// Update last timestamp for this container (for deduplication on reconnect)
+			wa.lastTimestampsMutex.Lock()
+			wa.lastTimestamps[msg.ContainerID] = logTimestamp
+			wa.lastTimestampsMutex.Unlock()
 
 			// Convert logs.LogMessage to logstore.LogMessage and add to store
 			message, fields := serializeLogEntry(msg.Entry)

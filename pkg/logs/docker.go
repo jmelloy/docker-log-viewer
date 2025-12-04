@@ -5,12 +5,27 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
+
+var dockerTimestampRegex = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s+(.*)$`)
+
+func parseDockerTimestamp(line string) (time.Time, string) {
+	matches := dockerTimestampRegex.FindStringSubmatch(line)
+	if matches == nil {
+		return time.Time{}, line
+	}
+	ts, err := time.Parse(time.RFC3339Nano, matches[1])
+	if err != nil {
+		return time.Time{}, line
+	}
+	return ts, matches[2]
+}
 
 type DockerClient struct {
 	cli *client.Client
@@ -92,12 +107,12 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,
-		Timestamps: false,
+		Timestamps: true,
 	}
 
 	if since.IsZero() {
-		options.Tail = "10000"
-		slog.Info("Starting log stream for container", "container_id", containerID[:12], "tail", options.Tail)
+		options.Since = time.Now().Add(-15 * time.Minute).Format(time.RFC3339Nano)
+		slog.Info("Starting log stream for container", "container_id", containerID[:12], "since", options.Since)
 	} else {
 		options.Since = since.Format(time.RFC3339Nano)
 		slog.Info("Resuming log stream for container", "container_id", containerID[:12], "since", options.Since)
@@ -124,6 +139,7 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 		buf := make([]byte, 8192)
 		var leftover []byte
 		var bufferedEntry *LogEntry
+		var bufferedTimestamp time.Time
 		lineCount := 0
 
 		// safeSend attempts to send a message to the channel, handling closed channel gracefully
@@ -159,13 +175,18 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 
 		flushBuffered := func() {
 			if bufferedEntry != nil {
+				ts := bufferedTimestamp
+				if ts.IsZero() {
+					ts = time.Now()
+				}
 				// Try to send, but don't block if context is cancelled or channel is closed
 				if safeSend(LogMessage{
 					ContainerID: containerID,
-					Timestamp:   time.Now(), // Will be updated below if bufferedEntry has timestamp
+					Timestamp:   ts,
 					Entry:       bufferedEntry,
 				}) {
 					bufferedEntry = nil
+					bufferedTimestamp = time.Time{}
 					lineCount++
 				}
 			}
@@ -222,8 +243,12 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 							continue
 						}
 
+						// Parse Docker timestamp prefix (format: 2024-12-04T10:30:00.123456789Z <log line>)
+						dockerTs, logContent := parseDockerTimestamp(trimmed)
+						trimmed = logContent
+
 						// Use ANSI codes and other heuristics to detect new log entries
-						isNewEntry := IsLikelyNewLogEntry(line)
+						isNewEntry := IsLikelyNewLogEntry(trimmed)
 
 						// If this looks like a continuation line and we have a buffered entry, append to it
 						if !isNewEntry && bufferedEntry != nil {
@@ -242,18 +267,26 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 
 							entry := ParseLogLine(trimmed)
 
+							// Use Docker timestamp if available, otherwise fall back to now
+							ts := dockerTs
+							if ts.IsZero() {
+								ts = time.Now()
+							}
+
 							// Check if this entry might have continuation lines
-							// SQL entries without fields or entries ending with incomplete patterns
-							shouldBuffer := (strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0) || entry.Timestamp == ""
+							// Only buffer SQL entries without fields (they may have multiline SQL)
+							// Don't buffer entries just because they lack a timestamp - most log formats work fine without
+							shouldBuffer := strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0
 
 							if shouldBuffer {
 								// Buffer it, waiting for potential continuation lines
 								bufferedEntry = entry
+								bufferedTimestamp = ts
 							} else {
 								// Send immediately, but check context first
 								if safeSend(LogMessage{
 									ContainerID: containerID,
-									Timestamp:   time.Now(),
+									Timestamp:   ts,
 									Entry:       entry,
 								}) {
 									lineCount++
