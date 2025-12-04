@@ -75,56 +75,13 @@ func CollectLogsForRequest(requestID string, logStore *logstore.LogStore, timeou
 	}
 	storeResults := logStore.SearchByFields(filters, 100000)
 
-	// Convert back to logs.LogMessage
+	// Convert pointers to values
 	collected := make([]logs.ContainerMessage, 0, len(storeResults))
 	for _, storeMsg := range storeResults {
-		entry := deserializeLogEntry(storeMsg)
-		collected = append(collected, logs.ContainerMessage{
-			ContainerID: storeMsg.ContainerID,
-			Timestamp:   storeMsg.Timestamp,
-			Entry:       entry,
-		})
+		collected = append(collected, *storeMsg)
 	}
 
 	return collected
-}
-
-// deserializeLogEntry reconstructs a logs.LogEntry from logstore.LogMessage
-func deserializeLogEntry(msg *logstore.LogMessage) *logs.LogEntry {
-	if msg == nil {
-		return nil
-	}
-
-	entry := &logs.LogEntry{
-		Message: msg.Message,
-		Fields:  make(map[string]string),
-	}
-
-	// Extract special fields
-	if raw, ok := msg.Fields["_raw"]; ok {
-		entry.Raw = raw
-	}
-	if timestamp, ok := msg.Fields["_timestamp"]; ok {
-		entry.Timestamp = timestamp
-	}
-	if level, ok := msg.Fields["_level"]; ok {
-		entry.Level = level
-	}
-	if file, ok := msg.Fields["_file"]; ok {
-		entry.File = file
-	}
-	if isJSON, ok := msg.Fields["_is_json"]; ok {
-		entry.IsJSON = isJSON == "true"
-	}
-
-	// Copy non-special fields
-	for k, v := range msg.Fields {
-		if k[0] != '_' {
-			entry.Fields[k] = v
-		}
-	}
-
-	return entry
 }
 
 // ContainsErrorsKey recursively checks if the data contains an "errors" key

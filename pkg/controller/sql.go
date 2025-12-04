@@ -110,11 +110,7 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 
 	messages := make([]logs.ContainerMessage, 0, len(logMessages))
 	for _, msg := range logMessages {
-		messages = append(messages, logs.ContainerMessage{
-			Timestamp:   msg.Timestamp,
-			ContainerID: msg.ContainerID,
-			Entry:       deserializeLogEntry(msg),
-		})
+		messages = append(messages, *msg)
 	}
 	slog.Info("[save trace] found", "count", len(messages), "containerIDs", containerIDs)
 
@@ -138,11 +134,11 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 		if logMsg.Timestamp.After(maxTimestamp) {
 			maxTimestamp = logMsg.Timestamp
 		}
-		if logMsg.Fields != nil {
-			if query, ok := logMsg.Fields["Operations"]; ok {
+		if logMsg.Entry != nil && logMsg.Entry.Fields != nil {
+			if query, ok := logMsg.Entry.Fields["Operations"]; ok {
 				requestBody = query
 			}
-			if status, ok := logMsg.Fields["status"]; ok {
+			if status, ok := logMsg.Entry.Fields["status"]; ok {
 				statusCodeVal, err := strconv.Atoi(status)
 				if err != nil {
 					slog.Error("failed to parse status", "error", err)
