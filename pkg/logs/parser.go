@@ -84,10 +84,10 @@ func IsLikelyNewLogEntry(line string) bool {
 		return true
 	}
 
-	// Check if line starts with ANSI escape code (common for new log entries)
-	if startsWithANSI(line) {
-		return true
-	}
+	// // Check if line starts with ANSI escape code (common for new log entries)
+	// if startsWithANSI(line) {
+	// 	return true
+	// }
 
 	// Check for timestamp at the beginning (after stripping ANSI)
 	stripped := stripANSI(line)
