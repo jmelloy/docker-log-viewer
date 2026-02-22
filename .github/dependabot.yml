@@ -4,11 +4,52 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      gorilla:
+        patterns:
+          - "github.com/gorilla/*"
+      golang-org-x:
+        patterns:
+          - "golang.org/x/*"
+      opentelemetry:
+        patterns:
+          - "go.opentelemetry.io/*"
+      docker:
+        patterns:
+          - "github.com/docker/*"
+          - "github.com/moby/*"
+      gorm:
+        patterns:
+          - "gorm.io/*"
 
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
       interval: "weekly"
+    groups:
+      eslint:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "@eslint/*"
+      vue:
+        patterns:
+          - "vue"
+          - "vue-*"
+          - "@vitejs/plugin-vue"
+          - "@vue/*"
+      codemirror:
+        patterns:
+          - "@codemirror/*"
+          - "cm6-graphql"
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+      vite:
+        patterns:
+          - "vite"
+          - "esbuild"
 
   - package-ecosystem: "docker"
     directory: "/"
