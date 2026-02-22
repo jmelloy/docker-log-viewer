@@ -81,7 +81,7 @@ Oct  6 19:24:05.450809 TRC pkg/repository/threadparticipant/repository.go:425 > 
 
 	// Add Docker multiplexing headers (stdout = 1)
 	var dockerData bytes.Buffer
-	for _, line := range bytes.Split(sampleData, []byte("\n")) {
+	for line := range bytes.SplitSeq(sampleData, []byte("\n")) {
 		if len(line) == 0 {
 			continue
 		}

@@ -61,18 +61,18 @@ type ComparisonSummary struct {
 
 // ParsedExplainPlan represents a parsed PostgreSQL EXPLAIN plan
 type ParsedExplainPlan struct {
-	NodeType      string                 `json:"nodeType"`
-	RelationName  string                 `json:"relationName,omitempty"`
-	StartupCost   float64                `json:"startupCost"`
-	TotalCost     float64                `json:"totalCost"`
-	PlanRows      float64                `json:"planRows"`
-	PlanWidth     int                    `json:"planWidth"`
-	ActualRows    float64                `json:"actualRows,omitempty"`
-	ActualLoops   int                    `json:"actualLoops,omitempty"`
-	IndexName     string                 `json:"indexName,omitempty"`
-	ScanDirection string                 `json:"scanDirection,omitempty"`
-	Plans         []ParsedExplainPlan    `json:"plans,omitempty"`
-	RawPlan       map[string]interface{} `json:"rawPlan,omitempty"`
+	NodeType      string              `json:"nodeType"`
+	RelationName  string              `json:"relationName,omitempty"`
+	StartupCost   float64             `json:"startupCost"`
+	TotalCost     float64             `json:"totalCost"`
+	PlanRows      float64             `json:"planRows"`
+	PlanWidth     int                 `json:"planWidth"`
+	ActualRows    float64             `json:"actualRows,omitempty"`
+	ActualLoops   int                 `json:"actualLoops,omitempty"`
+	IndexName     string              `json:"indexName,omitempty"`
+	ScanDirection string              `json:"scanDirection,omitempty"`
+	Plans         []ParsedExplainPlan `json:"plans,omitempty"`
+	RawPlan       map[string]any      `json:"rawPlan,omitempty"`
 }
 
 // CompareQuerySets compares two sets of queries with their explain plans
@@ -223,7 +223,7 @@ func parseExplainPlan(planJSON string) *ParsedExplainPlan {
 		return nil
 	}
 
-	var rawPlans []map[string]interface{}
+	var rawPlans []map[string]any
 	if err := json.Unmarshal([]byte(planJSON), &rawPlans); err != nil {
 		return nil
 	}
@@ -233,7 +233,7 @@ func parseExplainPlan(planJSON string) *ParsedExplainPlan {
 	}
 
 	// Get the Plan node from the first element
-	planData, ok := rawPlans[0]["Plan"].(map[string]interface{})
+	planData, ok := rawPlans[0]["Plan"].(map[string]any)
 	if !ok {
 		return nil
 	}
@@ -242,7 +242,7 @@ func parseExplainPlan(planJSON string) *ParsedExplainPlan {
 }
 
 // parsePlanNode recursively parses a plan node
-func parsePlanNode(data map[string]interface{}) *ParsedExplainPlan {
+func parsePlanNode(data map[string]any) *ParsedExplainPlan {
 	plan := &ParsedExplainPlan{
 		RawPlan: data,
 	}
@@ -280,9 +280,9 @@ func parsePlanNode(data map[string]interface{}) *ParsedExplainPlan {
 	}
 
 	// Parse child plans recursively
-	if plans, ok := data["Plans"].([]interface{}); ok {
+	if plans, ok := data["Plans"].([]any); ok {
 		for _, p := range plans {
-			if planMap, ok := p.(map[string]interface{}); ok {
+			if planMap, ok := p.(map[string]any); ok {
 				plan.Plans = append(plan.Plans, *parsePlanNode(planMap))
 			}
 		}

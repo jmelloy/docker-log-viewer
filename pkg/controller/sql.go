@@ -83,19 +83,16 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 
 	containerIDs := make([]string, 0, len(input.SelectedContainers))
 	for _, container := range containers {
-		for _, containerName := range input.SelectedContainers {
-			if containerName == containerIDNames[container.ID] {
-				containerIDs = append(containerIDs, container.ID)
-				break
-			}
+		if slices.Contains(input.SelectedContainers, containerIDNames[container.ID]) {
+			containerIDs = append(containerIDs, container.ID)
 		}
 	}
 
 	// Convert search query to search terms (split by whitespace and lowercase)
 	searchTerms := []string{}
 	if input.SearchQuery != "" {
-		terms := strings.Fields(input.SearchQuery)
-		for _, term := range terms {
+		terms := strings.FieldsSeq(input.SearchQuery)
+		for term := range terms {
 			if term != "" {
 				searchTerms = append(searchTerms, strings.ToLower(term))
 			}
@@ -202,7 +199,7 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 				if q.DurationMS > 2.0 && connectionString != "" {
 					variables := make(map[string]string)
 					if q.Variables != "" {
-						var varsArray []interface{}
+						var varsArray []any
 						if err := json.Unmarshal([]byte(q.Variables), &varsArray); err == nil {
 							for idx, val := range varsArray {
 								variables[fmt.Sprintf("%d", idx+1)] = fmt.Sprintf("%v", val)
@@ -234,7 +231,7 @@ func (c *Controller) HandleSaveTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"id":      id,
 		"message": "Trace saved successfully as execution",
 	})
@@ -434,7 +431,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 
 	title := fmt.Sprintf("SQL Query: %s on %s", detail.Operation, detail.TableName)
 
-	type blockOrRaw interface{}
+	type blockOrRaw any
 	var blocks []blockOrRaw
 
 	blocks = append(blocks, newHeading2Block("Query Information"))
@@ -449,7 +446,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 
 	blocks = append(blocks, newHeading2Block("SQL Query"))
 	statement := ""
-	for _, line := range strings.Split(formattedQuery, "\n") {
+	for line := range strings.SplitSeq(formattedQuery, "\n") {
 		if len(statement)+len(line) > 1999 {
 			blocks = append(blocks, newCodeBlock(statement, "sql"))
 			statement = ""
@@ -474,7 +471,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 		}
 
 		statement = ""
-		for _, line := range strings.Split(explainText, "\n") {
+		for line := range strings.SplitSeq(explainText, "\n") {
 			if len(statement)+len(line) > 1999 {
 				blocks = append(blocks, newCodeBlock(statement, "plain text"))
 				statement = ""
@@ -521,7 +518,7 @@ func createNotionPage(apiKey, databaseID string, detail *store.SQLQueryDetail) (
 		switch b := block.(type) {
 		case notionapi.Block:
 			children = append(children, b)
-		case map[string]interface{}:
+		case map[string]any:
 			slog.Warn("skipping unsupported block type", "block", b)
 		default:
 			return "", fmt.Errorf("unknown block type: %T", block)
@@ -611,7 +608,7 @@ func generateDaliboExplainLink(explainPlan, query, title string) string {
 	body, err := io.ReadAll(resp.Body)
 	slog.Info("body", "body", string(body))
 	if err == nil {
-		var result map[string]interface{}
+		var result map[string]any
 		if err := json.Unmarshal(body, &result); err == nil {
 			slog.Info("result", "result", result)
 			if urlStr, ok := result["url"].(string); ok {

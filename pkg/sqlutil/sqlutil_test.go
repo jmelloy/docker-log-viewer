@@ -71,7 +71,7 @@ func TestInterpolateSQLQuery(t *testing.T) {
 	tests := []struct {
 		name      string
 		query     string
-		variables interface{}
+		variables any
 		expected  string
 	}{
 		{
@@ -115,17 +115,17 @@ func TestFormatSQLBasic(t *testing.T) {
 func TestConvertVariablesToMap(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected int // number of keys in result
 	}{
 		{
 			name:     "array format",
-			input:    []interface{}{"value1", "value2"},
+			input:    []any{"value1", "value2"},
 			expected: 2,
 		},
 		{
 			name:     "object format",
-			input:    map[string]interface{}{"key1": "value1"},
+			input:    map[string]any{"key1": "value1"},
 			expected: 1,
 		},
 		{

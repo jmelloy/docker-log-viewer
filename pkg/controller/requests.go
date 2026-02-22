@@ -138,7 +138,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 	if input.Sync {
 		executeRequest()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"status":      "completed",
 			"executionId": execID,
 			"execution":   execution,
@@ -146,7 +146,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 	} else {
 		go executeRequest()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"status":      "started",
 			"executionId": execID,
 		})
@@ -208,7 +208,7 @@ func (c *Controller) HandleListAllRequests(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"executions": executions,
 		"total":      total,
 		"limit":      params.Limit,
@@ -403,7 +403,7 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 	}
 
 	// Create blocks for the page content using jomei/notionapi types
-	type blockOrRaw interface{}
+	type blockOrRaw any
 	var blocks []blockOrRaw
 
 	// Execution Information heading
@@ -439,7 +439,7 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 
 				// Add SQL query as code block
 				statement := ""
-				for _, line := range strings.Split(formattedQuery, "\n") {
+				for line := range strings.SplitSeq(formattedQuery, "\n") {
 					if len(statement)+len(line) > 1999 {
 						toggleChildren = append(toggleChildren, newCodeBlock(statement, "sql"))
 						statement = ""
@@ -477,7 +477,7 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 
 					// Add EXPLAIN plan as code block
 					statement = ""
-					for _, line := range strings.Split(explainText, "\n") {
+					for line := range strings.SplitSeq(explainText, "\n") {
 						if len(statement)+len(line) > 1999 {
 							toggleChildren = append(toggleChildren, newCodeBlock(statement, "json"))
 							statement = ""
@@ -503,12 +503,12 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 
 	// Convert blocks to notionapi.Block format (mix of notionapi.Block and raw blocks for heading_4)
 	children := make([]notionapi.Block, 0, len(blocks))
-	var heading4Blocks []map[string]interface{}
+	var heading4Blocks []map[string]any
 	for _, block := range blocks {
 		switch b := block.(type) {
 		case notionapi.Block:
 			children = append(children, b)
-		case map[string]interface{}:
+		case map[string]any:
 			// Collect heading_4 blocks to append later
 			heading4Blocks = append(heading4Blocks, b)
 		default:
@@ -548,11 +548,4 @@ func createNotionPageForRequest(apiKey, databaseID string, detail *store.Request
 	}
 
 	return page.URL, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -3,6 +3,7 @@ package logstore
 import (
 	"container/list"
 	"docker-log-parser/pkg/logs"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -588,13 +589,7 @@ func (ls *LogStore) Filter(opts FilterOptions, limit int) []*logs.ContainerMessa
 func (ls *LogStore) matchesFilterOptions(msg *logs.ContainerMessage, opts FilterOptions) bool {
 	// Container filter
 	if len(opts.ContainerIDs) > 0 {
-		found := false
-		for _, containerID := range opts.ContainerIDs {
-			if msg.ContainerID == containerID {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(opts.ContainerIDs, msg.ContainerID)
 		if !found {
 			return false
 		}
@@ -605,13 +600,7 @@ func (ls *LogStore) matchesFilterOptions(msg *logs.ContainerMessage, opts Filter
 		level := msg.Entry.Level
 		if level == "" {
 			// No level parsed - check if NONE is selected
-			found := false
-			for _, l := range opts.Levels {
-				if l == "NONE" {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(opts.Levels, "NONE")
 			if !found {
 				return false
 			}
@@ -716,7 +705,7 @@ func (ls *LogStore) applyContainerRetention(containerID string) {
 
 		if toRemove > 0 {
 			// Iterate from back (oldest) and remove
-			for i := 0; i < toRemove; i++ {
+			for range toRemove {
 				e := containerList.Back()
 				if e != nil {
 					elem := e.Value.(*list.Element)

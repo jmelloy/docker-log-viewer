@@ -1,14 +1,12 @@
 module docker-log-parser
 
-go 1.24.0
-
-toolchain go1.24.7
+go 1.26.0
 
 require (
 	github.com/docker/docker v24.0.7+incompatible
-	github.com/gorilla/websocket v1.5.3
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/schema v1.4.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/jomei/notionapi v1.13.3
 	github.com/lib/pq v1.10.9
 	github.com/lmittmann/tint v1.1.2
