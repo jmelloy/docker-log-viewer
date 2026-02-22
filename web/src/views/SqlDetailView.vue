@@ -1,30 +1,60 @@
 <template>
   <div class="app-container">
-    <app-header activePage="requests"></app-header>
+    <app-header active-page="requests" />
 
     <div class="main-layout">
       <main class="content content-padded">
-        <div v-if="loading" class="text-center p-3">
+        <div
+          v-if="loading"
+          class="text-center p-3"
+        >
           <p>Loading SQL query details...</p>
         </div>
 
-        <div v-if="error" class="text-center p-3">
-          <div class="alert alert-danger">{{ error }}</div>
-          <button @click="goBack" class="btn-secondary">Go Back</button>
+        <div
+          v-if="error"
+          class="text-center p-3"
+        >
+          <div class="alert alert-danger">
+            {{ error }}
+          </div>
+          <button
+            class="btn-secondary"
+            @click="goBack"
+          >
+            Go Back
+          </button>
         </div>
 
         <div v-if="!loading && !error && sqlDetail">
           <div class="flex-between mb-1_5">
             <div>
-              <button @click="goBack" class="btn-secondary mb-0_5">← Back</button>
-              <h2 class="m-0">SQL Query Details</h2>
-              <p class="text-muted mt-0_25">{{ sqlDetail.operation }} on {{ sqlDetail.tableName }}</p>
+              <button
+                class="btn-secondary mb-0_5"
+                @click="goBack"
+              >
+                ← Back
+              </button>
+              <h2 class="m-0">
+                SQL Query Details
+              </h2>
+              <p class="text-muted mt-0_25">
+                {{ sqlDetail.operation }} on {{ sqlDetail.tableName }}
+              </p>
             </div>
             <div style="display: flex; gap: 0.5rem">
-              <button @click="exportAsMarkdown" class="btn-secondary" title="Export as Markdown">
+              <button
+                class="btn-secondary"
+                title="Export as Markdown"
+                @click="exportAsMarkdown"
+              >
                 📄 Export Markdown
               </button>
-              <button @click="exportToNotion" class="btn-secondary" title="Export to Notion">
+              <button
+                class="btn-secondary"
+                title="Export to Notion"
+                @click="exportToNotion"
+              >
                 📘 Export to Notion
               </button>
             </div>
@@ -65,17 +95,22 @@
                 gap: 0.5rem;
               "
             >
-              <h4 style="margin: 0">SQL Query</h4>
+              <h4 style="margin: 0">
+                SQL Query
+              </h4>
               <button
-                @click="copyToClipboard(sqlDetail.query)"
                 class="btn-secondary"
                 style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
                 title="Copy SQL query"
+                @click="copyToClipboard(sqlDetail.query)"
               >
                 📋 Copy
               </button>
             </div>
-            <pre class="sql-query-display" style="white-space: pre-wrap; max-height: 20em"><code>{{
+            <pre
+              class="sql-query-display"
+              style="white-space: pre-wrap; max-height: 20em"
+            ><code>{{
               formatSQL(sqlDetail.query)
             }}</code></pre>
           </div>
@@ -95,8 +130,8 @@
           <div
             v-if="
               sqlDetail.indexAnalysis &&
-              sqlDetail.indexAnalysis.recommendations &&
-              sqlDetail.indexAnalysis.recommendations.length > 0
+                sqlDetail.indexAnalysis.recommendations &&
+                sqlDetail.indexAnalysis.recommendations.length > 0
             "
             class="modal-section"
           >
@@ -108,15 +143,27 @@
                 class="index-recommendation-item"
               >
                 <div class="index-rec-header">
-                  <span class="index-priority-badge" :class="'priority-' + rec.priority">
+                  <span
+                    class="index-priority-badge"
+                    :class="'priority-' + rec.priority"
+                  >
                     {{ rec.priority.toUpperCase() }}
                   </span>
                   <span class="index-rec-table">{{ rec.tableName }}</span>
                 </div>
-                <div class="index-rec-reason">{{ rec.reason }}</div>
-                <div class="index-rec-columns"><strong>Columns:</strong> {{ rec.columns.join(", ") }}</div>
-                <div class="index-rec-impact">{{ rec.estimatedImpact }}</div>
-                <div v-if="rec.sql" class="index-rec-sql">
+                <div class="index-rec-reason">
+                  {{ rec.reason }}
+                </div>
+                <div class="index-rec-columns">
+                  <strong>Columns:</strong> {{ rec.columns.join(", ") }}
+                </div>
+                <div class="index-rec-impact">
+                  {{ rec.estimatedImpact }}
+                </div>
+                <div
+                  v-if="rec.sql"
+                  class="index-rec-sql"
+                >
                   <strong>SQL:</strong>
                   <pre style="margin-top: 0.25rem">{{ rec.sql }}</pre>
                 </div>
@@ -128,21 +175,30 @@
           <div
             v-if="
               sqlDetail.indexAnalysis &&
-              sqlDetail.indexAnalysis.sequentialScans &&
-              sqlDetail.indexAnalysis.sequentialScans.length > 0
+                sqlDetail.indexAnalysis.sequentialScans &&
+                sqlDetail.indexAnalysis.sequentialScans.length > 0
             "
             class="modal-section"
           >
             <h4>Sequential Scan Issues</h4>
             <div class="index-issues-list">
-              <div v-for="(issue, idx) in sqlDetail.indexAnalysis.sequentialScans" :key="idx" class="index-issue-item">
+              <div
+                v-for="(issue, idx) in sqlDetail.indexAnalysis.sequentialScans"
+                :key="idx"
+                class="index-issue-item"
+              >
                 <div class="index-issue-header">
                   <span class="index-issue-table">{{ issue.tableName }}</span>
                   <span class="index-issue-stats">
                     {{ issue.occurrences }}x · {{ issue.durationMs.toFixed(2) }}ms · cost: {{ issue.cost.toFixed(0) }}
                   </span>
                 </div>
-                <div v-if="issue.filterCondition" class="index-issue-filter">Filter: {{ issue.filterCondition }}</div>
+                <div
+                  v-if="issue.filterCondition"
+                  class="index-issue-filter"
+                >
+                  Filter: {{ issue.filterCondition }}
+                </div>
               </div>
             </div>
           </div>
@@ -159,10 +215,13 @@
                 v-for="exec in sqlDetail.relatedExecutions"
                 :key="exec.id"
                 class="execution-item-compact"
-                @click="navigateToRequest(exec.id)"
                 style="cursor: pointer"
+                @click="navigateToRequest(exec.id)"
               >
-                <span class="exec-status" :class="getStatusClass(exec.statusCode)">{{ exec.statusCode }}</span>
+                <span
+                  class="exec-status"
+                  :class="getStatusClass(exec.statusCode)"
+                >{{ exec.statusCode }}</span>
                 <span class="exec-name">{{ exec.displayName }}</span>
                 <span class="exec-time">{{ new Date(exec.executedAt).toLocaleString() }}</span>
                 <span class="exec-duration">{{ exec.durationMs.toFixed(2) }}ms</span>

@@ -1,16 +1,35 @@
 <template>
-  <div class="plan-node" :style="{ marginLeft: level * 0.5 + 'rem' }">
-    <div class="node-header" :class="costClass">
+  <div
+    class="plan-node"
+    :style="{ marginLeft: level * 0.5 + 'rem' }"
+  >
+    <div
+      class="node-header"
+      :class="costClass"
+    >
       <span class="node-icon">{{ nodeIcon }}</span>
-      <span class="node-type"
-        >{{ node["Node Type"] }} {{ node["Subplan Name"] ? `(${node["Subplan Name"]})` : "" }}</span
-      >
-      <span v-if="costInfo" class="node-cost-info" :class="{ 'cost-highlight': isExpensive }">{{ costInfo }}</span>
+      <span class="node-type">{{ node["Node Type"] }} {{ node["Subplan Name"] ? `(${node["Subplan Name"]})` : "" }}</span>
+      <span
+        v-if="costInfo"
+        class="node-cost-info"
+        :class="{ 'cost-highlight': isExpensive }"
+      >{{ costInfo }}</span>
     </div>
 
-    <span v-if="relationInfo" class="relation-info">{{ relationInfo }}</span>
-    <div v-if="node['Filter']" class="node-filter-info">Filter: {{ node["Filter"] }}</div>
-    <div v-if="node['Rows Removed by Filter']" class="node-filter-info">
+    <span
+      v-if="relationInfo"
+      class="relation-info"
+    >{{ relationInfo }}</span>
+    <div
+      v-if="node['Filter']"
+      class="node-filter-info"
+    >
+      Filter: {{ node["Filter"] }}
+    </div>
+    <div
+      v-if="node['Rows Removed by Filter']"
+      class="node-filter-info"
+    >
       Rows Removed by Filter: {{ node["Rows Removed by Filter"] }}
     </div>
 

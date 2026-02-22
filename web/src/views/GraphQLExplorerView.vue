@@ -1,21 +1,44 @@
 <template>
   <div class="app-container">
-    <app-header activePage="graphql-explorer"></app-header>
+    <app-header active-page="graphql-explorer" />
 
     <div class="main-layout">
       <!-- Schema Sidebar -->
-      <aside v-if="showSchemaSidebar" class="sidebar sidebar-schema">
+      <aside
+        v-if="showSchemaSidebar"
+        class="sidebar sidebar-schema"
+      >
         <div class="section">
           <div class="flex-between mb-1">
-            <h3 class="m-0">GraphQL Schema</h3>
-            <button @click="showSchemaSidebar = false" class="btn-secondary btn-sm">✕</button>
+            <h3 class="m-0">
+              GraphQL Schema
+            </h3>
+            <button
+              class="btn-secondary btn-sm"
+              @click="showSchemaSidebar = false"
+            >
+              ✕
+            </button>
           </div>
 
-          <div v-if="loadingSchema" class="text-muted text-center p-1">Loading schema...</div>
+          <div
+            v-if="loadingSchema"
+            class="text-muted text-center p-1"
+          >
+            Loading schema...
+          </div>
 
-          <div v-if="schemaError" class="alert alert-danger mb-1">{{ schemaError }}</div>
+          <div
+            v-if="schemaError"
+            class="alert alert-danger mb-1"
+          >
+            {{ schemaError }}
+          </div>
 
-          <div v-if="schema && !loadingSchema" class="mb-1">
+          <div
+            v-if="schema && !loadingSchema"
+            class="mb-1"
+          >
             <input
               v-model="schemaFilter"
               type="text"
@@ -31,14 +54,17 @@
               "
               @focus="$event.target.style.borderColor = '#58a6ff'"
               @blur="$event.target.style.borderColor = '#30363d'"
-            />
+            >
           </div>
 
           <div v-if="schema && !loadingSchema">
             <!-- Query Type -->
-            <div v-if="queryType" class="schema-section" style="margin-bottom: 1rem">
+            <div
+              v-if="queryType"
+              class="schema-section"
+              style="margin-bottom: 1rem"
+            >
               <div
-                @click="toggleSection('queries')"
                 style="
                   display: flex;
                   align-items: center;
@@ -49,6 +75,7 @@
                   border-radius: 4px;
                   margin-bottom: 0.5rem;
                 "
+                @click="toggleSection('queries')"
                 @mouseover="$event.currentTarget.style.background = '#21262d'"
                 @mouseout="$event.currentTarget.style.background = '#161b22'"
               >
@@ -58,17 +85,22 @@
                     transition: 'transform 0.2s',
                     display: 'inline-block',
                   }"
-                  >▶</span
-                >
+                >▶</span>
                 <h4 style="color: #58a6ff; font-size: 0.875rem; margin: 0; text-transform: uppercase; flex: 1">
                   Queries
                 </h4>
                 <span style="color: #8b949e; font-size: 0.75rem">{{ filteredQueryFields.length }}</span>
               </div>
-              <div v-if="expandedSections.queries" style="font-size: 0.8rem; margin-left: 0.5rem">
-                <div v-for="field in filteredQueryFields" :key="field.name" style="margin-bottom: 0.5rem">
+              <div
+                v-if="expandedSections.queries"
+                style="font-size: 0.8rem; margin-left: 0.5rem"
+              >
+                <div
+                  v-for="field in filteredQueryFields"
+                  :key="field.name"
+                  style="margin-bottom: 0.5rem"
+                >
                   <div
-                    @click="toggleField('query-' + field.name)"
                     style="
                       padding: 0.5rem;
                       background: #0d1117;
@@ -76,6 +108,7 @@
                       border: 1px solid #30363d;
                       cursor: pointer;
                     "
+                    @click="toggleField('query-' + field.name)"
                     @mouseover="$event.currentTarget.style.borderColor = '#58a6ff'"
                     @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
                   >
@@ -87,16 +120,12 @@
                           display: 'inline-block',
                           fontSize: '0.7rem',
                         }"
-                        >▶</span
-                      >
+                      >▶</span>
                       <div style="flex: 1">
                         <span style="font-weight: 500; color: #79c0ff">{{ field.name }}</span>
-                        <span style="color: #8b949e; font-size: 0.7rem; margin-left: 0.5rem"
-                          >: {{ getTypeString(field.type) }}</span
-                        >
+                        <span style="color: #8b949e; font-size: 0.7rem; margin-left: 0.5rem">: {{ getTypeString(field.type) }}</span>
                       </div>
                       <button
-                        @click.stop="insertFieldIntoQuery(field.name, field.args, 'Query', field.type)"
                         style="
                           background: #238636;
                           color: white;
@@ -106,9 +135,10 @@
                           font-size: 0.65rem;
                           cursor: pointer;
                         "
+                        title="Insert into query"
+                        @click.stop="insertFieldIntoQuery(field.name, field.args, 'Query', field.type)"
                         @mouseover="$event.currentTarget.style.background = '#2ea043'"
                         @mouseout="$event.currentTarget.style.background = '#238636'"
-                        title="Insert into query"
                       >
                         +
                       </button>
@@ -123,8 +153,13 @@
                       >
                         {{ field.description }}
                       </div>
-                      <div v-if="field.args && field.args.length > 0" style="font-size: 0.7rem; margin-bottom: 0.5rem">
-                        <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">Arguments:</div>
+                      <div
+                        v-if="field.args && field.args.length > 0"
+                        style="font-size: 0.7rem; margin-bottom: 0.5rem"
+                      >
+                        <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">
+                          Arguments:
+                        </div>
                         <div
                           v-for="arg in field.args"
                           :key="arg.name"
@@ -132,13 +167,21 @@
                         >
                           <span style="color: #a5d6ff">{{ arg.name }}</span>
                           <span style="color: #8b949e">: {{ getTypeString(arg.type) }}</span>
-                          <div v-if="arg.description" style="color: #6e7681; font-size: 0.65rem; margin-left: 0.5rem">
+                          <div
+                            v-if="arg.description"
+                            style="color: #6e7681; font-size: 0.65rem; margin-left: 0.5rem"
+                          >
                             {{ arg.description }}
                           </div>
                         </div>
                       </div>
-                      <div v-if="field.type" style="font-size: 0.7rem">
-                        <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">Returns:</div>
+                      <div
+                        v-if="field.type"
+                        style="font-size: 0.7rem"
+                      >
+                        <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">
+                          Returns:
+                        </div>
                         <div style="margin-left: 0.5rem">
                           <div style="margin-bottom: 0.25rem">
                             <span style="color: #79c0ff">{{ getTypeString(field.type) }}</span>
@@ -147,7 +190,9 @@
                             v-if="getReturnTypeFields(field.type).length > 0"
                             style="margin-top: 0.5rem; padding: 0.5rem; background: #161b22; border-radius: 3px"
                           >
-                            <div style="color: #8b949e; font-size: 0.65rem; margin-bottom: 0.25rem">Fields:</div>
+                            <div style="color: #8b949e; font-size: 0.65rem; margin-bottom: 0.25rem">
+                              Fields:
+                            </div>
                             <div
                               v-for="returnField in getReturnTypeFields(field.type)"
                               :key="returnField.name"
@@ -165,9 +210,12 @@
               </div>
 
               <!-- Mutation Type -->
-              <div v-if="mutationType" class="schema-section" style="margin-bottom: 1rem">
+              <div
+                v-if="mutationType"
+                class="schema-section"
+                style="margin-bottom: 1rem"
+              >
                 <div
-                  @click="toggleSection('mutations')"
                   style="
                     display: flex;
                     align-items: center;
@@ -178,6 +226,7 @@
                     border-radius: 4px;
                     margin-bottom: 0.5rem;
                   "
+                  @click="toggleSection('mutations')"
                   @mouseover="$event.currentTarget.style.background = '#21262d'"
                   @mouseout="$event.currentTarget.style.background = '#161b22'"
                 >
@@ -187,17 +236,22 @@
                       transition: 'transform 0.2s',
                       display: 'inline-block',
                     }"
-                    >▶</span
-                  >
+                  >▶</span>
                   <h4 style="color: #f0883e; font-size: 0.875rem; margin: 0; text-transform: uppercase; flex: 1">
                     Mutations
                   </h4>
                   <span style="color: #8b949e; font-size: 0.75rem">{{ filteredMutationFields.length }}</span>
                 </div>
-                <div v-if="expandedSections.mutations" style="font-size: 0.8rem; margin-left: 0.5rem">
-                  <div v-for="field in filteredMutationFields" :key="field.name" style="margin-bottom: 0.5rem">
+                <div
+                  v-if="expandedSections.mutations"
+                  style="font-size: 0.8rem; margin-left: 0.5rem"
+                >
+                  <div
+                    v-for="field in filteredMutationFields"
+                    :key="field.name"
+                    style="margin-bottom: 0.5rem"
+                  >
                     <div
-                      @click="toggleField('mutation-' + field.name)"
                       style="
                         padding: 0.5rem;
                         background: #0d1117;
@@ -205,6 +259,7 @@
                         border: 1px solid #30363d;
                         cursor: pointer;
                       "
+                      @click="toggleField('mutation-' + field.name)"
                       @mouseover="$event.currentTarget.style.borderColor = '#f0883e'"
                       @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
                     >
@@ -216,16 +271,12 @@
                             display: 'inline-block',
                             fontSize: '0.7rem',
                           }"
-                          >▶</span
-                        >
+                        >▶</span>
                         <div style="flex: 1">
                           <span style="font-weight: 500; color: #f0883e">{{ field.name }}</span>
-                          <span style="color: #8b949e; font-size: 0.7rem; margin-left: 0.5rem"
-                            >: {{ getTypeString(field.type) }}</span
-                          >
+                          <span style="color: #8b949e; font-size: 0.7rem; margin-left: 0.5rem">: {{ getTypeString(field.type) }}</span>
                         </div>
                         <button
-                          @click.stop="insertFieldIntoQuery(field.name, field.args, 'Mutation', field.type)"
                           style="
                             background: #da3633;
                             color: white;
@@ -235,9 +286,10 @@
                             font-size: 0.65rem;
                             cursor: pointer;
                           "
+                          title="Insert into query"
+                          @click.stop="insertFieldIntoQuery(field.name, field.args, 'Mutation', field.type)"
                           @mouseover="$event.currentTarget.style.background = '#f85149'"
                           @mouseout="$event.currentTarget.style.background = '#da3633'"
-                          title="Insert into query"
                         >
                           +
                         </button>
@@ -256,7 +308,9 @@
                           v-if="field.args && field.args.length > 0"
                           style="font-size: 0.7rem; margin-bottom: 0.5rem"
                         >
-                          <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">Arguments:</div>
+                          <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">
+                            Arguments:
+                          </div>
                           <div
                             v-for="arg in field.args"
                             :key="arg.name"
@@ -264,13 +318,21 @@
                           >
                             <span style="color: #a5d6ff">{{ arg.name }}</span>
                             <span style="color: #8b949e">: {{ getTypeString(arg.type) }}</span>
-                            <div v-if="arg.description" style="color: #6e7681; font-size: 0.65rem; margin-left: 0.5rem">
+                            <div
+                              v-if="arg.description"
+                              style="color: #6e7681; font-size: 0.65rem; margin-left: 0.5rem"
+                            >
                               {{ arg.description }}
                             </div>
                           </div>
                         </div>
-                        <div v-if="field.type" style="font-size: 0.7rem">
-                          <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">Returns:</div>
+                        <div
+                          v-if="field.type"
+                          style="font-size: 0.7rem"
+                        >
+                          <div style="color: #8b949e; margin-bottom: 0.25rem; font-weight: 500">
+                            Returns:
+                          </div>
                           <div style="margin-left: 0.5rem">
                             <div style="margin-bottom: 0.25rem">
                               <span style="color: #f0883e">{{ getTypeString(field.type) }}</span>
@@ -279,7 +341,9 @@
                               v-if="getReturnTypeFields(field.type).length > 0"
                               style="margin-top: 0.5rem; padding: 0.5rem; background: #161b22; border-radius: 3px"
                             >
-                              <div style="color: #8b949e; font-size: 0.65rem; margin-bottom: 0.25rem">Fields:</div>
+                              <div style="color: #8b949e; font-size: 0.65rem; margin-bottom: 0.25rem">
+                                Fields:
+                              </div>
                               <div
                                 v-for="returnField in getReturnTypeFields(field.type)"
                                 :key="returnField.name"
@@ -301,7 +365,6 @@
             <!-- Types -->
             <div class="schema-section">
               <div
-                @click="toggleSection('types')"
                 style="
                   display: flex;
                   align-items: center;
@@ -312,6 +375,7 @@
                   border-radius: 4px;
                   margin-bottom: 0.5rem;
                 "
+                @click="toggleSection('types')"
                 @mouseover="$event.currentTarget.style.background = '#21262d'"
                 @mouseout="$event.currentTarget.style.background = '#161b22'"
               >
@@ -321,17 +385,22 @@
                     transition: 'transform 0.2s',
                     display: 'inline-block',
                   }"
-                  >▶</span
-                >
+                >▶</span>
                 <h4 style="color: #8b949e; font-size: 0.875rem; margin: 0; text-transform: uppercase; flex: 1">
                   Types
                 </h4>
                 <span style="color: #8b949e; font-size: 0.75rem">{{ filteredObjectTypes.length }}</span>
               </div>
-              <div v-if="expandedSections.types" style="max-height: 400px; overflow-y: auto; margin-left: 0.5rem">
-                <div v-for="type in filteredObjectTypes" :key="type.name" style="margin-bottom: 0.5rem">
+              <div
+                v-if="expandedSections.types"
+                style="max-height: 400px; overflow-y: auto; margin-left: 0.5rem"
+              >
+                <div
+                  v-for="type in filteredObjectTypes"
+                  :key="type.name"
+                  style="margin-bottom: 0.5rem"
+                >
                   <div
-                    @click="toggleType(type.name)"
                     style="
                       padding: 0.5rem;
                       background: #0d1117;
@@ -339,6 +408,7 @@
                       border: 1px solid #30363d;
                       cursor: pointer;
                     "
+                    @click="toggleType(type.name)"
                     @mouseover="$event.currentTarget.style.borderColor = '#8b949e'"
                     @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
                   >
@@ -351,13 +421,16 @@
                           display: 'inline-block',
                           fontSize: '0.7rem',
                         }"
-                        >▶</span
-                      >
-                      <span v-else style="width: 0.7rem; display: inline-block"></span>
+                      >▶</span>
+                      <span
+                        v-else
+                        style="width: 0.7rem; display: inline-block"
+                      />
                       <span style="font-weight: 500; color: #c9d1d9; flex: 1; font-size: 0.75rem">{{ type.name }}</span>
-                      <span v-if="type.fields" style="color: #8b949e; font-size: 0.65rem"
-                        >{{ type.fields.length }} fields</span
-                      >
+                      <span
+                        v-if="type.fields"
+                        style="color: #8b949e; font-size: 0.65rem"
+                      >{{ type.fields.length }} fields</span>
                     </div>
                     <div
                       v-if="isTypeExpanded(type.name) && type.fields"
@@ -386,27 +459,40 @@
         </div>
       </aside>
 
-      <main class="content" style="margin: 0; padding: 2rem">
+      <main
+        class="content"
+        style="margin: 0; padding: 2rem"
+      >
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem">
-          <h2 style="margin: 0">GraphQL Explorer</h2>
+          <h2 style="margin: 0">
+            GraphQL Explorer
+          </h2>
           <div style="display: flex; gap: 0.5rem">
-            <button @click="showSampleQueries = !showSampleQueries" class="btn-secondary">
+            <button
+              class="btn-secondary"
+              @click="showSampleQueries = !showSampleQueries"
+            >
               {{ showSampleQueries ? "Hide" : "Load" }} Sample Queries
             </button>
             <button
-              @click="loadGraphQLSchema"
               :disabled="!canLoadSchema || loadingSchema"
               class="btn-secondary"
               :style="{ opacity: !canLoadSchema || loadingSchema ? 0.5 : 1 }"
+              @click="loadGraphQLSchema"
             >
               {{ loadingSchema ? "Loading..." : "📖 Schema" }}
             </button>
-            <button @click="clearQuery" class="btn-secondary">Clear</button>
             <button
-              @click="executeQuery"
+              class="btn-secondary"
+              @click="clearQuery"
+            >
+              Clear
+            </button>
+            <button
               :disabled="!canExecute || executing"
               class="btn-primary"
               :style="{ opacity: !canExecute || executing ? 0.5 : 1 }"
+              @click="executeQuery"
             >
               {{ executing ? "Executing..." : "▶ Execute" }}
             </button>
@@ -414,16 +500,25 @@
         </div>
 
         <!-- Sample Queries Panel -->
-        <div v-if="showSampleQueries" class="modal-section" style="margin-bottom: 1rem">
+        <div
+          v-if="showSampleQueries"
+          class="modal-section"
+          style="margin-bottom: 1rem"
+        >
           <h4>Sample Queries</h4>
-          <div v-if="sampleQueries.length === 0" style="color: #8b949e">
+          <div
+            v-if="sampleQueries.length === 0"
+            style="color: #8b949e"
+          >
             No sample queries available. Create one from the Requests page.
           </div>
-          <div v-else style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.75rem">
+          <div
+            v-else
+            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.75rem"
+          >
             <div
               v-for="sq in sampleQueries"
               :key="sq.id"
-              @click="loadSampleQuery(sq)"
               style="
                 background: #161b22;
                 border: 1px solid #30363d;
@@ -432,18 +527,29 @@
                 cursor: pointer;
                 transition: border-color 0.2s;
               "
+              @click="loadSampleQuery(sq)"
               @mouseover="$event.currentTarget.style.borderColor = '#58a6ff'"
               @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
             >
-              <div style="font-weight: 500; margin-bottom: 0.25rem">{{ sq.name }}</div>
-              <div style="font-size: 0.75rem; color: #8b949e">{{ sq.server?.url || "No server" }}</div>
+              <div style="font-weight: 500; margin-bottom: 0.25rem">
+                {{ sq.name }}
+              </div>
+              <div style="font-size: 0.75rem; color: #8b949e">
+                {{ sq.server?.url || "No server" }}
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Configuration Section -->
-        <div class="modal-section" style="margin-bottom: 1rem">
-          <div class="form-group" style="margin-bottom: 0">
+        <div
+          class="modal-section"
+          style="margin-bottom: 1rem"
+        >
+          <div
+            class="form-group"
+            style="margin-bottom: 0"
+          >
             <label for="serverSelect">Server:</label>
             <select
               id="serverSelect"
@@ -457,8 +563,14 @@
                 color: #c9d1d9;
               "
             >
-              <option value="">-- Select Server --</option>
-              <option v-for="server in servers" :key="server.id" :value="server.id">
+              <option value="">
+                -- Select Server --
+              </option>
+              <option
+                v-for="server in servers"
+                :key="server.id"
+                :value="server.id"
+              >
                 {{ server.name }} ({{ server.url }})
               </option>
             </select>
@@ -470,23 +582,31 @@
           <!-- Left Column: Request -->
           <div style="min-width: 0; overflow: hidden">
             <!-- Query Editor -->
-            <div class="modal-section" style="margin-bottom: 1rem">
+            <div
+              class="modal-section"
+              style="margin-bottom: 1rem"
+            >
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-                <h4 style="margin: 0">GraphQL Query</h4>
+                <h4 style="margin: 0">
+                  GraphQL Query
+                </h4>
                 <button
-                  @click="copyToClipboard(query)"
                   class="btn-secondary"
                   style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+                  @click="copyToClipboard(query)"
                 >
                   📋 Copy
                 </button>
               </div>
-              <div class="form-group" style="margin-bottom: 0.5rem">
+              <div
+                class="form-group"
+                style="margin-bottom: 0.5rem"
+              >
                 <!-- <label for="operationName">Operation Name (optional):</label> -->
                 <input
-                  type="text"
                   id="operationName"
                   v-model="operationName"
+                  type="text"
                   placeholder="e.g., FetchUsers"
                   style="
                     width: 100%;
@@ -497,45 +617,61 @@
                     color: #c9d1d9;
                     font-family: monospace;
                   "
-                />
+                >
               </div>
-              <div class="graphql-editor-container" ref="queryEditorContainer"></div>
+              <div
+                ref="queryEditorContainer"
+                class="graphql-editor-container"
+              />
             </div>
 
             <!-- Variables Editor -->
-            <div class="modal-section" style="margin-bottom: 1rem">
+            <div
+              class="modal-section"
+              style="margin-bottom: 1rem"
+            >
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-                <h4 style="margin: 0">Variables (JSON)</h4>
+                <h4 style="margin: 0">
+                  Variables (JSON)
+                </h4>
                 <button
-                  @click="copyToClipboard(variables)"
                   class="btn-secondary"
                   style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+                  @click="copyToClipboard(variables)"
                 >
                   📋 Copy
                 </button>
               </div>
-              <div class="variables-editor-container" ref="variablesEditorContainer"></div>
+              <div
+                ref="variablesEditorContainer"
+                class="variables-editor-container"
+              />
             </div>
           </div>
 
           <!-- Right Column: Response (Always visible) -->
-          <div class="modal-section" style="min-width: 0; overflow: hidden">
+          <div
+            class="modal-section"
+            style="min-width: 0; overflow: hidden"
+          >
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
-              <h4 style="margin: 0">Response</h4>
+              <h4 style="margin: 0">
+                Response
+              </h4>
               <div style="display: flex; gap: 0.5rem">
                 <button
                   v-if="executionId"
-                  @click="viewExecutionDetail"
                   class="btn-secondary"
                   style="padding: 0.35rem 0.75rem; font-size: 0.875rem"
+                  @click="viewExecutionDetail"
                 >
                   View Full Details →
                 </button>
                 <button
-                  @click="copyToClipboard(formattedResult)"
                   class="btn-secondary"
                   style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
                   :disabled="!result"
+                  @click="copyToClipboard(formattedResult)"
                 >
                   📋 Copy
                 </button>
@@ -554,17 +690,32 @@
                 border-radius: 4px;
               "
             >
-              <div style="margin-bottom: 0.5rem; font-size: 1.5rem">⚡</div>
-              <div style="font-weight: 500">Executing query...</div>
-              <div style="font-size: 0.875rem; margin-top: 0.5rem">Request sent, waiting for response</div>
+              <div style="margin-bottom: 0.5rem; font-size: 1.5rem">
+                ⚡
+              </div>
+              <div style="font-weight: 500">
+                Executing query...
+              </div>
+              <div style="font-size: 0.875rem; margin-top: 0.5rem">
+                Request sent, waiting for response
+              </div>
             </div>
 
             <!-- Error State -->
-            <div v-else-if="error" class="alert alert-danger" style="display: block">{{ error }}</div>
+            <div
+              v-else-if="error"
+              class="alert alert-danger"
+              style="display: block"
+            >
+              {{ error }}
+            </div>
 
             <!-- Result State -->
             <div v-else-if="result">
-              <pre class="json-display" style="max-height: 500px; overflow: auto">{{ formattedResult }}</pre>
+              <pre
+                class="json-display"
+                style="max-height: 500px; overflow: auto"
+              >{{ formattedResult }}</pre>
             </div>
 
             <!-- Empty State -->
@@ -579,22 +730,35 @@
                 border-radius: 4px;
               "
             >
-              <div style="font-size: 1.5rem; margin-bottom: 0.5rem">📝</div>
+              <div style="font-size: 1.5rem; margin-bottom: 0.5rem">
+                📝
+              </div>
               <div>Response will appear here after execution</div>
             </div>
           </div>
         </div>
 
         <!-- Log Stream Panel (shown during/after execution) -->
-        <div v-if="showLogs || executing || requestIdHeader" class="modal-section" style="margin-top: 1rem">
+        <div
+          v-if="showLogs || executing || requestIdHeader"
+          class="modal-section"
+          style="margin-top: 1rem"
+        >
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
             <h4 style="margin: 0; display: flex; align-items: center; gap: 0.5rem">
               <span>Request Logs</span>
-              <span v-if="requestIdHeader" style="font-size: 0.75rem; color: #8b949e; font-weight: normal">
+              <span
+                v-if="requestIdHeader"
+                style="font-size: 0.75rem; color: #8b949e; font-weight: normal"
+              >
                 ({{ requestIdHeader.substring(0, 12) }}...)
               </span>
             </h4>
-            <button @click="toggleLogs" class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem">
+            <button
+              class="btn-secondary"
+              style="padding: 0.25rem 0.5rem; font-size: 0.75rem"
+              @click="toggleLogs"
+            >
               {{ showLogs ? "Hide" : "Show" }}
             </button>
           </div>
@@ -746,6 +910,14 @@ export default defineComponent(
       },
     },
 
+    watch: {
+      schema(newSchema) {
+        if (newSchema) {
+          this.updateEditorSchema();
+        }
+      },
+    },
+
     async mounted() {
       await this.loadServers();
       await this.loadSampleQueries();
@@ -770,6 +942,12 @@ export default defineComponent(
       this.$nextTick(() => {
         this.applySyntaxHighlighting();
       });
+    },
+
+    beforeUnmount() {
+      if (this.editorManager) {
+        this.editorManager.destroy();
+      }
     },
 
     methods: {
@@ -1399,20 +1577,6 @@ export default defineComponent(
       applySyntaxHighlighting() {
         applySyntaxHighlighting();
       },
-    },
-
-    watch: {
-      schema(newSchema) {
-        if (newSchema) {
-          this.updateEditorSchema();
-        }
-      },
-    },
-
-    beforeUnmount() {
-      if (this.editorManager) {
-        this.editorManager.destroy();
-      }
     },
   }
 );

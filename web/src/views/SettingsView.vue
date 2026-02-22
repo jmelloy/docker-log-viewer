@@ -1,19 +1,30 @@
 <template>
   <div class="app-container">
-    <app-header activePage="settings"></app-header>
+    <app-header active-page="settings" />
 
     <div class="settings-container">
       <section class="settings-section">
         <div class="section-header">
           <h2>Servers</h2>
-          <button @click="openNewServerModal" class="btn btn-primary">+ New Server</button>
+          <button
+            class="btn btn-primary"
+            @click="openNewServerModal"
+          >
+            + New Server
+          </button>
         </div>
 
-        <div v-if="servers.length === 0" class="empty-state-box">
+        <div
+          v-if="servers.length === 0"
+          class="empty-state-box"
+        >
           No servers configured. Click "New Server" to add one.
         </div>
 
-        <table v-else class="table table-striped">
+        <table
+          v-else
+          class="table table-striped"
+        >
           <thead>
             <tr>
               <th>Name</th>
@@ -23,16 +34,24 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="server in servers" :key="server.id">
+            <tr
+              v-for="server in servers"
+              :key="server.id"
+            >
               <td>{{ server.name }}</td>
               <td>{{ server.url }}</td>
               <td>{{ server.defaultDatabase ? server.defaultDatabase.name : "None" }}</td>
               <td>
-                <button @click="openEditServerModal(server)" class="btn btn-sm btn-outline-primary">Edit</button>
                 <button
-                  @click="deleteServer(server.id)"
+                  class="btn btn-sm btn-outline-primary"
+                  @click="openEditServerModal(server)"
+                >
+                  Edit
+                </button>
+                <button
                   class="btn btn-sm btn-outline-danger"
                   style="margin-left: 0.5rem"
+                  @click="deleteServer(server.id)"
                 >
                   Delete
                 </button>
@@ -45,14 +64,25 @@
       <section class="settings-section">
         <div class="section-header">
           <h2>Database URLs</h2>
-          <button @click="openNewDatabaseModal" class="btn btn-primary">+ New Database URL</button>
+          <button
+            class="btn btn-primary"
+            @click="openNewDatabaseModal"
+          >
+            + New Database URL
+          </button>
         </div>
 
-        <div v-if="databaseURLs.length === 0" class="empty-state-box">
+        <div
+          v-if="databaseURLs.length === 0"
+          class="empty-state-box"
+        >
           No database URLs configured. Click "New Database URL" to add one.
         </div>
 
-        <table v-else class="table table-striped">
+        <table
+          v-else
+          class="table table-striped"
+        >
           <thead>
             <tr>
               <th>Name</th>
@@ -62,18 +92,26 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="db in databaseURLs" :key="db.id">
+            <tr
+              v-for="db in databaseURLs"
+              :key="db.id"
+            >
               <td>{{ db.name }}</td>
               <td>{{ db.databaseType }}</td>
               <td style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">
                 {{ db.connectionString }}
               </td>
               <td>
-                <button @click="openEditDatabaseModal(db)" class="btn btn-sm btn-outline-primary">Edit</button>
                 <button
-                  @click="deleteDatabase(db.id)"
+                  class="btn btn-sm btn-outline-primary"
+                  @click="openEditDatabaseModal(db)"
+                >
+                  Edit
+                </button>
+                <button
                   class="btn btn-sm btn-outline-danger"
                   style="margin-left: 0.5rem"
+                  @click="deleteDatabase(db.id)"
                 >
                   Delete
                 </button>
@@ -94,13 +132,24 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">{{ serverModalTitle }}</h5>
-            <button type="button" class="btn-close" @click="closeServerModal"></button>
+            <h5 class="modal-title">
+              {{ serverModalTitle }}
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              @click="closeServerModal"
+            />
           </div>
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label">Name *</label>
-              <input v-model="serverForm.name" type="text" class="form-control" required />
+              <input
+                v-model="serverForm.name"
+                type="text"
+                class="form-control"
+                required
+              >
             </div>
             <div class="mb-3">
               <label class="form-label">URL *</label>
@@ -110,27 +159,58 @@
                 class="form-control"
                 placeholder="https://api.example.com/graphql"
                 required
-              />
+              >
             </div>
             <div class="mb-3">
               <label class="form-label">Bearer Token</label>
-              <input v-model="serverForm.bearerToken" type="text" class="form-control" />
+              <input
+                v-model="serverForm.bearerToken"
+                type="text"
+                class="form-control"
+              >
             </div>
             <div class="mb-3">
               <label class="form-label">Dev ID</label>
-              <input v-model="serverForm.devId" type="text" class="form-control" />
+              <input
+                v-model="serverForm.devId"
+                type="text"
+                class="form-control"
+              >
             </div>
             <div class="mb-3">
               <label class="form-label">Default Database</label>
-              <select v-model="serverForm.defaultDatabaseId" class="form-select">
-                <option :value="null">None</option>
-                <option v-for="db in databaseURLs" :key="db.id" :value="db.id">{{ db.name }}</option>
+              <select
+                v-model="serverForm.defaultDatabaseId"
+                class="form-select"
+              >
+                <option :value="null">
+                  None
+                </option>
+                <option
+                  v-for="db in databaseURLs"
+                  :key="db.id"
+                  :value="db.id"
+                >
+                  {{ db.name }}
+                </option>
               </select>
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeServerModal">Cancel</button>
-            <button type="button" class="btn btn-primary" @click="saveServer">Save</button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="closeServerModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="saveServer"
+            >
+              Save
+            </button>
           </div>
         </div>
       </div>
@@ -146,19 +226,37 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title">{{ databaseModalTitle }}</h5>
-            <button type="button" class="btn-close" @click="closeDatabaseModal"></button>
+            <h5 class="modal-title">
+              {{ databaseModalTitle }}
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              @click="closeDatabaseModal"
+            />
           </div>
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label">Name *</label>
-              <input v-model="databaseForm.name" type="text" class="form-control" required />
+              <input
+                v-model="databaseForm.name"
+                type="text"
+                class="form-control"
+                required
+              >
             </div>
             <div class="mb-3">
               <label class="form-label">Database Type *</label>
-              <select v-model="databaseForm.databaseType" class="form-select">
-                <option value="postgresql">PostgreSQL</option>
-                <option value="mysql">MySQL</option>
+              <select
+                v-model="databaseForm.databaseType"
+                class="form-select"
+              >
+                <option value="postgresql">
+                  PostgreSQL
+                </option>
+                <option value="mysql">
+                  MySQL
+                </option>
               </select>
             </div>
             <div class="mb-3">
@@ -169,12 +267,24 @@
                 class="form-control"
                 placeholder="postgresql://user:pass@localhost:5432/dbname"
                 required
-              />
+              >
             </div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeDatabaseModal">Cancel</button>
-            <button type="button" class="btn btn-primary" @click="saveDatabase">Save</button>
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="closeDatabaseModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="saveDatabase"
+            >
+              Save
+            </button>
           </div>
         </div>
       </div>

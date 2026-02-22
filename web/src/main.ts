@@ -37,7 +37,7 @@ declare global {
 const app = createApp(App);
 
 // Register global components
-app.component("app-header", AppHeader);
+app.component("AppHeader", AppHeader);
 
 // Use plugins
 app.use(router);

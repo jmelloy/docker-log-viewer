@@ -2,8 +2,8 @@
   <header class="app-header">
     <div class="app-header-content">
       <h1>🔱 Logseidon</h1>
-      <AppNav :activePage="activePage" />
-      <slot></slot>
+      <AppNav :active-page="activePage" />
+      <slot />
     </div>
   </header>
 </template>
