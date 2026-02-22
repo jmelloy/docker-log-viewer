@@ -2,36 +2,14 @@
   <div class="app-container">
     <app-header active-page="viewer">
       <div class="header-controls">
-        <div
-          v-if="hasTraceFilters"
-          class="trace-filter-display"
-        >
-          <span
-            v-for="[key, value] in Array.from(traceFilters.entries())"
-            :key="key"
-            class="trace-filter-badge"
-          >
-            <span class="filter-key">{{ key }}</span>=<span class="filter-value">{{ value }}</span>
-            <button
-              class="filter-remove"
-              title="Remove filter"
-              @click="removeTraceFilter(key)"
-            >×</button>
+        <div v-if="hasTraceFilters" class="trace-filter-display">
+          <span v-for="[key, value] in Array.from(traceFilters.entries())" :key="key" class="trace-filter-badge">
+            <span class="filter-key">{{ key }}</span
+            >=<span class="filter-value">{{ value }}</span>
+            <button class="filter-remove" title="Remove filter" @click="removeTraceFilter(key)">×</button>
           </span>
-          <button
-            class="btn-star"
-            title="Save trace to request manager"
-            @click="saveTrace"
-          >
-            ⭐
-          </button>
-          <button
-            class="clear-btn"
-            title="Clear all filters"
-            @click="clearTraceFilters"
-          >
-            ✕
-          </button>
+          <button class="btn-star" title="Save trace to request manager" @click="saveTrace">⭐</button>
+          <button class="clear-btn" title="Clear all filters" @click="clearTraceFilters">✕</button>
         </div>
       </div>
     </app-header>
@@ -41,11 +19,7 @@
         <!-- Search Box -->
         <div class="section">
           <div class="search-box">
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search logs..."
-            >
+            <input v-model="searchQuery" type="text" placeholder="Search logs..." />
             <button
               class="clear-btn"
               title="Clear search"
@@ -60,23 +34,12 @@
         </div>
 
         <!-- SQL Query Analyzer Section -->
-        <div
-          v-if="showAnalyzer"
-          class="section analyzer-section-container"
-        >
+        <div v-if="showAnalyzer" class="section analyzer-section-container">
           <div class="section-header">
             <h3>SQL Query Analyzer</h3>
-            <button
-              class="close-analyzer-btn"
-              @click="showAnalyzer = false"
-            >
-              ✕
-            </button>
+            <button class="close-analyzer-btn" @click="showAnalyzer = false">✕</button>
           </div>
-          <div
-            v-if="sqlAnalysis"
-            class="analyzer-content-compact"
-          >
+          <div v-if="sqlAnalysis" class="analyzer-content-compact">
             <div class="analyzer-subsection">
               <h4>Overview</h4>
               <div class="stats-grid-compact">
@@ -102,22 +65,16 @@
             <div class="analyzer-subsection">
               <h4>Slowest Queries</h4>
               <div class="query-list-compact">
-                <div
-                  v-if="sqlAnalysis.slowestQueries.length === 0"
-                  class="query-item-compact"
-                >
-                  No SQL queries
-                </div>
+                <div v-if="sqlAnalysis.slowestQueries.length === 0" class="query-item-compact">No SQL queries</div>
                 <div
                   v-for="(q, index) in sqlAnalysis.slowestQueries.slice(0, 3)"
                   :key="index"
                   class="query-item-compact"
                 >
                   <div class="query-header-compact">
-                    <span
-                      class="query-duration"
-                      :class="{ 'query-slow': q.duration > 10 }"
-                    >{{ q.duration.toFixed(2) }}ms</span>
+                    <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }"
+                      >{{ q.duration.toFixed(2) }}ms</span
+                    >
                     <span class="query-meta-inline">{{ q.table }} · {{ q.operation }}</span>
                   </div>
                   <div class="query-text-compact">
@@ -145,7 +102,9 @@
                 >
                   <div class="query-header-compact">
                     <span class="query-count">{{ item.count }}x</span>
-                    <span class="query-meta-inline">{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span>
+                    <span class="query-meta-inline"
+                      >{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span
+                    >
                   </div>
                   <div class="query-text-compact">
                     {{ item.example.query.substring(0, 60) }}{{ item.example.query.length > 60 ? "..." : "" }}
@@ -166,10 +125,7 @@
               </div>
             </div>
 
-            <div
-              v-if="sqlAnalysis.nPlusOne.length > 0"
-              class="analyzer-subsection"
-            >
+            <div v-if="sqlAnalysis.nPlusOne.length > 0" class="analyzer-subsection">
               <h4>N+1 Issues ({{ sqlAnalysis.nPlusOne.length }})</h4>
               <div class="query-list-compact">
                 <div
@@ -181,9 +137,7 @@
                     <span class="query-count">{{ item.count }}x</span>
                     <span class="query-meta-inline">{{ item.example.table }}</span>
                   </div>
-                  <div class="query-text-compact">
-                    {{ item.example.query.substring(0, 60) }}...
-                  </div>
+                  <div class="query-text-compact">{{ item.example.query.substring(0, 60) }}...</div>
                 </div>
               </div>
             </div>
@@ -191,11 +145,7 @@
             <div class="analyzer-subsection">
               <h4>Tables</h4>
               <div class="table-list-compact">
-                <span
-                  v-for="(item, index) in sqlAnalysis.tables"
-                  :key="index"
-                  class="table-badge-compact"
-                >
+                <span v-for="(item, index) in sqlAnalysis.tables" :key="index" class="table-badge-compact">
                   {{ item.table }}<span class="table-count">({{ item.count }})</span>
                 </span>
               </div>
@@ -206,19 +156,9 @@
         <div class="section">
           <h3>Containers</h3>
           <div class="container-list">
-            <div
-              v-for="project in projectNames"
-              :key="project"
-              class="project-section"
-            >
-              <div
-                class="project-header"
-                @click="toggleProjectCollapse(project)"
-              >
-                <span
-                  class="disclosure-arrow"
-                  :class="{ collapsed: isProjectCollapsed(project) }"
-                >▼</span>
+            <div v-for="project in projectNames" :key="project" class="project-section">
+              <div class="project-header" @click="toggleProjectCollapse(project)">
+                <span class="disclosure-arrow" :class="{ collapsed: isProjectCollapsed(project) }">▼</span>
                 <div
                   class="checkbox"
                   :class="{ checked: isProjectSelected(project), indeterminate: isProjectIndeterminate(project) }"
@@ -227,24 +167,15 @@
                 <span class="project-name">{{ project }}</span>
                 <span class="project-count">({{ containersByProject[project].length }})</span>
               </div>
-              <div
-                class="project-containers"
-                :class="{ collapsed: isProjectCollapsed(project) }"
-              >
+              <div class="project-containers" :class="{ collapsed: isProjectCollapsed(project) }">
                 <div
                   v-for="container in containersByProject[project]"
                   :key="container.Name"
                   class="container-item"
                   :class="{ selected: isContainerSelected(container.Name) }"
                 >
-                  <div
-                    style="display: flex; flex: 1; align-items: center"
-                    @click="toggleContainer(container.Name)"
-                  >
-                    <div
-                      class="checkbox"
-                      :class="{ checked: isContainerSelected(container.Name) }"
-                    />
+                  <div style="display: flex; flex: 1; align-items: center" @click="toggleContainer(container.Name)">
+                    <div class="checkbox" :class="{ checked: isContainerSelected(container.Name) }" />
                     <div class="container-info">
                       <div class="container-name">
                         {{ getShortContainerName(container.ID) }}
@@ -260,10 +191,7 @@
                     @click.stop="openRetentionModal(container.Name)"
                   >
                     {{ logCounts[container.Name] || 0 }}
-                    <span
-                      v-if="retentions[container.Name]"
-                      class="retention-indicator"
-                    >⏱</span>
+                    <span v-if="retentions[container.Name]" class="retention-indicator">⏱</span>
                   </div>
                 </div>
               </div>
@@ -271,10 +199,7 @@
           </div>
         </div>
 
-        <div
-          v-if="recentRequests.length > 0"
-          class="section"
-        >
+        <div v-if="recentRequests.length > 0" class="section">
           <h3>Recent Requests</h3>
           <div class="recent-requests-list">
             <div
@@ -291,7 +216,8 @@
                   v-if="req.latency"
                   class="request-latency"
                   :class="{ 'latency-slow': req.latency && req.latency > 1000 }"
-                >{{ req.latency }}ms</span>
+                  >{{ req.latency }}ms</span
+                >
                 <span
                   v-if="req.statusCode"
                   class="request-status"
@@ -299,17 +225,11 @@
                     'status-success': req.statusCode >= 200 && req.statusCode < 300,
                     'status-error': req.statusCode >= 400,
                   }"
-                >{{ req.statusCode }}</span>
+                  >{{ req.statusCode }}</span
+                >
               </div>
-              <div
-                v-if="req.operations.length > 0"
-                class="request-operations"
-              >
-                <span
-                  v-for="op in req.operations"
-                  :key="op"
-                  class="operation-badge"
-                >{{ op }}</span>
+              <div v-if="req.operations.length > 0" class="request-operations">
+                <span v-for="op in req.operations" :key="op" class="operation-badge">{{ op }}</span>
               </div>
               <div class="request-footer">
                 <span class="request-timestamp">{{ req.timestamp }}</span>
@@ -323,57 +243,27 @@
           <h3>Log Levels</h3>
           <div class="level-filters">
             <label class="level-filter">
-              <input
-                type="checkbox"
-                value="TRC"
-                :checked="isLevelSelected('TRC')"
-                @change="toggleLevel('TRC')"
-              >
+              <input type="checkbox" value="TRC" :checked="isLevelSelected('TRC')" @change="toggleLevel('TRC')" />
               <span class="level-badge level-trc">TRC</span>
             </label>
             <label class="level-filter">
-              <input
-                type="checkbox"
-                value="DBG"
-                :checked="isLevelSelected('DBG')"
-                @change="toggleLevel('DBG')"
-              >
+              <input type="checkbox" value="DBG" :checked="isLevelSelected('DBG')" @change="toggleLevel('DBG')" />
               <span class="level-badge level-dbg">DBG</span>
             </label>
             <label class="level-filter">
-              <input
-                type="checkbox"
-                value="INF"
-                :checked="isLevelSelected('INF')"
-                @change="toggleLevel('INF')"
-              >
+              <input type="checkbox" value="INF" :checked="isLevelSelected('INF')" @change="toggleLevel('INF')" />
               <span class="level-badge level-inf">INF</span>
             </label>
             <label class="level-filter">
-              <input
-                type="checkbox"
-                value="WRN"
-                :checked="isLevelSelected('WRN')"
-                @change="toggleLevel('WRN')"
-              >
+              <input type="checkbox" value="WRN" :checked="isLevelSelected('WRN')" @change="toggleLevel('WRN')" />
               <span class="level-badge level-wrn">WRN</span>
             </label>
             <label class="level-filter">
-              <input
-                type="checkbox"
-                value="ERR"
-                :checked="isLevelSelected('ERR')"
-                @change="toggleLevel('ERR')"
-              >
+              <input type="checkbox" value="ERR" :checked="isLevelSelected('ERR')" @change="toggleLevel('ERR')" />
               <span class="level-badge level-err">ERR</span>
             </label>
             <label class="level-filter">
-              <input
-                type="checkbox"
-                value="NONE"
-                :checked="isLevelSelected('NONE')"
-                @change="toggleLevel('NONE')"
-              >
+              <input type="checkbox" value="NONE" :checked="isLevelSelected('NONE')" @change="toggleLevel('NONE')" />
               <span class="level-badge level-none">NONE</span>
             </label>
           </div>
@@ -389,60 +279,29 @@
               }"
               :title="wsConnected ? 'Click to view debug information' : ''"
               @click="showDebugInfo"
-            >{{ statusText }}</span>
+              >{{ statusText }}</span
+            >
             <span>{{ logCountText }}</span>
           </div>
-          <button
-            class="clear-logs-btn"
-            title="Clear all logs"
-            @click="clearLogs"
-          >
-            Clear Logs
-          </button>
+          <button class="clear-logs-btn" title="Clear all logs" @click="clearLogs">Clear Logs</button>
         </div>
       </aside>
 
       <main class="log-viewer">
-        <div
-          ref="logsContainer"
-          class="logs"
-        >
-          <div
-            v-for="(log, index) in filteredLogs"
-            :key="index"
-            class="log-line"
-            @click="openLogDetails(log)"
-          >
-            <span
-              class="log-container"
-              :title="log.timestamp"
-            >{{ getShortContainerName(log.containerId) }}</span>
-            <span
-              v-if="log.entry?.timestamp"
-              class="log-timestamp"
-            >{{ formatTimestamp(log.entry.timestamp) }}</span>
-            <span
-              v-if="log.entry?.level"
-              class="log-level"
-              :class="log.entry.level"
-            >{{ log.entry.level }}</span>
-            <span
-              v-if="log.entry?.file"
-              class="log-file"
-            >{{ log.entry.file }}</span>
-            <span
-              v-if="log.entry?.message"
-              class="log-message"
-            >{{ log.entry.message }}</span>
-            <span
-              v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})"
-              :key="idx"
-              class="log-field"
-            >
-              <span class="log-field-key">{{ key }}</span>=<span
+        <div ref="logsContainer" class="logs">
+          <div v-for="(log, index) in filteredLogs" :key="index" class="log-line" @click="openLogDetails(log)">
+            <span class="log-container" :title="log.timestamp">{{ getShortContainerName(log.containerId) }}</span>
+            <span v-if="log.entry?.timestamp" class="log-timestamp">{{ formatTimestamp(log.entry.timestamp) }}</span>
+            <span v-if="log.entry?.level" class="log-level" :class="log.entry.level">{{ log.entry.level }}</span>
+            <span v-if="log.entry?.file" class="log-file">{{ log.entry.file }}</span>
+            <span v-if="log.entry?.message" class="log-message">{{ log.entry.message }}</span>
+            <span v-for="([key, value], idx) in Object.entries(log.entry?.fields || {})" :key="idx" class="log-field">
+              <span class="log-field-key">{{ key }}</span
+              >=<span
                 :class="{ 'log-field-value': !isJsonField(value) }"
                 @click.stop="!isJsonField(value) && setTraceFilter(key, value, $event)"
-              >{{ formatFieldValue(key, value) }}</span>
+                >{{ formatFieldValue(key, value) }}</span
+              >
             </span>
           </div>
         </div>
@@ -451,30 +310,15 @@
   </div>
 
   <!-- Log Details Modal -->
-  <div
-    v-if="showLogModal"
-    class="modal"
-    @click="showLogModal = false"
-  >
-    <div
-      class="modal-content"
-      @click.stop
-    >
+  <div v-if="showLogModal" class="modal" @click="showLogModal = false">
+    <div class="modal-content" @click.stop>
       <div class="modal-header">
         <h3>Log Details</h3>
-        <button @click="showLogModal = false">
-          ✕
-        </button>
+        <button @click="showLogModal = false">✕</button>
       </div>
-      <div
-        v-if="selectedLog"
-        class="modal-body"
-      >
+      <div v-if="selectedLog" class="modal-body">
         <!-- Show Raw Log first if it's NOT JSON -->
-        <div
-          v-if="!isRawLogJson(selectedLog)"
-          class="modal-section"
-        >
+        <div v-if="!isRawLogJson(selectedLog)" class="modal-section">
           <h4>Raw Log</h4>
           <pre
             style="white-space: pre-wrap"
@@ -494,35 +338,20 @@
               class="parsed-field"
               style="display: flex; gap: 1rem; align-items: center"
             >
-              <div
-                v-if="selectedLog.entry?.timestamp"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  Timestamp
-                </div>
+              <div v-if="selectedLog.entry?.timestamp" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">Timestamp</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.timestamp }}
                 </div>
               </div>
-              <div
-                v-if="selectedLog.entry?.level"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  Level
-                </div>
+              <div v-if="selectedLog.entry?.level" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">Level</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.level }}
                 </div>
               </div>
-              <div
-                v-if="selectedLog.entry?.fields?.request_id"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  request_id
-                </div>
+              <div v-if="selectedLog.entry?.fields?.request_id" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">request_id</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.fields.request_id }}
                 </div>
@@ -535,64 +364,34 @@
               class="parsed-field"
               style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap"
             >
-              <div
-                v-if="selectedLog.entry?.fields?.['graphql.operation']"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  graphql.operation
-                </div>
+              <div v-if="selectedLog.entry?.fields?.['graphql.operation']" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">graphql.operation</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.fields["graphql.operation"] }}
                 </div>
               </div>
-              <div
-                v-if="selectedLog.entry?.fields?.['trace_id']"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  trace_id
-                </div>
+              <div v-if="selectedLog.entry?.fields?.['trace_id']" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">trace_id</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.fields["trace_id"] }}
                 </div>
               </div>
             </div>
             <!-- Message on its own line -->
-            <div
-              v-if="selectedLog.entry?.message"
-              class="parsed-field"
-            >
-              <div class="parsed-field-key">
-                Message
-              </div>
-              <div
-                v-if="isSQLMessage(selectedLog.entry.message)"
-                class="parsed-field-value"
-              >
-                <pre
-                  ref="sqlMessageRef"
-                  class="sql-query-text"
-                  style="white-space: pre-wrap; margin: 0"
-                >{{
+            <div v-if="selectedLog.entry?.message" class="parsed-field">
+              <div class="parsed-field-key">Message</div>
+              <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
+                <pre ref="sqlMessageRef" class="sql-query-text" style="white-space: pre-wrap; margin: 0">{{
                   formatMessage(selectedLog.entry.message)
                 }}</pre>
               </div>
-              <div
-                v-else
-                class="parsed-field-value"
-              >
+              <div v-else class="parsed-field-value">
                 {{ selectedLog.entry.message }}
               </div>
             </div>
             <!-- File -->
-            <div
-              v-if="selectedLog.entry?.file"
-              class="parsed-field"
-            >
-              <div class="parsed-field-key">
-                File
-              </div>
+            <div v-if="selectedLog.entry?.file" class="parsed-field">
+              <div class="parsed-field-key">File</div>
               <div class="parsed-field-value">
                 {{ selectedLog.entry.file }}
               </div>
@@ -601,41 +400,26 @@
             <div
               v-if="
                 selectedLog.entry?.fields?.['db.rows'] ||
-                  selectedLog.entry?.fields?.['db.table'] ||
-                  selectedLog.entry?.fields?.['duration']
+                selectedLog.entry?.fields?.['db.table'] ||
+                selectedLog.entry?.fields?.['duration']
               "
               class="parsed-field"
               style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap"
             >
-              <div
-                v-if="selectedLog.entry?.fields?.['db.rows']"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  db.rows
-                </div>
+              <div v-if="selectedLog.entry?.fields?.['db.rows']" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">db.rows</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.fields["db.rows"] }}
                 </div>
               </div>
-              <div
-                v-if="selectedLog.entry?.fields?.['db.table']"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  db.table
-                </div>
+              <div v-if="selectedLog.entry?.fields?.['db.table']" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">db.table</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.fields["db.table"] }}
                 </div>
               </div>
-              <div
-                v-if="selectedLog.entry?.fields?.['duration']"
-                style="display: flex; gap: 0.5rem"
-              >
-                <div class="parsed-field-key">
-                  duration
-                </div>
+              <div v-if="selectedLog.entry?.fields?.['duration']" style="display: flex; gap: 0.5rem">
+                <div class="parsed-field-key">duration</div>
                 <div class="parsed-field-value">
                   {{ selectedLog.entry.fields["duration"] }}
                 </div>
@@ -651,26 +435,17 @@
               <div class="parsed-field-key">
                 {{ key }}
               </div>
-              <div
-                v-if="isJsonField(value)"
-                class="parsed-field-value"
-              >
+              <div v-if="isJsonField(value)" class="parsed-field-value">
                 <pre>{{ formatJsonField(value) }}</pre>
               </div>
-              <div
-                v-else
-                class="parsed-field-value"
-              >
+              <div v-else class="parsed-field-value">
                 {{ value }}
               </div>
             </div>
           </div>
         </div>
         <!-- Show Raw Log last if it IS JSON -->
-        <div
-          v-if="isRawLogJson(selectedLog)"
-          class="modal-section"
-        >
+        <div v-if="isRawLogJson(selectedLog)" class="modal-section">
           <h4>Raw Log</h4>
           <pre
             class="hljs"
@@ -683,15 +458,8 @@
   </div>
 
   <!-- EXPLAIN Plan Side Panel -->
-  <div
-    v-if="showExplainModal"
-    class="side-panel-overlay"
-    @click="closeExplainPlanModal"
-  >
-    <div
-      class="side-panel"
-      @click.stop
-    >
+  <div v-if="showExplainModal" class="side-panel-overlay" @click="closeExplainPlanModal">
+    <div class="side-panel" @click.stop>
       <div class="side-panel-header">
         <h3>SQL Query EXPLAIN Plan</h3>
         <div style="display: flex; gap: 0.5rem">
@@ -703,54 +471,28 @@
           >
             📋 Share
           </button>
-          <button @click="closeExplainPlanModal">
-            ✕
-          </button>
+          <button @click="closeExplainPlanModal">✕</button>
         </div>
       </div>
       <div class="side-panel-body">
-        <div
-          v-if="explainData.error"
-          class="alert alert-danger"
-          style="display: block; margin: 1rem"
-        >
+        <div v-if="explainData.error" class="alert alert-danger" style="display: block; margin: 1rem">
           {{ explainData.error }}
         </div>
-        <div
-          v-if="!explainData.error"
-          class="d-flex flex-column"
-          style="height: 100%"
-        >
-          <ExplainPlanFormatter
-            :explain-plan="explainData.planSource"
-            :query="explainData.planQuery"
-          />
+        <div v-if="!explainData.error" class="d-flex flex-column" style="height: 100%">
+          <ExplainPlanFormatter :explain-plan="explainData.planSource" :query="explainData.planQuery" />
         </div>
       </div>
     </div>
   </div>
 
   <!-- Retention Modal -->
-  <div
-    v-if="showRetentionModal"
-    class="modal"
-    @click="showRetentionModal = false"
-  >
-    <div
-      class="modal-content"
-      style="max-width: 500px"
-      @click.stop
-    >
+  <div v-if="showRetentionModal" class="modal" @click="showRetentionModal = false">
+    <div class="modal-content" style="max-width: 500px" @click.stop>
       <div class="modal-header">
         <h3>Log Retention - {{ retentionContainer }}</h3>
-        <button @click="showRetentionModal = false">
-          ✕
-        </button>
+        <button @click="showRetentionModal = false">✕</button>
       </div>
-      <div
-        class="modal-body"
-        style="padding: 1.5rem"
-      >
+      <div class="modal-body" style="padding: 1.5rem">
         <div style="margin-bottom: 1rem">
           <label style="display: block; margin-bottom: 0.5rem; font-weight: 500">Retention Type:</label>
           <select
@@ -764,12 +506,8 @@
               border-radius: 6px;
             "
           >
-            <option value="count">
-              By Count (number of logs)
-            </option>
-            <option value="time">
-              By Time (seconds)
-            </option>
+            <option value="count">By Count (number of logs)</option>
+            <option value="time">By Time (seconds)</option>
           </select>
         </div>
         <div style="margin-bottom: 1rem">
@@ -789,7 +527,7 @@
               border-radius: 6px;
             "
             :placeholder="retentionForm.type === 'count' ? 'e.g., 1000' : 'e.g., 3600 (1 hour)'"
-          >
+          />
         </div>
         <div style="display: flex; gap: 0.5rem; justify-content: flex-end">
           <button
@@ -840,72 +578,43 @@
   </div>
 
   <!-- Debug Info Modal -->
-  <div
-    v-if="showDebugModal"
-    class="modal"
-    @click="showDebugModal = false"
-  >
-    <div
-      class="modal-content"
-      style="max-width: 800px; max-height: 90vh; overflow-y: auto"
-      @click.stop
-    >
+  <div v-if="showDebugModal" class="modal" @click="showDebugModal = false">
+    <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto" @click.stop>
       <div class="modal-header">
         <h3>Debug Information</h3>
-        <button @click="showDebugModal = false">
-          ✕
-        </button>
+        <button @click="showDebugModal = false">✕</button>
       </div>
-      <div
-        class="modal-body"
-        style="padding: 1.5rem"
-      >
-        <div
-          v-if="debugInfo"
-          style="display: flex; flex-direction: column; gap: 1.5rem"
-        >
+      <div class="modal-body" style="padding: 1.5rem">
+        <div v-if="debugInfo" style="display: flex; flex-direction: column; gap: 1.5rem">
           <div class="modal-section">
             <h4>System Status</h4>
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem">
               <div>
-                <div class="parsed-field-key">
-                  Total Logs in Memory
-                </div>
+                <div class="parsed-field-key">Total Logs in Memory</div>
                 <div class="parsed-field-value">
                   {{ debugInfo.totalLogsInMemory.toLocaleString() }}
                 </div>
               </div>
               <div>
-                <div class="parsed-field-key">
-                  Container Count
-                </div>
+                <div class="parsed-field-key">Container Count</div>
                 <div class="parsed-field-value">
                   {{ debugInfo.containerCount }}
                 </div>
               </div>
               <div>
-                <div class="parsed-field-key">
-                  Connected Clients
-                </div>
+                <div class="parsed-field-key">Connected Clients</div>
                 <div class="parsed-field-value">
                   {{ debugInfo.connectedClients }}
                 </div>
               </div>
               <div>
-                <div class="parsed-field-key">
-                  Log Channel
-                </div>
-                <div class="parsed-field-value">
-                  {{ debugInfo.logChannelSize }} / {{ debugInfo.logChannelCap }}
-                </div>
+                <div class="parsed-field-key">Log Channel</div>
+                <div class="parsed-field-value">{{ debugInfo.logChannelSize }} / {{ debugInfo.logChannelCap }}</div>
               </div>
             </div>
           </div>
 
-          <div
-            v-if="debugInfo.containers.length > 0"
-            class="modal-section"
-          >
+          <div v-if="debugInfo.containers.length > 0" class="modal-section">
             <h4>Containers ({{ debugInfo.containers.length }})</h4>
             <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto">
               <div
@@ -927,17 +636,12 @@
                     {{ container.id }}
                   </div>
                 </div>
-                <div style="font-weight: 500; color: var(--color-blue)">
-                  {{ container.count }} logs
-                </div>
+                <div style="font-weight: 500; color: var(--color-blue)">{{ container.count }} logs</div>
               </div>
             </div>
           </div>
 
-          <div
-            v-if="debugInfo.clientFilters.length > 0"
-            class="modal-section"
-          >
+          <div v-if="debugInfo.clientFilters.length > 0" class="modal-section">
             <h4>Client Filters ({{ debugInfo.clientFilters.length }})</h4>
             <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto">
               <div
@@ -947,37 +651,25 @@
               >
                 <div style="margin-bottom: 0.5rem">
                   <span class="parsed-field-key">Containers:</span>
-                  <span
-                    class="parsed-field-value"
-                    style="margin-left: 0.5rem"
-                  >
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
                     {{ filter.selectedContainers.length > 0 ? filter.selectedContainers.join(", ") : "None" }}
                   </span>
                 </div>
                 <div style="margin-bottom: 0.5rem">
                   <span class="parsed-field-key">Levels:</span>
-                  <span
-                    class="parsed-field-value"
-                    style="margin-left: 0.5rem"
-                  >
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
                     {{ filter.selectedLevels.length > 0 ? filter.selectedLevels.join(", ") : "None" }}
                   </span>
                 </div>
                 <div style="margin-bottom: 0.5rem">
                   <span class="parsed-field-key">Search Query:</span>
-                  <span
-                    class="parsed-field-value"
-                    style="margin-left: 0.5rem"
-                  >
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
                     {{ filter.searchQuery || "None" }}
                   </span>
                 </div>
                 <div>
                   <span class="parsed-field-key">Trace Filters:</span>
-                  <span
-                    class="parsed-field-value"
-                    style="margin-left: 0.5rem"
-                  >
+                  <span class="parsed-field-value" style="margin-left: 0.5rem">
                     {{ filter.traceFilterCount }}
                   </span>
                 </div>
@@ -985,10 +677,7 @@
             </div>
           </div>
         </div>
-        <div
-          v-else
-          style="text-align: center; padding: 2rem; color: var(--text-secondary)"
-        >
+        <div v-else style="text-align: center; padding: 2rem; color: var(--text-secondary)">
           Loading debug information...
         </div>
       </div>
@@ -1009,7 +698,6 @@ import type {
   Container,
   LogMessage,
   SQLAnalysis,
-  ExplainData,
   RecentRequest,
   RetentionSettings,
   WebSocketMessage,

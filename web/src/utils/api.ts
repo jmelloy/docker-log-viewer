@@ -165,7 +165,7 @@ export const Format = {
     try {
       const obj = typeof data === "string" ? JSON.parse(data) : data;
       return JSON.stringify(obj, null, indent);
-    } catch (e) {
+    } catch {
       return String(data);
     }
   },

@@ -1,39 +1,20 @@
 <template>
   <div class="query-plan-viewer">
-    <div
-      v-if="error"
-      class="alert alert-danger"
-    >
+    <div v-if="error" class="alert alert-danger">
       {{ error }}
     </div>
-    <div
-      v-else-if="!plan"
-      class="text-muted"
-    >
-      No query plan available.
-    </div>
-    <div
-      v-else
-      class="plan-tree"
-    >
-      <plan-node-item
-        :node="plan.Plan"
-        :level="0"
-        :root-cost="rootCost"
-      />
-      <div class="total-rows">
-        Planning Time: {{ planningTime }}
-      </div>
-      <div class="total-width">
-        Execution Time: {{ executionTime }}
-      </div>
+    <div v-else-if="!plan" class="text-muted">No query plan available.</div>
+    <div v-else class="plan-tree">
+      <plan-node-item :node="plan.Plan" :level="0" :root-cost="rootCost" />
+      <div class="total-rows">Planning Time: {{ planningTime }}</div>
+      <div class="total-width">Execution Time: {{ executionTime }}</div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import type { Plan, PlanNodeType } from "@/types";
+import type { Plan } from "@/types";
 import PlanNodeItem from "./PlanNodeItem.vue";
 
 export default defineComponent({

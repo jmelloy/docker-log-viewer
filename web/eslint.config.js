@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 import pluginVue from "eslint-plugin-vue";
 import tseslint from "typescript-eslint";
+import eslintConfigPrettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
@@ -10,6 +11,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...pluginVue.configs["flat/recommended"],
+  eslintConfigPrettier,
   {
     files: ["**/*.vue"],
     languageOptions: {
@@ -42,6 +44,7 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-empty-object-type": "off",
       "vue/multi-word-component-names": "off",
+      "vue/no-v-html": "off",
     },
   }
 );

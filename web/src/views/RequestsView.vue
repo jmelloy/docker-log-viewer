@@ -6,17 +6,9 @@
       <aside class="sidebar">
         <div class="section">
           <h3>Sample Queries</h3>
-          <button
-            class="btn-primary"
-            @click="openNewSampleQueryModal"
-          >
-            + New Sample Query
-          </button>
+          <button class="btn-primary" @click="openNewSampleQueryModal">+ New Sample Query</button>
           <div class="requests-list">
-            <p
-              v-if="sampleQueries.length === 0"
-              style="padding: 1rem; color: #6c757d; text-align: center"
-            >
+            <p v-if="sampleQueries.length === 0" style="padding: 1rem; color: #6c757d; text-align: center">
               No sample queries yet
             </p>
             <div
@@ -40,21 +32,10 @@
       <main class="content">
         <div class="empty-state">
           <div class="flex-between mb-1">
-            <h2 class="m-0">
-              All Requests
-            </h2>
+            <h2 class="m-0">All Requests</h2>
             <div class="flex-center">
-              <button
-                class="btn-primary"
-                @click="openExecuteNewModal"
-              >
-                ▶ Execute Request
-              </button>
-              <button
-                v-if="compareButtonVisible"
-                class="btn-primary"
-                @click="compareSelectedRequests"
-              >
+              <button class="btn-primary" @click="openExecuteNewModal">▶ Execute Request</button>
+              <button v-if="compareButtonVisible" class="btn-primary" @click="compareSelectedRequests">
                 Compare Selected
               </button>
             </div>
@@ -66,13 +47,10 @@
               placeholder="Search requests..."
               class="search-input-full"
               @input="handleSearchChange"
-            >
+            />
           </div>
           <div class="executions-list">
-            <p
-              v-if="allRequests.length === 0"
-              class="text-muted"
-            >
+            <p v-if="allRequests.length === 0" class="text-muted">
               No requests executed yet. Click "Execute Request" to get started.
             </p>
             <div
@@ -87,11 +65,8 @@
                 :data-id="req.id"
                 :checked="selectedRequestIds.includes(req.id)"
                 @change="updateCompareButton"
-              >
-              <span
-                class="exec-status"
-                :class="getExecutionStatusClass(req)"
-              >{{ req.statusCode ?? "EXC" }}</span>
+              />
+              <span class="exec-status" :class="getExecutionStatusClass(req)">{{ req.statusCode ?? "EXC" }}</span>
               <span class="exec-name">{{ req.displayName }}</span>
               <span class="exec-time">{{ getExecutionTimeString(req) }}</span>
               <span class="exec-server">{{ getExecutionServerUrl(req) }}</span>
@@ -99,39 +74,12 @@
               <span class="exec-id">{{ req.requestIdHeader }}</span>
             </div>
           </div>
-          <div
-            v-if="totalPages > 1"
-            class="pagination"
-          >
-            <button
-              :disabled="!hasPrevPage"
-              class="btn-secondary"
-              @click="changePage(1)"
-            >
-              « First
-            </button>
-            <button
-              :disabled="!hasPrevPage"
-              class="btn-secondary"
-              @click="changePage(currentPage - 1)"
-            >
-              ‹ Prev
-            </button>
+          <div v-if="totalPages > 1" class="pagination">
+            <button :disabled="!hasPrevPage" class="btn-secondary" @click="changePage(1)">« First</button>
+            <button :disabled="!hasPrevPage" class="btn-secondary" @click="changePage(currentPage - 1)">‹ Prev</button>
             <span>Page {{ currentPage }} of {{ totalPages }}</span>
-            <button
-              :disabled="!hasNextPage"
-              class="btn-secondary"
-              @click="changePage(currentPage + 1)"
-            >
-              Next ›
-            </button>
-            <button
-              :disabled="!hasNextPage"
-              class="btn-secondary"
-              @click="changePage(totalPages)"
-            >
-              Last »
-            </button>
+            <button :disabled="!hasNextPage" class="btn-secondary" @click="changePage(currentPage + 1)">Next ›</button>
+            <button :disabled="!hasNextPage" class="btn-secondary" @click="changePage(totalPages)">Last »</button>
           </div>
         </div>
       </main>
@@ -139,16 +87,11 @@
   </div>
 
   <!-- New Sample Query Modal -->
-  <div
-    v-if="showNewSampleQueryModal"
-    class="modal"
-  >
+  <div v-if="showNewSampleQueryModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
         <h3>New Sample Query</h3>
-        <button @click="showNewSampleQueryModal = false">
-          ✕
-        </button>
+        <button @click="showNewSampleQueryModal = false">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
@@ -159,23 +102,13 @@
             type="text"
             placeholder="e.g., FetchUsers"
             required
-          >
+          />
         </div>
         <div class="form-group">
           <label for="newSampleQueryServer">Server (optional):</label>
-          <select
-            id="newSampleQueryServer"
-            v-model="newQueryForm.serverId"
-            :disabled="newQueryForm.createNewServer"
-          >
-            <option value="">
-              -- No Server --
-            </option>
-            <option
-              v-for="server in servers"
-              :key="server.id"
-              :value="server.id"
-            >
+          <select id="newSampleQueryServer" v-model="newQueryForm.serverId" :disabled="newQueryForm.createNewServer">
+            <option value="">-- No Server --</option>
+            <option v-for="server in servers" :key="server.id" :value="server.id">
               {{ server.name }} ({{ server.url }})
             </option>
           </select>
@@ -186,7 +119,7 @@
               v-model="newQueryForm.createNewServer"
               type="checkbox"
               @change="newQueryForm.createNewServer && (newQueryForm.serverId = '')"
-            >
+            />
             <span>Create New Server</span>
           </label>
         </div>
@@ -198,7 +131,7 @@
               v-model="newQueryForm.url"
               type="text"
               placeholder="https://api.example.com/graphql"
-            >
+            />
           </div>
           <div class="form-group">
             <label for="newSampleQueryToken">Bearer Token (optional):</label>
@@ -207,16 +140,11 @@
               v-model="newQueryForm.bearerToken"
               type="text"
               placeholder="your-token-here"
-            >
+            />
           </div>
           <div class="form-group">
             <label for="newSampleQueryDevID">Dev ID (optional):</label>
-            <input
-              id="newSampleQueryDevID"
-              v-model="newQueryForm.devId"
-              type="text"
-              placeholder="dev-user-id"
-            >
+            <input id="newSampleQueryDevID" v-model="newQueryForm.devId" type="text" placeholder="dev-user-id" />
           </div>
         </div>
         <div class="form-group">
@@ -225,55 +153,30 @@
             id="newSampleQueryData"
             v-model="newQueryForm.requestData"
             rows="15"
-            placeholder="{&quot;query&quot;: &quot;{ users { id name } }&quot;}"
+            placeholder='{"query": "{ users { id name } }"}'
           />
         </div>
       </div>
       <div class="modal-footer">
-        <button
-          class="btn-primary"
-          @click="saveNewSampleQuery"
-        >
-          Save Sample Query
-        </button>
-        <button
-          class="btn-secondary"
-          @click="showNewSampleQueryModal = false"
-        >
-          Cancel
-        </button>
+        <button class="btn-primary" @click="saveNewSampleQuery">Save Sample Query</button>
+        <button class="btn-secondary" @click="showNewSampleQueryModal = false">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- Execute New Request Modal -->
-  <div
-    v-if="showExecuteNewModal"
-    class="modal"
-  >
+  <div v-if="showExecuteNewModal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
         <h3>Execute Request</h3>
-        <button @click="showExecuteNewModal = false">
-          ✕
-        </button>
+        <button @click="showExecuteNewModal = false">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
           <label for="executeNewQuery">Sample Query:</label>
-          <select
-            id="executeNewQuery"
-            v-model="selectedSampleQuery"
-            @change="selectSampleQueryForExecution"
-          >
-            <option :value="null">
-              -- Select Sample Query --
-            </option>
-            <option
-              v-for="sq in sampleQueries"
-              :key="sq.id"
-              :value="sq"
-            >
+          <select id="executeNewQuery" v-model="selectedSampleQuery" @change="selectSampleQueryForExecution">
+            <option :value="null">-- Select Sample Query --</option>
+            <option v-for="sq in sampleQueries" :key="sq.id" :value="sq">
               {{ getSampleQueryDisplayName(sq) }}
             </option>
           </select>
@@ -290,47 +193,24 @@
         </div>
         <div class="form-group">
           <label for="executeServer">Server: <span style="color: #f85149">*</span></label>
-          <select
-            id="executeServer"
-            v-model="executeForm.serverId"
-            required
-            @change="updateServerDefaults"
-          >
-            <option value="">
-              -- Select Server --
-            </option>
-            <option
-              v-for="server in servers"
-              :key="server.id"
-              :value="server.id"
-            >
+          <select id="executeServer" v-model="executeForm.serverId" required @change="updateServerDefaults">
+            <option value="">-- Select Server --</option>
+            <option v-for="server in servers" :key="server.id" :value="server.id">
               {{ server.name }} ({{ server.url }})
             </option>
           </select>
         </div>
         <div class="form-group">
           <label for="executeUserID">User ID (optional):</label>
-          <input
-            id="executeUserID"
-            v-model="executeForm.devIdOverride"
-            type="text"
-            placeholder="Override user ID"
-          >
+          <input id="executeUserID" v-model="executeForm.devIdOverride" type="text" placeholder="Override user ID" />
         </div>
         <div class="form-group">
           <details style="cursor: pointer">
-            <summary style="user-select: none; color: #79c0ff; margin-bottom: 0.5rem">
-              Advanced Options
-            </summary>
+            <summary style="user-select: none; color: #79c0ff; margin-bottom: 0.5rem">Advanced Options</summary>
             <div style="margin-top: 0.75rem; padding-left: 1rem; border-left: 2px solid #30363d">
               <div class="form-group">
                 <label for="executeToken">Bearer Token Override (optional):</label>
-                <input
-                  id="executeToken"
-                  v-model="executeForm.tokenOverride"
-                  type="text"
-                  placeholder="Override token"
-                >
+                <input id="executeToken" v-model="executeForm.tokenOverride" type="text" placeholder="Override token" />
               </div>
               <div class="form-group">
                 <label for="executeExperimentHeader">Experiment Header (optional):</label>
@@ -339,17 +219,13 @@
                   v-model="executeForm.experimentHeaderOverride"
                   type="text"
                   placeholder="Override experiment header"
-                >
+                />
               </div>
             </div>
           </details>
         </div>
 
-        <div
-          v-if="Object.keys(executeForm.graphqlVariables).length > 0"
-          class="form-group"
-          style="margin-top: 1.5rem"
-        >
+        <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
             <label style="margin: 0">GraphQL Variables:</label>
             <button
@@ -361,13 +237,11 @@
             </button>
           </div>
           <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem">
-            <div
-              v-for="(value, key) in executeForm.graphqlVariables"
-              :key="key"
-              style="margin-bottom: 0.75rem"
-            >
+            <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem">
               <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem">
-                <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem">{{ key }}:</label>
+                <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem"
+                  >{{ key }}:</label
+                >
                 <button
                   style="
                     background: #da3633;
@@ -404,11 +278,7 @@
             </div>
           </div>
         </div>
-        <div
-          v-else
-          class="form-group"
-          style="margin-top: 1.5rem"
-        >
+        <div v-else class="form-group" style="margin-top: 1.5rem">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
             <label style="margin: 0">GraphQL Variables:</label>
             <button
@@ -425,36 +295,18 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button
-          class="btn-primary"
-          @click="executeSelectedQuery"
-        >
-          Execute
-        </button>
-        <button
-          class="btn-secondary"
-          @click="showExecuteNewModal = false"
-        >
-          Cancel
-        </button>
+        <button class="btn-primary" @click="executeSelectedQuery">Execute</button>
+        <button class="btn-secondary" @click="showExecuteNewModal = false">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- Request Comparison Modal -->
-  <div
-    v-if="showComparisonModal && comparisonData"
-    class="modal"
-  >
-    <div
-      class="modal-content"
-      style="max-width: 1400px"
-    >
+  <div v-if="showComparisonModal && comparisonData" class="modal">
+    <div class="modal-content" style="max-width: 1400px">
       <div class="modal-header">
         <h3>Request Comparison</h3>
-        <button @click="showComparisonModal = false">
-          ✕
-        </button>
+        <button @click="showComparisonModal = false">✕</button>
       </div>
       <div class="modal-body">
         <div class="comparison-grid">
@@ -475,11 +327,7 @@
             <div class="comparison-section">
               <h4>SQL Queries ({{ comparisonData.detail1.sqlQueries.length }})</h4>
               <div class="comparison-queries">
-                <div
-                  v-for="(q, idx) in comparisonData.detail1.sqlQueries"
-                  :key="idx"
-                  class="comparison-query"
-                >
+                <div v-for="(q, idx) in comparisonData.detail1.sqlQueries" :key="idx" class="comparison-query">
                   <div>
                     <strong>{{ q.tableName }}</strong> - {{ q.durationMs.toFixed(2) }}ms
                   </div>
@@ -519,11 +367,7 @@
             <div class="comparison-section">
               <h4>SQL Queries ({{ comparisonData.detail2.sqlQueries.length }})</h4>
               <div class="comparison-queries">
-                <div
-                  v-for="(q, idx) in comparisonData.detail2.sqlQueries"
-                  :key="idx"
-                  class="comparison-query"
-                >
+                <div v-for="(q, idx) in comparisonData.detail2.sqlQueries" :key="idx" class="comparison-query">
                   <div>
                     <strong>{{ q.tableName }}</strong> - {{ q.durationMs.toFixed(2) }}ms
                   </div>

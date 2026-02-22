@@ -4,37 +4,21 @@
 
     <div class="main-layout">
       <main class="content content-padded">
-        <div
-          v-if="loading"
-          class="text-center p-3"
-        >
+        <div v-if="loading" class="text-center p-3">
           <p>Loading request details...</p>
         </div>
 
-        <div
-          v-if="error"
-          class="text-center p-3"
-        >
+        <div v-if="error" class="text-center p-3">
           <div class="alert alert-danger">
             {{ error }}
           </div>
-          <button
-            class="btn-secondary"
-            @click="goBack"
-          >
-            Go Back
-          </button>
+          <button class="btn-secondary" @click="goBack">Go Back</button>
         </div>
 
         <div v-if="!loading && !error && requestDetail">
           <div class="flex-between mb-1_5">
             <div>
-              <button
-                class="btn-secondary mb-0_5"
-                @click="goBack"
-              >
-                ← Back to Requests
-              </button>
+              <button class="btn-secondary mb-0_5" @click="goBack">← Back to Requests</button>
               <h2 class="m-0">
                 {{ requestDetail.execution.name || requestDetail.execution.displayName || "(unnamed)" }}
               </h2>
@@ -43,18 +27,10 @@
               </p>
             </div>
             <div style="display: flex; gap: 0.5rem">
-              <button
-                v-if="requestDetail.execution.requestBody"
-                class="btn-primary"
-                @click="executeAgain"
-              >
+              <button v-if="requestDetail.execution.requestBody" class="btn-primary" @click="executeAgain">
                 ▶ Execute Again
               </button>
-              <button
-                v-if="requestDetail.execution.requestBody"
-                class="btn-secondary"
-                @click="openExecuteModal"
-              >
+              <button v-if="requestDetail.execution.requestBody" class="btn-secondary" @click="openExecuteModal">
                 ⚙️ Execute w/ Override
               </button>
               <button
@@ -87,10 +63,7 @@
           <div class="execution-overview">
             <div class="stat-item">
               <span class="stat-label">Status Code</span>
-              <span
-                class="stat-value"
-                :class="statusClass"
-              >{{
+              <span class="stat-value" :class="statusClass">{{
                 requestDetail.execution.statusCode || "Executing"
               }}</span>
             </div>
@@ -106,10 +79,7 @@
               <span class="stat-label">Executed At</span>
               <span class="stat-value">{{ new Date(requestDetail.execution.executedAt).toLocaleString() }}</span>
             </div>
-            <div
-              v-if="requestDetail.server?.devId || requestDetail.execution.server?.devId"
-              class="stat-item"
-            >
+            <div v-if="requestDetail.server?.devId || requestDetail.execution.server?.devId" class="stat-item">
               <span class="stat-label">Dev ID</span>
               <span class="stat-value">{{
                 requestDetail.devId || requestDetail.server?.devId || requestDetail.execution.server?.devId || "N/A"
@@ -125,7 +95,8 @@
                     Request Body<span
                       v-if="isGraphQLRequest"
                       style="color: #8b949e; font-size: 0.75rem; margin-left: 0.5rem"
-                    >GraphQL</span>
+                      >GraphQL</span
+                    >
                   </h4>
                   <div style="display: flex; gap: 0.5rem">
                     <button
@@ -149,10 +120,7 @@
 
                 <!-- GraphQL Request Display -->
                 <div v-if="isGraphQLRequest">
-                  <div
-                    v-if="isGraphQLBatchRequest"
-                    style="margin-bottom: 0.5rem"
-                  >
+                  <div v-if="isGraphQLBatchRequest" style="margin-bottom: 0.5rem">
                     <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">
                       Operations ({{ graphqlOperations.length }}):
                     </div>
@@ -170,22 +138,13 @@
                         cursor: pointer;
                       "
                     >
-                      <option
-                        v-for="(op, idx) in graphqlOperations"
-                        :key="idx"
-                        :value="idx"
-                      >
+                      <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">
                         {{ op.operationName }}
                       </option>
                     </select>
                   </div>
-                  <div
-                    v-else-if="graphqlOperationName"
-                    style="margin-bottom: 0.5rem"
-                  >
-                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">
-                      Operation:
-                    </div>
+                  <div v-else-if="graphqlOperationName" style="margin-bottom: 0.5rem">
+                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Operation:</div>
                     <div
                       style="
                         background: #161b22;
@@ -201,34 +160,17 @@
                     </div>
                   </div>
                   <div style="margin-bottom: 0.5rem">
-                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">
-                      Query:
-                    </div>
-                    <pre
-                      class="graphql-query"
-                      style="max-height: 12em; white-space: pre-wrap"
-                    >{{ graphqlQuery }}</pre>
+                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Query:</div>
+                    <pre class="graphql-query" style="max-height: 12em; white-space: pre-wrap">{{ graphqlQuery }}</pre>
                   </div>
-                  <div
-                    v-if="graphqlVariables"
-                    style="margin-bottom: 0.5rem"
-                  >
-                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">
-                      Variables:
-                    </div>
-                    <pre
-                      class="json-display"
-                      style="max-height: 8em"
-                    >{{ graphqlVariables }}</pre>
+                  <div v-if="graphqlVariables" style="margin-bottom: 0.5rem">
+                    <div style="color: #8b949e; font-size: 0.75rem; margin-bottom: 0.25rem">Variables:</div>
+                    <pre class="json-display" style="max-height: 8em">{{ graphqlVariables }}</pre>
                   </div>
                 </div>
 
                 <!-- Standard Request Display -->
-                <pre
-                  v-else
-                  class="json-display"
-                  style="max-height: 20em"
-                >{{ requestData }}</pre>
+                <pre v-else class="json-display" style="max-height: 20em">{{ requestData }}</pre>
               </div>
               <div style="flex: 1; min-width: 300px">
                 <div
@@ -240,9 +182,7 @@
                     gap: 0.5rem;
                   "
                 >
-                  <h4 style="margin: 0">
-                    Response
-                  </h4>
+                  <h4 style="margin: 0">Response</h4>
                   <input
                     v-model="responseFilter"
                     type="text"
@@ -259,7 +199,7 @@
                       font-size: 0.75rem;
                     "
                     title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
-                  >
+                  />
 
                   <div style="display: flex; gap: 0.5rem">
                     <button
@@ -280,32 +220,20 @@
                     </button>
                   </div>
                 </div>
-                <pre
-                  class="json-display"
-                  style="max-height: 28em"
-                >{{ filteredResponseBody }}</pre>
+                <pre class="json-display" style="max-height: 28em">{{ filteredResponseBody }}</pre>
               </div>
             </div>
           </div>
 
-          <div
-            v-if="requestDetail.execution.error"
-            class="modal-section"
-          >
+          <div v-if="requestDetail.execution.error" class="modal-section">
             <h4>Error</h4>
             <pre class="error-display">{{ requestDetail.execution.error }}</pre>
           </div>
 
-          <div
-            v-if="sqlAnalysisData"
-            class="modal-section"
-          >
+          <div v-if="sqlAnalysisData" class="modal-section">
             <h4>SQL Query Analyzer</h4>
 
-            <div
-              class="analyzer-subsection"
-              style="margin-bottom: 1.5rem"
-            >
+            <div class="analyzer-subsection" style="margin-bottom: 1.5rem">
               <h5
                 style="
                   color: #8b949e;
@@ -361,10 +289,9 @@
                     class="query-item-compact"
                   >
                     <div class="query-header-compact">
-                      <span
-                        class="query-duration"
-                        :class="{ 'query-slow': q.duration > 10 }"
-                      >{{ q.duration.toFixed(2) }}ms</span>
+                      <span class="query-duration" :class="{ 'query-slow': q.duration > 10 }"
+                        >{{ q.duration.toFixed(2) }}ms</span
+                      >
                       <span class="query-meta-inline">{{ q.table }} · {{ q.operation }}</span>
                     </div>
                     <div
@@ -424,7 +351,9 @@
                   >
                     <div class="query-header-compact">
                       <span class="query-count">{{ item.count }}x</span>
-                      <span class="query-meta-inline">{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span>
+                      <span class="query-meta-inline"
+                        >{{ item.example.table }} · {{ item.avgDuration.toFixed(2) }}ms</span
+                      >
                     </div>
                     <div
                       class="query-text-compact"
@@ -466,8 +395,8 @@
               <div
                 v-if="
                   requestDetail.indexAnalysis &&
-                    requestDetail.indexAnalysis.recommendations &&
-                    requestDetail.indexAnalysis.recommendations.length > 0
+                  requestDetail.indexAnalysis.recommendations &&
+                  requestDetail.indexAnalysis.recommendations.length > 0
                 "
                 class="analyzer-subsection"
                 style="flex: 1; min-width: 280px"
@@ -494,7 +423,8 @@
                         class="index-priority-badge"
                         :class="'priority-' + rec.priority"
                         style="font-size: 0.65rem; padding: 0.15rem 0.3rem"
-                      >{{ rec.priority.toUpperCase() }}</span>
+                        >{{ rec.priority.toUpperCase() }}</span
+                      >
                       <span class="query-meta-inline">{{ rec.tableName }}</span>
                     </div>
                     <div style="font-size: 0.7rem; color: #c9d1d9; margin-bottom: 0.25rem">
@@ -511,11 +441,7 @@
               </div>
             </div>
 
-            <div
-              v-if="sqlAnalysisData.tables.length > 0"
-              class="analyzer-subsection"
-              style="margin-bottom: 1.5rem"
-            >
+            <div v-if="sqlAnalysisData.tables.length > 0" class="analyzer-subsection" style="margin-bottom: 1.5rem">
               <h5
                 style="
                   color: #8b949e;
@@ -528,11 +454,7 @@
                 Tables
               </h5>
               <div class="table-list-compact">
-                <span
-                  v-for="(item, index) in sqlAnalysisData.tables"
-                  :key="index"
-                  class="table-badge-compact"
-                >
+                <span v-for="(item, index) in sqlAnalysisData.tables" :key="index" class="table-badge-compact">
                   {{ item.table }}<span class="table-count">({{ item.count }})</span>
                 </span>
               </div>
@@ -573,15 +495,11 @@
                       min-width: 250px;
                     "
                     title="Filter by GraphQL operation, table name, experiment, or any field"
-                  >
+                  />
                 </div>
               </div>
               <div class="sql-queries-list">
-                <div
-                  v-for="(q, idx) in filteredSQLQueries"
-                  :key="idx"
-                  class="sql-query-item"
-                >
+                <div v-for="(q, idx) in filteredSQLQueries" :key="idx" class="sql-query-item">
                   <div class="sql-query-header">
                     <span>{{ q.tableName || "unknown" }} - {{ q.operation || "SELECT" }}</span>
                     <span class="sql-query-duration">{{ q.durationMs.toFixed(2) }}ms</span>
@@ -626,8 +544,8 @@
           <div
             v-if="
               requestDetail.indexAnalysis &&
-                (requestDetail.indexAnalysis.sequentialScans?.length > 0 ||
-                  requestDetail.indexAnalysis.recommendations?.length > 0)
+              (requestDetail.indexAnalysis.sequentialScans?.length > 0 ||
+                requestDetail.indexAnalysis.recommendations?.length > 0)
             "
             class="modal-section"
           >
@@ -638,7 +556,8 @@
                 <span
                   class="stat-value"
                   :class="{ 'text-warning': requestDetail.indexAnalysis.summary.sequentialScans > 0 }"
-                >{{ requestDetail.indexAnalysis.summary.sequentialScans }}</span>
+                  >{{ requestDetail.indexAnalysis.summary.sequentialScans }}</span
+                >
               </div>
               <div class="stat-item">
                 <span class="stat-label">Index Scans</span>
@@ -649,24 +568,21 @@
                 <span
                   class="stat-value"
                   :class="{ 'text-warning': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }"
-                >{{ requestDetail.indexAnalysis.summary.totalRecommendations }}</span>
+                  >{{ requestDetail.indexAnalysis.summary.totalRecommendations }}</span
+                >
               </div>
               <div class="stat-item">
                 <span class="stat-label">High Priority</span>
                 <span
                   class="stat-value"
                   :class="{ 'text-danger': requestDetail.indexAnalysis.summary.highPriorityRecs > 0 }"
-                >{{ requestDetail.indexAnalysis.summary.highPriorityRecs }}</span>
+                  >{{ requestDetail.indexAnalysis.summary.highPriorityRecs }}</span
+                >
               </div>
             </div>
 
-            <div
-              v-if="requestDetail.indexAnalysis.sequentialScans?.length > 0"
-              style="margin-top: 1rem"
-            >
-              <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">
-                Sequential Scan Issues
-              </h5>
+            <div v-if="requestDetail.indexAnalysis.sequentialScans?.length > 0" style="margin-top: 1rem">
+              <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">Sequential Scan Issues</h5>
               <div class="index-issues-list">
                 <div
                   v-for="(issue, idx) in requestDetail.indexAnalysis.sequentialScans.slice(0, 5)"
@@ -675,26 +591,18 @@
                 >
                   <div class="index-issue-header">
                     <span class="index-issue-table">{{ issue.tableName }}</span>
-                    <span class="index-issue-stats">{{ issue.occurrences }}x · {{ issue.durationMs.toFixed(2) }}ms · cost:
-                      {{ issue.cost.toFixed(0) }}</span>
+                    <span class="index-issue-stats"
+                      >{{ issue.occurrences }}x · {{ issue.durationMs.toFixed(2) }}ms · cost:
+                      {{ issue.cost.toFixed(0) }}</span
+                    >
                   </div>
-                  <div
-                    v-if="issue.filterCondition"
-                    class="index-issue-filter"
-                  >
-                    Filter: {{ issue.filterCondition }}
-                  </div>
+                  <div v-if="issue.filterCondition" class="index-issue-filter">Filter: {{ issue.filterCondition }}</div>
                 </div>
               </div>
             </div>
 
-            <div
-              v-if="requestDetail.indexAnalysis.recommendations.length > 0"
-              style="margin-top: 1rem"
-            >
-              <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">
-                Index Recommendations
-              </h5>
+            <div v-if="requestDetail.indexAnalysis.recommendations.length > 0" style="margin-top: 1rem">
+              <h5 style="color: #8b949e; font-size: 0.9rem; margin-bottom: 0.5rem">Index Recommendations</h5>
               <div class="index-recommendations-list">
                 <div
                   v-for="(rec, idx) in requestDetail.indexAnalysis.recommendations.slice(0, 5)"
@@ -702,10 +610,7 @@
                   class="index-recommendation-item"
                 >
                   <div class="index-recommendation-header">
-                    <span
-                      class="index-priority-badge"
-                      :class="'priority-' + rec.priority"
-                    >{{
+                    <span class="index-priority-badge" :class="'priority-' + rec.priority">{{
                       rec.priority.toUpperCase()
                     }}</span>
                     <span class="index-recommendation-table">{{ rec.tableName }}</span>
@@ -713,12 +618,8 @@
                   <div class="index-recommendation-reason">
                     {{ rec.reason }}
                   </div>
-                  <div class="index-recommendation-columns">
-                    Columns: {{ rec.columns.join(", ") }}
-                  </div>
-                  <div class="index-recommendation-impact">
-                    Impact: {{ rec.estimatedImpact }}
-                  </div>
+                  <div class="index-recommendation-columns">Columns: {{ rec.columns.join(", ") }}</div>
+                  <div class="index-recommendation-impact">Impact: {{ rec.estimatedImpact }}</div>
                   <div class="index-recommendation-sql">
                     <code>{{ rec.sqlCommand }}</code>
                   </div>
@@ -731,15 +632,16 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
               <h4 style="margin: 0">
                 Logs
-                <span v-if="!showLiveLogStream">(<span>{{ filteredRequestLogs.length }}</span>)
+                <span v-if="!showLiveLogStream"
+                  >(<span>{{ filteredRequestLogs.length }}</span
+                  >)
                   <span
                     v-if="requestDetail.logs.length > filteredRequestLogs.length"
                     style="color: #8b949e; font-size: 0.85rem; font-weight: normal"
-                  >({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span></span>
-                <span
-                  v-else
-                  style="color: #8b949e; font-size: 0.85rem; font-weight: normal"
-                >(Live Stream)</span>
+                    >({{ requestDetail.logs.length - filteredRequestLogs.length }} TRACE filtered)</span
+                  ></span
+                >
+                <span v-else style="color: #8b949e; font-size: 0.85rem; font-weight: normal">(Live Stream)</span>
               </h4>
               <div style="display: flex; gap: 0.5rem">
                 <button
@@ -755,49 +657,24 @@
                   target="_blank"
                   class="btn-primary"
                   style="padding: 0.35rem 0.75rem; font-size: 0.85rem; text-decoration: none"
-                >View in Log Viewer →</a>
+                  >View in Log Viewer →</a
+                >
               </div>
             </div>
 
             <!-- Saved Logs View -->
-            <div
-              v-if="!showLiveLogStream"
-              class="logs-list"
-            >
-              <p
-                v-if="filteredRequestLogs.length === 0"
-                style="color: #6c757d"
-              >
+            <div v-if="!showLiveLogStream" class="logs-list">
+              <p v-if="filteredRequestLogs.length === 0" style="color: #6c757d">
                 No logs captured (or all logs are TRACE level)
               </p>
-              <div
-                v-for="(log, idx) in filteredRequestLogs"
-                :key="idx"
-                class="log-line"
-                @click="openLogDetails(log)"
-              >
-                <span
-                  v-if="log.timestamp"
-                  class="log-timestamp"
-                >{{ new Date(log.timestamp).toLocaleString() }}</span>
-                <span
-                  v-if="log.level"
-                  class="log-level"
-                  :class="log.level"
-                >{{ log.level }}</span>
-                <span
-                  v-if="log.file"
-                  class="log-file"
-                >{{ log.file }}</span>
-                <span
-                  v-if="log.message"
-                  class="log-message"
-                >{{ log.message }}</span>
-                <template
-                  v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})"
-                  :key="fieldIdx"
-                >
-                  <span class="log-field-key">{{ key }}</span>=<span class="log-field-value">{{ formatFieldValue(value) }}</span>
+              <div v-for="(log, idx) in filteredRequestLogs" :key="idx" class="log-line" @click="openLogDetails(log)">
+                <span v-if="log.timestamp" class="log-timestamp">{{ new Date(log.timestamp).toLocaleString() }}</span>
+                <span v-if="log.level" class="log-level" :class="log.level">{{ log.level }}</span>
+                <span v-if="log.file" class="log-file">{{ log.file }}</span>
+                <span v-if="log.message" class="log-message">{{ log.message }}</span>
+                <template v-for="([key, value], fieldIdx) in Object.entries(log.fields || {})" :key="fieldIdx">
+                  <span class="log-field-key">{{ key }}</span
+                  >=<span class="log-field-value">{{ formatFieldValue(value) }}</span>
                 </template>
               </div>
             </div>
@@ -818,43 +695,25 @@
   </div>
 
   <!-- Request Body Modal -->
-  <div
-    v-if="showRequestModal"
-    class="modal"
-    @click="showRequestModal = false"
-  >
-    <div
-      class="modal-content"
-      style="max-width: 900px"
-      @click.stop
-    >
+  <div v-if="showRequestModal" class="modal" @click="showRequestModal = false">
+    <div class="modal-content" style="max-width: 900px" @click.stop>
       <div class="modal-header">
         <h3>
-          Request Body<span
-            v-if="isGraphQLRequest"
-            style="color: #8b949e; font-size: 0.875rem; margin-left: 0.5rem"
-          >GraphQL</span>
+          Request Body<span v-if="isGraphQLRequest" style="color: #8b949e; font-size: 0.875rem; margin-left: 0.5rem"
+            >GraphQL</span
+          >
         </h3>
         <div style="display: flex; gap: 0.5rem">
-          <button
-            class="btn-secondary"
-            style="padding: 0.5rem 1rem"
-            @click="copyToClipboard(requestData)"
-          >
+          <button class="btn-secondary" style="padding: 0.5rem 1rem" @click="copyToClipboard(requestData)">
             📋 Copy
           </button>
-          <button @click="showRequestModal = false">
-            ✕
-          </button>
+          <button @click="showRequestModal = false">✕</button>
         </div>
       </div>
       <div class="modal-body">
         <!-- GraphQL Request Display -->
         <div v-if="isGraphQLRequest">
-          <div
-            v-if="isGraphQLBatchRequest"
-            style="margin-bottom: 1rem"
-          >
+          <div v-if="isGraphQLBatchRequest" style="margin-bottom: 1rem">
             <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">
               Operations ({{ graphqlOperations.length }}):
             </h4>
@@ -876,22 +735,13 @@
                 cursor: pointer;
               "
             >
-              <option
-                v-for="(op, idx) in graphqlOperations"
-                :key="idx"
-                :value="idx"
-              >
+              <option v-for="(op, idx) in graphqlOperations" :key="idx" :value="idx">
                 {{ op.operationName }}
               </option>
             </select>
           </div>
-          <div
-            v-else-if="graphqlOperationName"
-            style="margin-bottom: 1rem"
-          >
-            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">
-              Operation:
-            </h4>
+          <div v-else-if="graphqlOperationName" style="margin-bottom: 1rem">
+            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Operation:</h4>
             <div
               style="
                 background: #161b22;
@@ -911,9 +761,7 @@
             </div>
           </div>
           <div style="margin-bottom: 1rem">
-            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">
-              Query:
-            </h4>
+            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Query:</h4>
             <pre
               class="graphql-query"
               style="
@@ -934,12 +782,11 @@
                 word-break: break-word;
                 max-height: 400px;
               "
-            >{{ graphqlQuery }}</pre>
+              >{{ graphqlQuery }}</pre
+            >
           </div>
           <div v-if="graphqlVariables">
-            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">
-              Variables:
-            </h4>
+            <h4 style="color: #8b949e; font-size: 0.875rem; margin-bottom: 0.5rem">Variables:</h4>
             <pre
               style="
                 background: #0d1117;
@@ -959,7 +806,8 @@
                 word-break: break-word;
                 max-height: 300px;
               "
-            >{{ graphqlVariables }}</pre>
+              >{{ graphqlVariables }}</pre
+            >
           </div>
         </div>
 
@@ -983,22 +831,15 @@
             white-space: pre-wrap;
             word-break: break-word;
           "
-        >{{ requestData }}</pre>
+          >{{ requestData }}</pre
+        >
       </div>
     </div>
   </div>
 
   <!-- Response Body Modal -->
-  <div
-    v-if="showResponseModal"
-    class="modal"
-    @click="showResponseModal = false"
-  >
-    <div
-      class="modal-content"
-      style="max-width: 900px"
-      @click.stop
-    >
+  <div v-if="showResponseModal" class="modal" @click="showResponseModal = false">
+    <div class="modal-content" style="max-width: 900px" @click.stop>
       <div class="modal-header">
         <h3>Response Body</h3>
         <div style="display: flex; gap: 0.5rem; align-items: center">
@@ -1018,17 +859,11 @@
               font-size: 0.875rem;
             "
             title="Filter response JSON. Examples: .data, .data.users[0], .errors[1].message, or simple text search"
-          >
-          <button
-            class="btn-secondary"
-            style="padding: 0.5rem 1rem"
-            @click="copyToClipboard(filteredResponseBody)"
-          >
+          />
+          <button class="btn-secondary" style="padding: 0.5rem 1rem" @click="copyToClipboard(filteredResponseBody)">
             📋 Copy
           </button>
-          <button @click="showResponseModal = false">
-            ✕
-          </button>
+          <button @click="showResponseModal = false">✕</button>
         </div>
       </div>
       <div class="modal-body">
@@ -1051,34 +886,20 @@
             white-space: pre-wrap;
             word-break: break-word;
           "
-        >{{ filteredResponseBody }}</pre>
+          >{{ filteredResponseBody }}</pre
+        >
       </div>
     </div>
   </div>
 
   <!-- EXPLAIN Plan Side Panel -->
-  <div
-    v-if="showExplainPlanPanel"
-    class="side-panel-overlay"
-    @click="closeExplainPlanModal"
-  >
-    <div
-      class="side-panel"
-      @click.stop
-    >
+  <div v-if="showExplainPlanPanel" class="side-panel-overlay" @click="closeExplainPlanModal">
+    <div class="side-panel" @click.stop>
       <div class="side-panel-header">
         <h3>SQL Query EXPLAIN Plan</h3>
         <div style="display: flex; gap: 0.5rem">
-          <button
-            class="btn-secondary"
-            style="padding: 0.5rem 1rem"
-            @click="shareExplainPlan"
-          >
-            📋 Share
-          </button>
-          <button @click="closeExplainPlanModal">
-            ✕
-          </button>
+          <button class="btn-secondary" style="padding: 0.5rem 1rem" @click="shareExplainPlan">📋 Share</button>
+          <button @click="closeExplainPlanModal">✕</button>
         </div>
       </div>
       <div class="side-panel-body">
@@ -1089,40 +910,21 @@
         >
           {{ explainPlanData.error }}
         </div>
-        <div
-          v-if="explainPlanData && !explainPlanData.error"
-          class="d-flex flex-column"
-          style="height: 100%"
-        >
-          <ExplainPlanFormatter
-            :explain-plan="explainPlanData.planSource"
-            :query="explainPlanData.planQuery"
-          />
+        <div v-if="explainPlanData && !explainPlanData.error" class="d-flex flex-column" style="height: 100%">
+          <ExplainPlanFormatter :explain-plan="explainPlanData.planSource" :query="explainPlanData.planQuery" />
         </div>
       </div>
     </div>
   </div>
 
   <!-- Log Details Modal -->
-  <div
-    v-if="showLogModal"
-    class="modal"
-    @click="showLogModal = false"
-  >
-    <div
-      class="modal-content"
-      @click.stop
-    >
+  <div v-if="showLogModal" class="modal" @click="showLogModal = false">
+    <div class="modal-content" @click.stop>
       <div class="modal-header">
         <h3>Log Details</h3>
-        <button @click="showLogModal = false">
-          ✕
-        </button>
+        <button @click="showLogModal = false">✕</button>
       </div>
-      <div
-        v-if="selectedLog"
-        class="modal-body"
-      >
+      <div v-if="selectedLog" class="modal-body">
         <div class="modal-section">
           <h4>Raw Log</h4>
           <pre
@@ -1132,60 +934,34 @@
         <div class="modal-section">
           <h4>Parsed Fields</h4>
           <div>
-            <div
-              v-if="selectedLog.entry?.timestamp"
-              class="parsed-field"
-            >
-              <div class="parsed-field-key">
-                Timestamp
-              </div>
+            <div v-if="selectedLog.entry?.timestamp" class="parsed-field">
+              <div class="parsed-field-key">Timestamp</div>
               <div class="parsed-field-value">
                 {{ new Date(selectedLog.entry.timestamp).toLocaleString() }}
               </div>
             </div>
-            <div
-              v-if="selectedLog.entry?.level"
-              class="parsed-field"
-            >
-              <div class="parsed-field-key">
-                Level
-              </div>
+            <div v-if="selectedLog.entry?.level" class="parsed-field">
+              <div class="parsed-field-key">Level</div>
               <div class="parsed-field-value">
                 {{ selectedLog.entry.level }}
               </div>
             </div>
-            <div
-              v-if="selectedLog.entry?.file"
-              class="parsed-field"
-            >
-              <div class="parsed-field-key">
-                File
-              </div>
+            <div v-if="selectedLog.entry?.file" class="parsed-field">
+              <div class="parsed-field-key">File</div>
               <div class="parsed-field-value">
                 {{ selectedLog.entry.file }}
               </div>
             </div>
-            <div
-              v-if="selectedLog.entry?.message"
-              class="parsed-field"
-            >
-              <div class="parsed-field-key">
-                Message
-              </div>
-              <div
-                v-if="isSQLMessage(selectedLog.entry.message)"
-                class="parsed-field-value"
-              >
+            <div v-if="selectedLog.entry?.message" class="parsed-field">
+              <div class="parsed-field-key">Message</div>
+              <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
                 <pre
                   class="sql-query-text"
                   style="white-space: pre-wrap; margin: 0"
                   v-html="formatAndHighlightSQL(selectedLog.entry.message)"
                 />
               </div>
-              <div
-                v-else
-                class="parsed-field-value"
-              >
+              <div v-else class="parsed-field-value">
                 {{ selectedLog.entry.message }}
               </div>
             </div>
@@ -1197,16 +973,10 @@
               <div class="parsed-field-key">
                 {{ key }}
               </div>
-              <div
-                v-if="isJsonField(value)"
-                class="parsed-field-value"
-              >
+              <div v-if="isJsonField(value)" class="parsed-field-value">
                 <pre>{{ formatJsonField(value) }}</pre>
               </div>
-              <div
-                v-else
-                class="parsed-field-value"
-              >
+              <div v-else class="parsed-field-value">
                 {{ value }}
               </div>
             </div>
@@ -1217,47 +987,23 @@
   </div>
 
   <!-- Execute Request Modal -->
-  <div
-    v-if="showExecuteModal"
-    class="modal"
-    @click="showExecuteModal = false"
-  >
-    <div
-      class="modal-content"
-      style="max-width: 900px"
-      @click.stop
-    >
+  <div v-if="showExecuteModal" class="modal" @click="showExecuteModal = false">
+    <div class="modal-content" style="max-width: 900px" @click.stop>
       <div class="modal-header">
         <h3>Re-execute Request</h3>
-        <button @click="showExecuteModal = false">
-          ✕
-        </button>
+        <button @click="showExecuteModal = false">✕</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
           <label for="executeToken">Bearer Token Override (optional):</label>
-          <input
-            id="executeToken"
-            v-model="executeForm.tokenOverride"
-            type="text"
-            placeholder="Override token"
-          >
+          <input id="executeToken" v-model="executeForm.tokenOverride" type="text" placeholder="Override token" />
         </div>
         <div class="form-group">
           <label for="executeDevID">Dev ID Override (optional):</label>
-          <input
-            id="executeDevID"
-            v-model="executeForm.devIdOverride"
-            type="text"
-            placeholder="Override dev ID"
-          >
+          <input id="executeDevID" v-model="executeForm.devIdOverride" type="text" placeholder="Override dev ID" />
         </div>
 
-        <div
-          v-if="Object.keys(executeForm.graphqlVariables).length > 0"
-          class="form-group"
-          style="margin-top: 1.5rem"
-        >
+        <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
             <label style="margin: 0">GraphQL Variables:</label>
             <button
@@ -1269,13 +1015,11 @@
             </button>
           </div>
           <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 1rem">
-            <div
-              v-for="(value, key) in executeForm.graphqlVariables"
-              :key="key"
-              style="margin-bottom: 0.75rem"
-            >
+            <div v-for="(value, key) in executeForm.graphqlVariables" :key="key" style="margin-bottom: 0.75rem">
               <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem">
-                <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem">{{ key }}:</label>
+                <label style="min-width: 120px; color: #79c0ff; font-family: monospace; font-size: 0.875rem"
+                  >{{ key }}:</label
+                >
                 <button
                   style="
                     background: #da3633;
@@ -1312,11 +1056,7 @@
             </div>
           </div>
         </div>
-        <div
-          v-else
-          class="form-group"
-          style="margin-top: 1.5rem"
-        >
+        <div v-else class="form-group" style="margin-top: 1.5rem">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem">
             <label style="margin: 0">GraphQL Variables:</label>
             <button
@@ -1332,10 +1072,7 @@
           </p>
         </div>
 
-        <div
-          class="form-group"
-          style="margin-top: 1.5rem"
-        >
+        <div class="form-group" style="margin-top: 1.5rem">
           <label for="executeRequestData">Request Data:</label>
           <textarea
             id="executeRequestData"
@@ -1347,18 +1084,8 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button
-          class="btn-primary"
-          @click="executeRequest"
-        >
-          Execute
-        </button>
-        <button
-          class="btn-secondary"
-          @click="showExecuteModal = false"
-        >
-          Cancel
-        </button>
+        <button class="btn-primary" @click="executeRequest">Execute</button>
+        <button class="btn-secondary" @click="showExecuteModal = false">Cancel</button>
       </div>
     </div>
   </div>
@@ -1616,7 +1343,7 @@ export default defineComponent({
                 return true;
               }
             }
-          } catch (e) {
+          } catch {
             // Ignore parse errors
           }
         }
@@ -2481,7 +2208,7 @@ export default defineComponent({
           try {
             const plan = JSON.parse(q.explainPlan);
             markdown += `${formatExplainPlanAsText(plan)}\n\`\`\`\n\n`;
-          } catch (e) {
+          } catch {
             markdown += `${q.explainPlan}\n\`\`\`\n\n`;
           }
         }
@@ -2497,7 +2224,7 @@ export default defineComponent({
             for (const [key, value] of Object.entries(fields)) {
               markdown += `| **${key}** | ${value} |\n`;
             }
-          } catch (e) {
+          } catch {
             markdown += `| **Log Fields** | ${q.logFields} |\n`;
           }
         }
@@ -2533,7 +2260,7 @@ export default defineComponent({
           const fields = JSON.parse(q.logFields);
           experimentId = fields?.experiment_id || fields?.experiment || "unknown";
           experimentNames[experimentId] = fields?.experiment || "unknown";
-        } catch (e) {
+        } catch {
           // ignore
         }
 
@@ -2544,7 +2271,7 @@ export default defineComponent({
             if (vars && Object.keys(vars).length > 0) {
               displayQuery = this.interpolateSQLQuery(q.query, vars);
             }
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
