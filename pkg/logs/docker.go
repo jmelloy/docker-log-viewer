@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
 
@@ -61,7 +61,7 @@ func NewDockerClient() (*DockerClient, error) {
 }
 
 func (dc *DockerClient) ListRunningContainers(ctx context.Context) ([]Container, error) {
-	containers, err := dc.cli.ContainerList(ctx, types.ContainerListOptions{})
+	containers, err := dc.cli.ContainerList(ctx, container.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
@@ -109,7 +109,7 @@ func (dc *DockerClient) StreamLogs(ctx context.Context, containerID string, logC
 }
 
 func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string, logChan chan<- ContainerMessage, onStreamEnd func(), since time.Time) error {
-	options := types.ContainerLogsOptions{
+	options := container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,
