@@ -19,10 +19,10 @@ type Request struct {
 }
 
 type Response struct {
-	QueryPlan      []map[string]interface{} `json:"queryPlan"`
-	Error          string                   `json:"error,omitempty"`
-	Query          string                   `json:"query"`
-	FormattedQuery string                   `json:"formattedQuery"`
+	QueryPlan      []map[string]any `json:"queryPlan"`
+	Error          string           `json:"error,omitempty"`
+	Query          string           `json:"query"`
+	FormattedQuery string           `json:"formattedQuery"`
 }
 
 var db *sql.DB
@@ -196,7 +196,7 @@ func Explain(req Request) Response {
 	// If we have variables, use them as bind parameters
 	if len(req.Variables) > 0 {
 		// Convert variables map to ordered slice based on $1, $2, $3...
-		args := make([]interface{}, 0)
+		args := make([]any, 0)
 		for i := 1; ; i++ {
 			val, ok := req.Variables[fmt.Sprintf("%d", i)]
 			if !ok {
@@ -218,14 +218,14 @@ func Explain(req Request) Response {
 	defer rows.Close()
 
 	// Collect all rows (usually just one for EXPLAIN JSON)
-	var planJSON string
+	var planJSON strings.Builder
 	for rows.Next() {
 		var plan string
 		if err := rows.Scan(&plan); err != nil {
 			resp.Error = fmt.Sprintf("Error scanning result: %v", err)
 			return resp
 		}
-		planJSON += plan
+		planJSON.WriteString(plan)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -234,8 +234,8 @@ func Explain(req Request) Response {
 	}
 
 	// Parse the JSON plan
-	var plan []map[string]interface{}
-	if err := json.Unmarshal([]byte(planJSON), &plan); err != nil {
+	var plan []map[string]any
+	if err := json.Unmarshal([]byte(planJSON.String()), &plan); err != nil {
 		resp.Error = fmt.Sprintf("Error parsing EXPLAIN JSON: %v", err)
 		return resp
 	}
@@ -252,24 +252,24 @@ func Close() {
 }
 
 type PlanNode struct {
-	NodeType            string      `json:"Node Type"`
-	RelationName        string      `json:"Relation Name,omitempty"`
-	Alias               string      `json:"Alias,omitempty"`
-	StartupCost         float64     `json:"Startup Cost,omitempty"`
-	TotalCost           float64     `json:"Total Cost,omitempty"`
-	PlanRows            int         `json:"Plan Rows,omitempty"`
-	PlanWidth           int         `json:"Plan Width,omitempty"`
-	ActualStartupTime   float64     `json:"Actual Startup Time,omitempty"`
-	ActualTotalTime     float64     `json:"Actual Total Time,omitempty"`
-	ActualRows          int         `json:"Actual Rows,omitempty"`
-	ActualLoops         int         `json:"Actual Loops,omitempty"`
-	Filter              string      `json:"Filter,omitempty"`
-	RowsRemovedByFilter int         `json:"Rows Removed by Filter,omitempty"`
-	IndexCond           string      `json:"Index Cond,omitempty"`
-	HashCond            string      `json:"Hash Cond,omitempty"`
-	JoinFilter          string      `json:"Join Filter,omitempty"`
-	SortKey             interface{} `json:"Sort Key,omitempty"` // string or []string
-	Plans               []PlanNode  `json:"Plans,omitempty"`
+	NodeType            string     `json:"Node Type"`
+	RelationName        string     `json:"Relation Name,omitempty"`
+	Alias               string     `json:"Alias,omitempty"`
+	StartupCost         float64    `json:"Startup Cost,omitempty"`
+	TotalCost           float64    `json:"Total Cost,omitempty"`
+	PlanRows            int        `json:"Plan Rows,omitempty"`
+	PlanWidth           int        `json:"Plan Width,omitempty"`
+	ActualStartupTime   float64    `json:"Actual Startup Time,omitempty"`
+	ActualTotalTime     float64    `json:"Actual Total Time,omitempty"`
+	ActualRows          int        `json:"Actual Rows,omitempty"`
+	ActualLoops         int        `json:"Actual Loops,omitempty"`
+	Filter              string     `json:"Filter,omitempty"`
+	RowsRemovedByFilter int        `json:"Rows Removed by Filter,omitempty"`
+	IndexCond           string     `json:"Index Cond,omitempty"`
+	HashCond            string     `json:"Hash Cond,omitempty"`
+	JoinFilter          string     `json:"Join Filter,omitempty"`
+	SortKey             any        `json:"Sort Key,omitempty"` // string or []string
+	Plans               []PlanNode `json:"Plans,omitempty"`
 }
 
 type Plan struct {
@@ -279,7 +279,7 @@ type Plan struct {
 }
 
 // explainPlanLine formats a single line for a plan node (matches TypeScript explainPlanLine)
-func explainPlanLine(node map[string]interface{}) string {
+func explainPlanLine(node map[string]any) string {
 	var line strings.Builder
 
 	// Index Name
@@ -342,7 +342,7 @@ func explainPlanLine(node map[string]interface{}) string {
 }
 
 // Helper functions to safely extract values from map[string]interface{}
-func getString(m map[string]interface{}, key string) (string, bool) {
+func getString(m map[string]any, key string) (string, bool) {
 	val, ok := m[key]
 	if !ok {
 		return "", false
@@ -351,7 +351,7 @@ func getString(m map[string]interface{}, key string) (string, bool) {
 	return str, ok
 }
 
-func getFloat64(m map[string]interface{}, key string) (float64, bool) {
+func getFloat64(m map[string]any, key string) (float64, bool) {
 	val, ok := m[key]
 	if !ok {
 		return 0, false
@@ -369,7 +369,7 @@ func getFloat64(m map[string]interface{}, key string) (float64, bool) {
 	return 0, false
 }
 
-func getInt(m map[string]interface{}, key string) (int, bool) {
+func getInt(m map[string]any, key string) (int, bool) {
 	val, ok := m[key]
 	if !ok {
 		return 0, false
@@ -390,8 +390,8 @@ func getInt(m map[string]interface{}, key string) (int, bool) {
 func FormatExplainPlanAsText(planJSON any) (string, error) {
 	var output []string
 
-	var formatNode func(node map[string]interface{}, level int, isLast bool, prefix string)
-	formatNode = func(node map[string]interface{}, level int, isLast bool, prefix string) {
+	var formatNode func(node map[string]any, level int, isLast bool, prefix string)
+	formatNode = func(node map[string]any, level int, isLast bool, prefix string) {
 		indent := level
 		spaces := strings.Repeat("  ", indent)
 		line := spaces
@@ -474,7 +474,7 @@ func FormatExplainPlanAsText(planJSON any) (string, error) {
 			}
 			var sortKeys string
 			switch v := sortKey.(type) {
-			case []interface{}:
+			case []any:
 				var parts []string
 				for _, item := range v {
 					parts = append(parts, fmt.Sprintf("%v", item))
@@ -489,7 +489,7 @@ func FormatExplainPlanAsText(planJSON any) (string, error) {
 		}
 
 		// Process child plans
-		if plans, ok := node["Plans"].([]interface{}); ok && len(plans) > 0 {
+		if plans, ok := node["Plans"].([]any); ok && len(plans) > 0 {
 			childPrefix := prefix
 			if isLast {
 				childPrefix += "   "
@@ -497,7 +497,7 @@ func FormatExplainPlanAsText(planJSON any) (string, error) {
 				childPrefix += "│  "
 			}
 			for idx, child := range plans {
-				if childMap, ok := child.(map[string]interface{}); ok {
+				if childMap, ok := child.(map[string]any); ok {
 					childIsLast := idx == len(plans)-1
 					formatNode(childMap, indent+1, childIsLast, childPrefix)
 				}
@@ -506,10 +506,10 @@ func FormatExplainPlanAsText(planJSON any) (string, error) {
 	}
 
 	// Handle array of plans
-	if planArray, ok := planJSON.([]interface{}); ok {
+	if planArray, ok := planJSON.([]any); ok {
 		for _, planItem := range planArray {
-			if planMap, ok := planItem.(map[string]interface{}); ok {
-				if planNode, ok := planMap["Plan"].(map[string]interface{}); ok {
+			if planMap, ok := planItem.(map[string]any); ok {
+				if planNode, ok := planMap["Plan"].(map[string]any); ok {
 					formatNode(planNode, 0, true, "")
 				}
 				if planningTime, ok := getFloat64(planMap, "Planning Time"); ok {
@@ -521,9 +521,9 @@ func FormatExplainPlanAsText(planJSON any) (string, error) {
 				output = append(output, "")
 			}
 		}
-	} else if planMap, ok := planJSON.(map[string]interface{}); ok {
+	} else if planMap, ok := planJSON.(map[string]any); ok {
 		// Handle single plan
-		if planNode, ok := planMap["Plan"].(map[string]interface{}); ok {
+		if planNode, ok := planMap["Plan"].(map[string]any); ok {
 			formatNode(planNode, 0, true, "")
 
 			// Add planning and execution time

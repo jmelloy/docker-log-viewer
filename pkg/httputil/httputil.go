@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"docker-log-parser/pkg/logs"
@@ -86,14 +87,14 @@ func CollectLogsForRequest(requestID string, logStore *logstore.LogStore, timeou
 
 // ContainsErrorsKey recursively checks if the data contains an "errors" key
 // Returns: hasErrors, errorMessage, keyPath
-func ContainsErrorsKey(data interface{}, key string) (bool, string, string) {
+func ContainsErrorsKey(data any, key string) (bool, string, string) {
 	errors := map[string]string{}
 
 	switch v := data.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		if _, exists := v["errors"]; exists {
-			if errors, ok := v["errors"].([]interface{}); ok && len(errors) > 0 {
-				if first, ok := errors[0].(map[string]interface{}); ok {
+			if errors, ok := v["errors"].([]any); ok && len(errors) > 0 {
+				if first, ok := errors[0].(map[string]any); ok {
 					message, _ := json.Marshal(first)
 					return true, string(message), key
 				}
@@ -105,7 +106,7 @@ func ContainsErrorsKey(data interface{}, key string) (bool, string, string) {
 				return true, message, key
 			}
 		}
-	case []interface{}:
+	case []any:
 		for i, item := range v {
 			if hasErrors, message, key := ContainsErrorsKey(item, fmt.Sprintf("%s.[%d]", key, i)); hasErrors {
 				errors[key] = message
@@ -113,11 +114,11 @@ func ContainsErrorsKey(data interface{}, key string) (bool, string, string) {
 		}
 	}
 	if len(errors) > 0 {
-		errorsString := ""
+		var errorsString strings.Builder
 		for k, v := range errors {
-			errorsString += fmt.Sprintf("%s: %s\n", k, v)
+			errorsString.WriteString(fmt.Sprintf("%s: %s\n", k, v))
 		}
-		return true, errorsString, ""
+		return true, errorsString.String(), ""
 	}
 	return false, "", key
 }

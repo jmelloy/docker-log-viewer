@@ -2,6 +2,7 @@ package sqlexplain
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 )
 
@@ -216,25 +217,13 @@ func TestComparePlans(t *testing.T) {
 	}
 
 	// Check for node type change
-	found := false
-	for _, diff := range diffs {
-		if diff == "Node type changed: Seq Scan → Index Scan" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(diffs, "Node type changed: Seq Scan → Index Scan")
 	if !found {
 		t.Error("Expected node type change to be detected")
 	}
 
 	// Check for cost change
-	found = false
-	for _, diff := range diffs {
-		if diff == "Changed from sequential scan to indexed access" {
-			found = true
-			break
-		}
-	}
+	found = slices.Contains(diffs, "Changed from sequential scan to indexed access")
 	if !found {
 		t.Error("Expected scan type change to be detected")
 	}

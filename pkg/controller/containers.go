@@ -97,9 +97,9 @@ func (c *Controller) HandleDebug(w http.ResponseWriter, r *http.Request) {
 
 	c.clientsMutex.RLock()
 	clientCount := len(c.clients)
-	clientFilters := make([]map[string]interface{}, 0)
+	clientFilters := make([]map[string]any, 0)
 	for client := range c.clients {
-		clientFilters = append(clientFilters, map[string]interface{}{
+		clientFilters = append(clientFilters, map[string]any{
 			"selectedContainers": client.filter.SelectedContainers,
 			"selectedLevels":     client.filter.SelectedLevels,
 			"searchQuery":        client.filter.SearchQuery,
@@ -108,7 +108,7 @@ func (c *Controller) HandleDebug(w http.ResponseWriter, r *http.Request) {
 	}
 	c.clientsMutex.RUnlock()
 
-	debugInfo := map[string]interface{}{
+	debugInfo := map[string]any{
 		"totalLogsInMemory": totalLogs,
 		"containerCount":    len(containers),
 		"containers":        containers,

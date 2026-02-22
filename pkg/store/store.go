@@ -815,7 +815,7 @@ func computeDisplayName(name string, requestData string) string {
 	// Try to extract operationName from requestData (JSON)
 	if requestData != "" {
 		// Try parsing as single request
-		var data map[string]interface{}
+		var data map[string]any
 		if err := json.Unmarshal([]byte(requestData), &data); err == nil {
 			if opName, ok := data["operationName"].(string); ok && opName != "" {
 				return opName
@@ -830,7 +830,7 @@ func computeDisplayName(name string, requestData string) string {
 		} else {
 			ouptput := []string{}
 			// Try parsing as array of requests
-			var dataArr []map[string]interface{}
+			var dataArr []map[string]any
 			if err := json.Unmarshal([]byte(requestData), &dataArr); err == nil && len(dataArr) > 0 {
 				for _, data := range dataArr {
 					if opName, ok := data["operationName"].(string); ok && opName != "" {

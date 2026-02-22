@@ -35,7 +35,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 
 	// Create execution 1
 	exec1 := &store.Request{
-		ServerID:        uintPtr(uint(serverID)),
+		ServerID:        new(uint(serverID)),
 		RequestIDHeader: "req-001",
 		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
 		StatusCode:      200,
@@ -76,7 +76,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 
 	// Create execution 2 (optimized)
 	exec2 := &store.Request{
-		ServerID:        uintPtr(uint(serverID)),
+		ServerID:        new(uint(serverID)),
 		RequestIDHeader: "req-002",
 		RequestBody:     `{"query": "{ user(id: 1) { name } }"}`,
 		StatusCode:      200,
@@ -175,6 +175,7 @@ func TestIntegrationAnalyzeTwoExecutions(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func uintPtr(u uint) *uint {
-	return &u
+	return new(u)
 }
