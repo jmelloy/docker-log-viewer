@@ -2148,7 +2148,7 @@ export default defineComponent({
 
       let experiment = null;
       queries.forEach(async (q, idx) => {
-        let fields = null;
+        let fields;
         const parts = [];
         parts.push(q.operationName);
         parts.push(q.tableName);

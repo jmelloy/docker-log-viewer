@@ -31,7 +31,7 @@ export const API = {
         return JSON.parse(text) as T;
       } catch (parseError) {
         if (parseError instanceof SyntaxError) {
-          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`);
+          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`, { cause: parseError });
         }
         throw parseError;
       }
@@ -79,7 +79,7 @@ export const API = {
         return JSON.parse(text) as T;
       } catch (parseError) {
         if (parseError instanceof SyntaxError) {
-          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`);
+          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`, { cause: parseError });
         }
         throw parseError;
       }
@@ -127,7 +127,7 @@ export const API = {
         return JSON.parse(text) as T;
       } catch (parseError) {
         if (parseError instanceof SyntaxError) {
-          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`);
+          throw new Error(`Invalid JSON response from ${url}: ${parseError.message}`, { cause: parseError });
         }
         throw parseError;
       }
