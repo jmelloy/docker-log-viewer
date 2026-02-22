@@ -12,7 +12,7 @@ require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/pressly/goose/v3 v3.26.0
 	gorm.io/driver/sqlite v1.6.0
-	gorm.io/gorm v1.31.0
+	gorm.io/gorm v1.31.1
 )
 
 require (
