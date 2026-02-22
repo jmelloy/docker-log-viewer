@@ -9,7 +9,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jomei/notionapi v1.13.3
 	github.com/lib/pq v1.11.2
-	github.com/lmittmann/tint v1.1.2
+	github.com/lmittmann/tint v1.1.3
 	github.com/pressly/goose/v3 v3.26.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.0
