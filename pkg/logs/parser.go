@@ -246,12 +246,7 @@ func ParseKeyValues(s string) (map[string]string, string) {
 
 // findStructuredDataStart finds where structured key=value data begins
 func findStructuredDataStart(s string) int {
-	re := regexp.MustCompile(`[\w.]+=["\{\[]`)
-	if match := re.FindStringIndex(s); match != nil {
-		return match[0]
-	}
-
-	re = regexp.MustCompile(`[\w.]+=`)
+	re := regexp.MustCompile(`[\w.]+=`)
 	if match := re.FindStringIndex(s); match != nil {
 		return match[0]
 	}
@@ -526,10 +521,14 @@ func parseANSIFields(line string) (*LogEntry, string) {
 
 		if strings.HasSuffix(block.Text, "=") && i < len(blocks)-1 {
 			nextBlock = blocks[i+1]
-			key := block.Text[:len(block.Text)-1]
+			prefix := block.Text[:len(block.Text)-1]
+			key := prefix
+			if lastSpace := strings.LastIndex(prefix, " "); lastSpace >= 0 {
+				key = prefix[lastSpace+1:]
+			}
 			value := strings.TrimSpace(nextBlock.Text)
 			entry.Fields[key] = value
-			linesToStrip = append(linesToStrip, block.Text+value)
+			linesToStrip = append(linesToStrip, key+"="+value)
 
 			continue
 		}
@@ -610,6 +609,7 @@ func ParseLogLine(line string) *LogEntry {
 			if ok {
 				entry.Level = parsedLevel
 			}
+			line = strings.TrimSpace(line[:match[0]] + line[match[1]:])
 		}
 	}
 
@@ -617,6 +617,10 @@ func ParseLogLine(line string) *LogEntry {
 		if matches := fileRegex.FindStringSubmatch(line); len(matches) > 0 {
 			if _, ok := ParseFile(matches[1]); ok {
 				entry.File = matches[1]
+				line = strings.TrimSpace(strings.Replace(line, matches[0], "", 1))
+				if strings.HasPrefix(line, "> ") {
+					line = strings.TrimSpace(line[2:])
+				}
 			}
 		}
 	}
@@ -764,7 +768,12 @@ func ParseTimestamp(timestampStr string) (time.Time, bool) {
 			switch format {
 			case "Jan  2 15:04:05.000000", "Jan _2 15:04:05.000000":
 				now := time.Now()
-				t = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
+				year := now.Year()
+				candidate := time.Date(year, t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
+				if candidate.After(now) {
+					year--
+				}
+				t = time.Date(year, t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 			case "[15:04:05.000]", "15:04:05.000000", "15:04:05.000", "15:04:05", "15:04PM":
 				now := time.Now()
 				t = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
@@ -806,11 +815,12 @@ func ParseLevel(levelStr string) (string, bool) {
 }
 
 func ParseFile(fileStr string) (string, bool) {
+	fileStr = strings.TrimSpace(fileStr)
 	if fileStr == "" {
 		return "", false
 	}
 	matches := fileRegex.FindStringSubmatch(fileStr)
-	if len(matches) > 1 {
+	if len(matches) > 1 && matches[0] == fileStr {
 		return matches[1], true
 	}
 	return "", false
