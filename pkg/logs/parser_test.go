@@ -69,8 +69,8 @@ Oct  3 21:53:27.208471 INF pkg/observability/logging/logging.go:110 > POST /stre
 			var bufferedLog strings.Builder
 			entries := 0
 
-			lines := strings.Split(tc.input, "\n")
-			for _, line := range lines {
+			lines := strings.SplitSeq(tc.input, "\n")
+			for line := range lines {
 				trimmed := strings.TrimSpace(line)
 				if trimmed == "" {
 					continue

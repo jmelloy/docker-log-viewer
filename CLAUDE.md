@@ -216,7 +216,7 @@ docker-log-viewer/
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| **Go** | 1.24.0 | Primary backend language |
+| **Go** | 1.26.0 | Primary backend language |
 | Docker SDK | v24.0.7 | Docker API client |
 | Gorilla Mux | v1.8.1 | HTTP routing |
 | Gorilla WebSocket | v1.5.3 | Real-time communication |

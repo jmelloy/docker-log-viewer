@@ -13,14 +13,14 @@ import (
 )
 
 type LogEntry struct {
-	Raw        string                 `json:"raw"`
-	Timestamp  string                 `json:"timestamp"`
-	Level      string                 `json:"level"`
-	File       string                 `json:"file"`
-	Message    string                 `json:"message"`
-	Fields     map[string]string      `json:"fields"`
-	IsJSON     bool                   `json:"isJson"`
-	JSONFields map[string]interface{} `json:"jsonFields,omitempty"`
+	Raw        string            `json:"raw"`
+	Timestamp  string            `json:"timestamp"`
+	Level      string            `json:"level"`
+	File       string            `json:"file"`
+	Message    string            `json:"message"`
+	Fields     map[string]string `json:"fields"`
+	IsJSON     bool              `json:"isJson"`
+	JSONFields map[string]any    `json:"jsonFields,omitempty"`
 }
 
 var (
@@ -45,7 +45,7 @@ func tryNormalizeJSON(val string) string {
 		var unquoted string
 		if err := json.Unmarshal([]byte(val), &unquoted); err == nil {
 			if json.Valid([]byte(unquoted)) {
-				var parsedJSON interface{}
+				var parsedJSON any
 				if err := json.Unmarshal([]byte(unquoted), &parsedJSON); err == nil {
 					if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
 						return string(jsonBytes)
@@ -55,7 +55,7 @@ func tryNormalizeJSON(val string) string {
 		}
 	} else if len(val) >= 2 && (val[0] == '{' || val[0] == '[') && json.Valid([]byte(val)) {
 		// If it's already valid JSON (object or array), normalize it
-		var parsedJSON interface{}
+		var parsedJSON any
 		if err := json.Unmarshal([]byte(val), &parsedJSON); err == nil {
 			if jsonBytes, err := json.Marshal(parsedJSON); err == nil {
 				return string(jsonBytes)
@@ -124,13 +124,6 @@ func IsLikelyNewLogEntry(line string) bool {
 	}
 
 	return false
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func stripANSI(s string) string {
@@ -376,25 +369,25 @@ func extractRequestFields(line string) (map[string]string, string) {
 			if line[i] == '{' {
 				jsonPart := line[i:]
 				if json.Valid([]byte(jsonPart)) {
-					var jsonFields map[string]interface{}
+					var jsonFields map[string]any
 					err := json.Unmarshal([]byte(jsonPart), &jsonFields)
 					if err != nil {
 						return nil, ""
 					}
-					if req, ok := jsonFields["req"].(map[string]interface{}); ok {
+					if req, ok := jsonFields["req"].(map[string]any); ok {
 						if id, ok := req["id"]; ok {
 							fields["request_id"] = fmt.Sprintf("%v", id)
 						}
 						if method, ok := req["method"].(string); ok {
 							fields["method"] = method
 						}
-						if headers, ok := req["headers"].(map[string]interface{}); ok {
+						if headers, ok := req["headers"].(map[string]any); ok {
 							if contentLength, ok := headers["content-length"].(string); ok {
 								fields["content-length"] = contentLength
 							}
 							if baggage, ok := headers["baggage"].(string); ok {
 								// Parse baggage for sentry-trace_id
-								for _, pair := range strings.Split(baggage, ",") {
+								for pair := range strings.SplitSeq(baggage, ",") {
 									kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
 									if len(kv) == 2 && kv[0] == "sentry-trace_id" {
 										fields["trace_id"] = kv[1]
@@ -407,7 +400,7 @@ func extractRequestFields(line string) (map[string]string, string) {
 							fields["path"] = url
 						}
 					}
-					if res, ok := jsonFields["res"].(map[string]interface{}); ok {
+					if res, ok := jsonFields["res"].(map[string]any); ok {
 						if statusCode, ok := res["statusCode"].(float64); ok {
 							fields["status"] = strconv.Itoa(int(statusCode))
 						}
@@ -437,7 +430,7 @@ func parseJSONFields(line string) *LogEntry {
 		Raw:        line,
 		Fields:     make(map[string]string),
 		IsJSON:     true,
-		JSONFields: make(map[string]interface{}),
+		JSONFields: make(map[string]any),
 	}
 
 	json.Unmarshal([]byte(line), &entry.JSONFields)

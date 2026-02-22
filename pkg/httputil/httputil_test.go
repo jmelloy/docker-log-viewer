@@ -38,22 +38,22 @@ func TestCollectLogsForRequest(t *testing.T) {
 func TestContainsErrorsKey(t *testing.T) {
 	tests := []struct {
 		name     string
-		data     interface{}
+		data     any
 		expected bool
 	}{
 		{
 			name:     "no errors",
-			data:     map[string]interface{}{"data": "value"},
+			data:     map[string]any{"data": "value"},
 			expected: false,
 		},
 		{
 			name:     "has errors key",
-			data:     map[string]interface{}{"errors": []interface{}{map[string]interface{}{"message": "error"}}},
+			data:     map[string]any{"errors": []any{map[string]any{"message": "error"}}},
 			expected: true,
 		},
 		{
 			name:     "empty errors",
-			data:     map[string]interface{}{"errors": []interface{}{}},
+			data:     map[string]any{"errors": []any{}},
 			expected: true,
 		},
 	}

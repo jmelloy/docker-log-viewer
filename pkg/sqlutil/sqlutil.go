@@ -150,7 +150,7 @@ func ExtractSQLQueries(logMessages []logs.ContainerMessage) []store.SQLQuery {
 }
 
 // InterpolateSQLQuery replaces placeholder variables in a SQL query with their actual values
-func InterpolateSQLQuery(query string, variables interface{}) string {
+func InterpolateSQLQuery(query string, variables any) string {
 	if variables == nil {
 		return query
 	}
@@ -164,14 +164,14 @@ func InterpolateSQLQuery(query string, variables interface{}) string {
 			return query
 		}
 		// Try to parse as JSON
-		var parsed interface{}
+		var parsed any
 		if err := json.Unmarshal([]byte(v), &parsed); err != nil {
 			return query
 		}
 		varsMap = ConvertVariablesToMap(parsed)
 	case map[string]string:
 		varsMap = v
-	case map[string]interface{}:
+	case map[string]any:
 		varsMap = make(map[string]string)
 		for k, val := range v {
 			varsMap[k] = fmt.Sprintf("%v", val)
@@ -190,16 +190,16 @@ func InterpolateSQLQuery(query string, variables interface{}) string {
 }
 
 // ConvertVariablesToMap converts variables from various formats to map[string]string
-func ConvertVariablesToMap(vars interface{}) map[string]string {
+func ConvertVariablesToMap(vars any) map[string]string {
 	result := make(map[string]string)
 
 	switch v := vars.(type) {
-	case []interface{}:
+	case []any:
 		// Array format: ["value1", "value2"] -> {"1": "value1", "2": "value2"}
 		for i, val := range v {
 			result[strconv.Itoa(i+1)] = fmt.Sprintf("%v", val)
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		// Object format: {"key": "value"} -> {"key": "value"}
 		for k, val := range v {
 			result[k] = fmt.Sprintf("%v", val)
@@ -257,7 +257,7 @@ func FormatSQLForDisplay(sql string) string {
 		if err == nil {
 			execDir := filepath.Dir(execPath)
 			// Try going up a few directories to find web
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				candidate := filepath.Join(execDir, webDir)
 				if _, err := os.Stat(candidate); err == nil {
 					webDir = candidate
