@@ -333,5 +333,3 @@ func (c *Controller) BroadcastBatch(batch []logs.ContainerMessage) {
 		}
 	}
 }
-
-

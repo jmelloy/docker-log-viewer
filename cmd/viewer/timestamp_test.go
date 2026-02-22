@@ -201,5 +201,3 @@ func TestTimestampInterpolation(t *testing.T) {
 			logTimestamp5, logTimestamp4)
 	}
 }
-
-
