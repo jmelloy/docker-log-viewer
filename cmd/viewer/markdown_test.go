@@ -107,7 +107,7 @@ func simulateMarkdownGeneration(detail *store.SQLQueryDetail) string {
 	if detail.ExplainPlan != "" {
 		sb.WriteString("## EXPLAIN Plan\n\n")
 		// Format the plan
-		var planData interface{}
+		var planData any
 		if err := json.Unmarshal([]byte(detail.ExplainPlan), &planData); err == nil {
 			formatted, _ := json.MarshalIndent(planData, "", "  ")
 			sb.WriteString("```\n" + string(formatted) + "\n```\n\n")

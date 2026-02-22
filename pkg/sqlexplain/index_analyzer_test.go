@@ -461,7 +461,7 @@ func TestIndexAnalysisJSON(t *testing.T) {
 
 func TestExtractFilterCondition(t *testing.T) {
 	plan := &ParsedExplainPlan{
-		RawPlan: map[string]interface{}{
+		RawPlan: map[string]any{
 			"Filter": "(user_id = 123)",
 		},
 	}
@@ -473,7 +473,7 @@ func TestExtractFilterCondition(t *testing.T) {
 
 	// Test with Index Cond
 	plan2 := &ParsedExplainPlan{
-		RawPlan: map[string]interface{}{
+		RawPlan: map[string]any{
 			"Index Cond": "(email = 'test@example.com')",
 		},
 	}
@@ -485,7 +485,7 @@ func TestExtractFilterCondition(t *testing.T) {
 
 	// Test with no filter
 	plan3 := &ParsedExplainPlan{
-		RawPlan: map[string]interface{}{},
+		RawPlan: map[string]any{},
 	}
 
 	result3 := extractFilterCondition(plan3)

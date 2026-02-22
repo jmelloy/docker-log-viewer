@@ -2,8 +2,6 @@ module docker-log-parser
 
 go 1.26.0
 
-toolchain go1.26.0
-
 require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/gorilla/mux v1.8.1

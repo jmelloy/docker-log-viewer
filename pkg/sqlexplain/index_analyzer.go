@@ -380,7 +380,7 @@ func sortRecommendations(recs []IndexRecommendation) {
 	priorityOrder := map[string]int{"high": 0, "medium": 1, "low": 2}
 
 	// Use a simple bubble sort since we're modifying in place
-	for i := 0; i < len(recs); i++ {
+	for i := range recs {
 		for j := i + 1; j < len(recs); j++ {
 			if priorityOrder[recs[i].Priority] > priorityOrder[recs[j].Priority] {
 				recs[i], recs[j] = recs[j], recs[i]

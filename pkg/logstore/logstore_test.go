@@ -75,7 +75,7 @@ func TestEvictionByCount(t *testing.T) {
 	store := NewLogStore(5, 1*time.Hour)
 
 	// Add 10 messages
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		msg := newTestMessage("container1", fmt.Sprintf("Message %d", i), map[string]string{"index": fmt.Sprintf("%d", i)})
 		store.Add(msg)
 	}
@@ -106,7 +106,7 @@ func TestEvictionByAge(t *testing.T) {
 
 	// Add old messages (200ms before base time)
 	oldTime := baseTime.Add(-200 * time.Millisecond)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		msg := newTestMessageWithTime("container1", fmt.Sprintf("Old message %d", i), map[string]string{}, oldTime)
 		store.Add(msg)
 	}
@@ -133,11 +133,11 @@ func TestSearchByContainer(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
 
 	// Add messages for different containers
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		store.Add(newTestMessage("container1", fmt.Sprintf("Container1 message %d", i), map[string]string{}))
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		store.Add(newTestMessage("container2", fmt.Sprintf("Container2 message %d", i), map[string]string{}))
 	}
 
@@ -164,11 +164,11 @@ func TestSearchByField(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
 
 	// Add messages with different field values
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		store.Add(newTestMessage("container1", fmt.Sprintf("Message with req1: %d", i), map[string]string{"request_id": "req1"}))
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		store.Add(newTestMessage("container1", fmt.Sprintf("Message with req2: %d", i), map[string]string{"request_id": "req2"}))
 	}
 
@@ -333,7 +333,7 @@ func TestSetMaxMessages(t *testing.T) {
 	store := NewLogStore(10, 1*time.Hour)
 
 	// Add 10 messages
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		store.Add(newTestMessage("container1", fmt.Sprintf("Message %d", i), map[string]string{}))
 	}
 
@@ -364,7 +364,7 @@ func TestIndexConsistency(t *testing.T) {
 
 	// Add 10 messages across 2 containers (5 per container)
 	// With per-container limit of 3, each container will keep only the last 3
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		store.Add(newTestMessage(
 			fmt.Sprintf("container%d", i%2),
 			fmt.Sprintf("Message %d", i),
@@ -422,11 +422,11 @@ func TestConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrent writers
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				store.Add(newTestMessage(
 					fmt.Sprintf("container%d", id),
 					fmt.Sprintf("Writer %d message %d", id, j),
@@ -437,11 +437,11 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	// Concurrent readers
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < 50; j++ {
+			for range 50 {
 				store.GetRecent(10)
 				store.SearchByContainer(fmt.Sprintf("container%d", id), 10)
 				store.SearchByField("writer", fmt.Sprintf("%d", id), 10)
@@ -493,7 +493,7 @@ func TestLimitParameter(t *testing.T) {
 	store := NewLogStore(100, 1*time.Hour)
 
 	// Add 20 messages
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		store.Add(newTestMessage("container1", fmt.Sprintf("Message %d", i), map[string]string{"field": "value"}))
 	}
 
@@ -688,12 +688,12 @@ func TestContainerRetentionByTime(t *testing.T) {
 	now := time.Now()
 
 	// Add 120 old messages (older than 5 seconds) to exceed the minimum of 100
-	for i := 0; i < 120; i++ {
+	for i := range 120 {
 		store.Add(newTestMessageWithTime(containerID, fmt.Sprintf("Old message %d", i), map[string]string{}, now.Add(-10*time.Second)))
 	}
 
 	// Add 5 recent messages (within last second)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		store.Add(newTestMessageWithTime(containerID, fmt.Sprintf("Recent message %d", i), map[string]string{}, now.Add(-1*time.Second)))
 	}
 
@@ -724,7 +724,7 @@ func TestContainerRetentionByCount(t *testing.T) {
 	containerID := "test-container"
 
 	// Add 20 messages
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		store.Add(newTestMessage(containerID, fmt.Sprintf("Message %d", i), map[string]string{}))
 	}
 
@@ -768,7 +768,7 @@ func TestContainerRetentionMinKeep(t *testing.T) {
 	now := time.Now()
 
 	// Add 150 old messages (all older than cutoff)
-	for i := 0; i < 150; i++ {
+	for i := range 150 {
 		store.Add(newTestMessageWithTime(containerID, fmt.Sprintf("Old message %d", i), map[string]string{}, now.Add(-20*time.Second)))
 	}
 

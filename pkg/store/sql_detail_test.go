@@ -22,7 +22,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 	// Create sample queries
 	sampleID, err := store.CreateSampleQuery(&SampleQuery{
 		Name:        "Test Query",
-		ServerID:    ptrUint(uint(serverID)),
+		ServerID:    new(uint(serverID)),
 		RequestData: `{"query": "query Test { user { id } }"}`,
 	})
 	if err != nil {
@@ -31,8 +31,8 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 
 	// Create test executions
 	exec1ID, err := store.CreateRequest(&Request{
-		SampleID:        ptrUint(uint(sampleID)),
-		ServerID:        ptrUint(uint(serverID)),
+		SampleID:        new(uint(sampleID)),
+		ServerID:        new(uint(serverID)),
 		RequestIDHeader: "req-exec-001",
 		StatusCode:      200,
 		DurationMS:      100,
@@ -42,8 +42,8 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 	}
 
 	exec2ID, err := store.CreateRequest(&Request{
-		SampleID:        ptrUint(uint(sampleID)),
-		ServerID:        ptrUint(uint(serverID)),
+		SampleID:        new(uint(sampleID)),
+		ServerID:        new(uint(serverID)),
 		RequestIDHeader: "req-exec-002",
 		StatusCode:      200,
 		DurationMS:      150,
@@ -189,6 +189,7 @@ func TestGetSQLQueryDetailByHash(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func ptrUint(u uint) *uint {
-	return &u
+	return new(u)
 }
