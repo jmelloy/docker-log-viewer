@@ -1,42 +1,36 @@
 import js from "@eslint/js";
+import globals from "globals";
+import pluginVue from "eslint-plugin-vue";
+import tseslint from "typescript-eslint";
 
-export default [
+export default tseslint.config(
   {
     ignores: ["lib/**", "node_modules/**", "dist/**", "build/**", "bin/**", "*.min.js", "coverage/**"],
   },
   js.configs.recommended,
+  ...tseslint.configs.recommended,
+  ...pluginVue.configs["flat/recommended"],
+  {
+    files: ["**/*.vue"],
+    languageOptions: {
+      parserOptions: {
+        parser: tseslint.parser,
+      },
+    },
+  },
   {
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
       globals: {
+        ...globals.browser,
         Vue: "readonly",
-        console: "readonly",
-        document: "readonly",
-        window: "readonly",
-        localStorage: "readonly",
-        WebSocket: "readonly",
-        fetch: "readonly",
-        location: "readonly",
-        navigator: "readonly",
-        alert: "readonly",
-        setTimeout: "readonly",
-        clearTimeout: "readonly",
-        setInterval: "readonly",
-        clearInterval: "readonly",
-        URLSearchParams: "readonly",
-        prompt: "readonly",
-        confirm: "readonly",
         hljs: "readonly",
-        customElements: "readonly",
-        matchMedia: "readonly",
-        IntersectionObserver: "readonly",
-        MutationObserver: "readonly",
-        Element: "readonly",
       },
     },
     rules: {
-      "no-unused-vars": [
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": [
         "warn",
         {
           argsIgnorePattern: "^_",
@@ -45,6 +39,9 @@ export default [
       ],
       "no-console": "off",
       "no-control-regex": "off", // Allow ANSI color codes in regex
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-empty-object-type": "off",
+      "vue/multi-word-component-names": "off",
     },
-  },
-];
+  }
+);

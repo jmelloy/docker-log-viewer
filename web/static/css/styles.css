@@ -539,7 +539,6 @@ body {
   overflow: hidden;
 }
 
-
 .log-count-badge {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-primary);

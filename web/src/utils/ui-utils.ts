@@ -259,12 +259,12 @@ export function explainPlanLine(node: PlanNodeType): string {
   return line;
 }
 export function formatExplainPlanAsText(planJson: Plan | Plan[]): string {
-  let output = [];
+  const output: string[] = [];
 
   const formatNode = (node: PlanNodeType, level = 0, isLast = true, prefix = "") => {
-    let indent = level;
+    const indent = level;
 
-    let spaces = "  ".repeat(indent);
+    const spaces = "  ".repeat(indent);
     let line = spaces;
 
     // Add tree structure characters

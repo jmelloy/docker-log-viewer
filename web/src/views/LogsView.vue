@@ -3,11 +3,7 @@
     <app-header activePage="viewer">
       <div class="header-controls">
         <div class="trace-filter-display" v-if="hasTraceFilters">
-          <span
-            v-for="([key, value], index) in Array.from(traceFilters.entries())"
-            :key="key"
-            class="trace-filter-badge"
-          >
+          <span v-for="[key, value] in Array.from(traceFilters.entries())" :key="key" class="trace-filter-badge">
             <span class="filter-key">{{ key }}</span
             >=<span class="filter-value">{{ value }}</span>
             <button @click="removeTraceFilter(key)" class="filter-remove" title="Remove filter">×</button>
