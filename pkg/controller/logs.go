@@ -62,7 +62,7 @@ func (c *Controller) HandleClearLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, client := range clients {
-		if err := client.conn.WriteJSON(clearMsg); err != nil {
+		if err := client.writeJSON(clearMsg); err != nil {
 			slog.Error("failed to send clear message", "error", err)
 			client.conn.Close()
 			c.clientsMutex.Lock()
@@ -163,7 +163,7 @@ func (c *Controller) sendInitialLogs(client *Client) {
 	}
 	wsMsg.Data = data
 
-	if err := client.conn.WriteJSON(wsMsg); err != nil {
+	if err := client.writeJSON(wsMsg); err != nil {
 		slog.Error("failed to send initial logs", "error", err)
 	}
 }
@@ -323,7 +323,7 @@ func (c *Controller) BroadcastBatch(batch []logs.ContainerMessage) {
 		}
 		wsMsg.Data = data
 
-		if err := client.conn.WriteJSON(wsMsg); err != nil {
+		if err := client.writeJSON(wsMsg); err != nil {
 			// Close connection on error and remove from clients map
 			client.conn.Close()
 

@@ -14,14 +14,14 @@ FROM golang:1.26.0-alpine AS backend-builder
 
 WORKDIR /app
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git build-base
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o docker-log-viewer cmd/viewer/main.go
+RUN CGO_ENABLED=1 GOOS=linux go build -o docker-log-viewer cmd/viewer/main.go
 
 # Final stage
 FROM alpine:latest

@@ -41,9 +41,17 @@ type Controller struct {
 
 // Client represents a WebSocket client connection
 type Client struct {
-	conn   *websocket.Conn
-	filter ClientFilter
-	mu     sync.RWMutex
+	conn    *websocket.Conn
+	filter  ClientFilter
+	mu      sync.RWMutex
+	writeMu sync.Mutex
+}
+
+// Gorilla WebSocket connections allow only one concurrent writer.
+func (c *Client) writeJSON(message any) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return c.conn.WriteJSON(message)
 }
 
 // ClientFilter holds filter criteria for a client
