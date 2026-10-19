@@ -246,12 +246,7 @@ func ParseKeyValues(s string) (map[string]string, string) {
 
 // findStructuredDataStart finds where structured key=value data begins
 func findStructuredDataStart(s string) int {
-	re := regexp.MustCompile(`[\w.]+=["\{\[]`)
-	if match := re.FindStringIndex(s); match != nil {
-		return match[0]
-	}
-
-	re = regexp.MustCompile(`[\w.]+=`)
+	re := regexp.MustCompile(`[\w.]+=`)
 	if match := re.FindStringIndex(s); match != nil {
 		return match[0]
 	}
@@ -278,6 +273,9 @@ func extractValue(s string, i int) (string, int) {
 			if s[i] == '"' {
 				value := s[valueStart:i]
 				i++
+				if decoded, err := strconv.Unquote(s[start:i]); err == nil {
+					value = decoded
+				}
 				return value, i
 			}
 			i++
@@ -528,8 +526,11 @@ func parseANSIFields(line string) (*LogEntry, string) {
 			nextBlock = blocks[i+1]
 			key := block.Text[:len(block.Text)-1]
 			value := strings.TrimSpace(nextBlock.Text)
-			entry.Fields[key] = value
 			linesToStrip = append(linesToStrip, block.Text+value)
+			if decoded, err := strconv.Unquote(value); err == nil {
+				value = decoded
+			}
+			entry.Fields[key] = value
 
 			continue
 		}
@@ -576,7 +577,7 @@ func ParseLogLine(line string) *LogEntry {
 
 	// Keep original line with ANSI codes for field boundary detection
 	if json.Valid([]byte(line)) {
-		return parseJSONFields(line)
+		return normalizeSQLFields(parseJSONFields(line))
 	}
 
 	entry, line := parseANSIFields(line)
@@ -642,6 +643,19 @@ func ParseLogLine(line string) *LogEntry {
 		}
 	}
 
+	return normalizeSQLFields(entry)
+}
+
+// Normalize structured SQL logs to the format consumed by analysis and EXPLAIN.
+func normalizeSQLFields(entry *LogEntry) *LogEntry {
+	if query := entry.Fields["sql.query"]; query != "" {
+		entry.Message = "[sql]: " + query
+		if _, exists := entry.Fields["duration"]; !exists {
+			if duration, ok := entry.Fields["duration_ms"]; ok {
+				entry.Fields["duration"] = duration
+			}
+		}
+	}
 	return entry
 }
 
