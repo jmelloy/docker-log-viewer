@@ -10,6 +10,8 @@ import (
 
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/logstore"
+
+	"github.com/gorilla/websocket"
 )
 
 // WSMessage represents a WebSocket message
@@ -114,6 +116,9 @@ func (c *Controller) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		err := conn.ReadJSON(&msg)
 		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				slog.Warn("WebSocket disconnected unexpectedly", "remote", r.RemoteAddr, "error", err)
+			}
 			break
 		}
 
