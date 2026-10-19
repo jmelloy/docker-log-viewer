@@ -3,6 +3,7 @@ package logs
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMultiLineLogParsing(t *testing.T) {
@@ -204,8 +205,9 @@ func TestMultilineSQLParsing(t *testing.T) {
 	}
 
 	// Should have timestamp extracted (converted to RFC3339Nano)
-	if entry.Timestamp != "2025-10-06T18:09:28.984986Z" {
-		t.Errorf("Expected timestamp '2025-10-06T18:09:28.984986Z', got '%s'", entry.Timestamp)
+	wantTimestamp := time.Date(time.Now().Year(), time.October, 6, 18, 9, 28, 984986000, time.UTC).Format(time.RFC3339Nano)
+	if entry.Timestamp != wantTimestamp {
+		t.Errorf("Expected timestamp %q, got %q", wantTimestamp, entry.Timestamp)
 	}
 
 	// Should contain the SQL UNION statement
