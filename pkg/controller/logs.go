@@ -10,6 +10,8 @@ import (
 
 	"docker-log-parser/pkg/logs"
 	"docker-log-parser/pkg/logstore"
+
+	"github.com/gorilla/websocket"
 )
 
 // WSMessage represents a WebSocket message
@@ -62,7 +64,7 @@ func (c *Controller) HandleClearLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, client := range clients {
-		if err := client.conn.WriteJSON(clearMsg); err != nil {
+		if err := client.writeJSON(clearMsg); err != nil {
 			slog.Error("failed to send clear message", "error", err)
 			client.conn.Close()
 			c.clientsMutex.Lock()
@@ -114,6 +116,9 @@ func (c *Controller) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		err := conn.ReadJSON(&msg)
 		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				slog.Warn("WebSocket disconnected unexpectedly", "remote", r.RemoteAddr, "error", err)
+			}
 			break
 		}
 
@@ -163,7 +168,7 @@ func (c *Controller) sendInitialLogs(client *Client) {
 	}
 	wsMsg.Data = data
 
-	if err := client.conn.WriteJSON(wsMsg); err != nil {
+	if err := client.writeJSON(wsMsg); err != nil {
 		slog.Error("failed to send initial logs", "error", err)
 	}
 }
@@ -323,7 +328,7 @@ func (c *Controller) BroadcastBatch(batch []logs.ContainerMessage) {
 		}
 		wsMsg.Data = data
 
-		if err := client.conn.WriteJSON(wsMsg); err != nil {
+		if err := client.writeJSON(wsMsg); err != nil {
 			// Close connection on error and remove from clients map
 			client.conn.Close()
 

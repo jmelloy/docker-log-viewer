@@ -966,8 +966,14 @@ export default defineComponent({
         }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
         this.wsConnected = false;
+        console.warn("WebSocket closed", {
+          url: wsUrl,
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        });
         setTimeout(() => this.connectWebSocket(), 5000);
       };
 

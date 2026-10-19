@@ -114,8 +114,9 @@ func NewWebApp() (*WebApp, error) {
 	// Open store
 	db, err := store.NewStore("graphql-requests.db")
 	if err != nil {
-		slog.Warn("failed to open database", "error", err)
-		db = nil
+		cancel()
+		docker.Close()
+		return nil, fmt.Errorf("failed to initialize store: %w", err)
 	}
 
 	// Initialize schema decoder for parsing query and form parameters

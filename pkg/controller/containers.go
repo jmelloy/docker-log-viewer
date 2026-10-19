@@ -294,7 +294,7 @@ func (c *Controller) BroadcastContainerUpdate(containers []logs.Container) {
 	defer c.clientsMutex.Unlock()
 
 	for client := range c.clients {
-		err := client.conn.WriteJSON(wsMsg)
+		err := client.writeJSON(wsMsg)
 		if err != nil {
 			client.conn.Close()
 			delete(c.clients, client)
