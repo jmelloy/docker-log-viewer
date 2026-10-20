@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"docker-log-parser/pkg/httputil"
 	"docker-log-parser/pkg/store"
 
 	"github.com/gorilla/mux"
@@ -36,16 +37,22 @@ func (c *Controller) HandleCreateSampleQuery(w http.ResponseWriter, r *http.Requ
 	}
 
 	var input struct {
-		Name        string `json:"name"`
-		ServerID    *uint  `json:"serverId,omitempty"`
-		URL         string `json:"url,omitempty"`
-		URLOverride string `json:"urlOverride,omitempty"`
-		BearerToken string `json:"bearerToken,omitempty"`
-		DevID       string `json:"devId,omitempty"`
-		RequestData string `json:"requestData"`
+		Headers     map[string]string `json:"headers,omitempty"`
+		Name        string            `json:"name"`
+		ServerID    *uint             `json:"serverId,omitempty"`
+		URL         string            `json:"url,omitempty"`
+		URLOverride string            `json:"urlOverride,omitempty"`
+		BearerToken string            `json:"bearerToken,omitempty"`
+		DevID       string            `json:"devId,omitempty"`
+		RequestData string            `json:"requestData"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := httputil.ValidateHeaders(input.Headers); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -71,6 +78,7 @@ func (c *Controller) HandleCreateSampleQuery(w http.ResponseWriter, r *http.Requ
 	}
 
 	req := &store.SampleQuery{
+		Headers:     input.Headers,
 		Name:        input.Name,
 		URLOverride: input.URLOverride,
 		ServerID:    serverID,

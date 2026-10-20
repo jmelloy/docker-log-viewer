@@ -325,12 +325,14 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	// Get server info for execution
 	var url, bearerToken, devID, experimentalMode string
 	var serverIDForExec *uint
+	var serverHeaders map[string]string
 	if req.Server != nil {
 		url = req.Server.URL
 		bearerToken = req.Server.BearerToken
 		devID = req.Server.DevID
 		experimentalMode = req.Server.ExperimentalMode
 		serverIDForExec = &req.Server.ID
+		serverHeaders = req.Server.Headers
 	}
 
 	url, err = httputil.ResolveRequestURL(url, req.URLOverride)
@@ -341,6 +343,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	// Execute request
 	sampleID := uint(requestID)
 	execution := &store.Request{
+		Headers:     httputil.MergeHeaders(serverHeaders, req.Headers),
 		SampleID:    &sampleID,
 		URL:         url,
 		ServerID:    serverIDForExec,
@@ -349,7 +352,7 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 	}
 
 	startTime := time.Now()
-	statusCode, responseBody, responseHeaders, err := httputil.MakeHTTPRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
+	statusCode, responseBody, responseHeaders, err := httputil.MakeHTTPRequest(url, []byte(req.RequestData), requestIDHeader, bearerToken, devID, experimentalMode, serverHeaders, req.Headers)
 	execution.DurationMS = time.Since(startTime).Milliseconds()
 	execution.StatusCode = statusCode
 	execution.ResponseBody = responseBody

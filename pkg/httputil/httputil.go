@@ -43,7 +43,12 @@ func ResolveRequestURL(serverURL, endpoint string) (string, error) {
 
 // MakeHTTPRequest executes an HTTP POST request with the given parameters
 // Returns: statusCode, responseBody, responseHeaders (as JSON), error
-func MakeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string) (int, string, string, error) {
+func MakeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, experimentalMode string, customHeaders ...map[string]string) (int, string, string, error) {
+	for _, headers := range customHeaders {
+		if err := ValidateHeaders(headers); err != nil {
+			return 0, "", "", err
+		}
+	}
 	// Replace localhost with host.docker.internal if running in Docker
 	url = utils.ReplaceLocalhostWithDockerHost(url)
 
@@ -63,6 +68,10 @@ func MakeHTTPRequest(url string, data []byte, requestID, bearerToken, devID, exp
 	}
 	if experimentalMode != "" {
 		req.Header.Set("x-glue-experimental-mode", experimentalMode)
+	}
+
+	for name, value := range MergeHeaders(customHeaders...) {
+		req.Header.Set(name, value)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}

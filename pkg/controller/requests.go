@@ -28,14 +28,15 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 	}
 
 	var input struct {
-		ServerID                 *uint  `json:"serverId"`
-		URLOverride              string `json:"urlOverride,omitempty"`
-		BearerTokenOverride      string `json:"bearerTokenOverride,omitempty"`
-		DevIDOverride            string `json:"devIdOverride,omitempty"`
-		ExperimentalModeOverride string `json:"experimentalModeOverride,omitempty"`
-		RequestData              string `json:"requestData"`
-		Sync                     bool   `json:"sync,omitempty"`
-		SampleID                 *uint  `json:"sampleId,omitempty"`
+		Headers                  map[string]string `json:"headers,omitempty"`
+		ServerID                 *uint             `json:"serverId"`
+		URLOverride              string            `json:"urlOverride,omitempty"`
+		BearerTokenOverride      string            `json:"bearerTokenOverride,omitempty"`
+		DevIDOverride            string            `json:"devIdOverride,omitempty"`
+		ExperimentalModeOverride string            `json:"experimentalModeOverride,omitempty"`
+		RequestData              string            `json:"requestData"`
+		Sync                     bool              `json:"sync,omitempty"`
+		SampleID                 *uint             `json:"sampleId,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -64,7 +65,8 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 	}
 
 	endpoint := input.URLOverride
-	if endpoint == "" && input.SampleID != nil {
+	var sampleHeaders map[string]string
+	if input.SampleID != nil {
 		sample, err := c.store.GetSampleQuery(int64(*input.SampleID))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -74,7 +76,10 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 			http.Error(w, "Sample query not found", http.StatusNotFound)
 			return
 		}
-		endpoint = sample.URLOverride
+		sampleHeaders = sample.Headers
+		if endpoint == "" {
+			endpoint = sample.URLOverride
+		}
 	}
 	url, err := httputil.ResolveRequestURL(server.URL, endpoint)
 	if err != nil {
@@ -95,9 +100,24 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 		experimentalMode = input.ExperimentalModeOverride
 	}
 
+	legacyHeaders := make(map[string]string)
+	if devID != "" {
+		legacyHeaders["X-GlueDev-UserID"] = devID
+	}
+	if experimentalMode != "" {
+		legacyHeaders["X-Glue-Experimental-Mode"] = experimentalMode
+	}
+	for _, layer := range []map[string]string{server.Headers, sampleHeaders, input.Headers} {
+		if err := httputil.ValidateHeaders(layer); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	headers := httputil.MergeHeaders(legacyHeaders, server.Headers, sampleHeaders, input.Headers)
 	requestIDHeader := httputil.GenerateRequestID()
 
 	execution := &store.Request{
+		Headers:             headers,
 		URL:                 url,
 		ServerID:            input.ServerID,
 		RequestIDHeader:     requestIDHeader,
@@ -118,7 +138,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 
 	executeRequest := func() {
 		startTime := time.Now()
-		statusCode, responseBody, responseHeaders, err := httputil.MakeHTTPRequest(url, []byte(input.RequestData), requestIDHeader, bearerToken, devID, experimentalMode)
+		statusCode, responseBody, responseHeaders, err := httputil.MakeHTTPRequest(url, []byte(input.RequestData), requestIDHeader, bearerToken, devID, experimentalMode, headers)
 		execution.DurationMS = time.Since(startTime).Milliseconds()
 		execution.StatusCode = statusCode
 		execution.ResponseBody = responseBody

@@ -108,6 +108,7 @@ export interface ContainerData {
 }
 
 export interface Server {
+  headers?: Record<string, string>;
   id: number;
   name: string;
   url: string;
@@ -153,6 +154,7 @@ export interface RetentionResponse {
 }
 
 export interface SampleQuery {
+  headers?: Record<string, string>;
   urlOverride?: string;
   id: number;
   name: string;
@@ -165,6 +167,7 @@ export interface SampleQuery {
 }
 
 export interface ExecutedRequest {
+  headers?: Record<string, string>;
   url?: string;
   id: number;
   sampleId?: number | null;
