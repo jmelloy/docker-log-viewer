@@ -26,9 +26,10 @@ type LogEntry struct {
 var (
 	timestampRegex = regexp.MustCompile(`(\d{1,2}\s+\w+\s+\d{4}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d{4}[-/]\d{2}[-/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\w+\s+\d+\s+\d+:\d+:\d+(?:\.\d+)?|\[\d{2}:\d{2}:\d{2}\.\d+\]|\d{2}:\d{2}:\d{2}(?:\.\d+)?|\d+[-/]\d+[-/]\d+\s+\d+:\d+:\d+(?:\.\d+)?|\b\d{10,13}\b)`)
 	levelRegex     = regexp.MustCompile(`\b(FATAL|DEBUG|INFO|ERROR|DBG|TRC|INF|WARNING|WARN|WRN|ERR)\b`)
-	fileRegex      = regexp.MustCompile(`\b([\w/]+\.go:\d+)`)
+	fileRegex      = regexp.MustCompile(`([\w/]+\.go:\d+)`)
 	ansiRegex      = regexp.MustCompile(`\x1b\[[0-9;]*[mGKHfABCDsuJSTlh]|\x1b\][^\x07]*\x07|\x1b[>=]|\x1b\[?[\d;]*[a-zA-Z]`)
 	ansiStartRegex = regexp.MustCompile(`^\x1b\[`)
+	fieldKeyRegex  = regexp.MustCompile(`^[\w.]+=$`)
 )
 
 // startsWithANSI checks if a line starts with an ANSI escape code
@@ -246,12 +247,7 @@ func ParseKeyValues(s string) (map[string]string, string) {
 
 // findStructuredDataStart finds where structured key=value data begins
 func findStructuredDataStart(s string) int {
-	re := regexp.MustCompile(`[\w.]+=["\{\[]`)
-	if match := re.FindStringIndex(s); match != nil {
-		return match[0]
-	}
-
-	re = regexp.MustCompile(`[\w.]+=`)
+	re := regexp.MustCompile(`[\w.]+=`)
 	if match := re.FindStringIndex(s); match != nil {
 		return match[0]
 	}
@@ -278,6 +274,9 @@ func extractValue(s string, i int) (string, int) {
 			if s[i] == '"' {
 				value := s[valueStart:i]
 				i++
+				if decoded, err := strconv.Unquote(s[start:i]); err == nil {
+					value = decoded
+				}
 				return value, i
 			}
 			i++
@@ -519,17 +518,24 @@ func parseANSIFields(line string) (*LogEntry, string) {
 
 	nextBlock := Block{}
 	for i, block := range blocks {
+		if block.Equals(nextBlock) {
+			continue
+		}
 		block.Text = strings.TrimSpace(block.Text)
-		if block.Equals(nextBlock) || block.Text == "" {
+		if block.Text == "" {
 			continue
 		}
 
-		if strings.HasSuffix(block.Text, "=") && i < len(blocks)-1 {
+		if fieldKeyRegex.MatchString(block.Text) && i < len(blocks)-1 {
 			nextBlock = blocks[i+1]
 			key := block.Text[:len(block.Text)-1]
-			value := strings.TrimSpace(nextBlock.Text)
+			valueText := strings.TrimSpace(nextBlock.Text)
+			value, end := extractValue(valueText, 0)
+			if end <= 0 {
+				value, end = valueText, len(valueText)
+			}
+			linesToStrip = append(linesToStrip, block.Text+valueText[:end])
 			entry.Fields[key] = value
-			linesToStrip = append(linesToStrip, block.Text+value)
 
 			continue
 		}
@@ -546,7 +552,7 @@ func parseANSIFields(line string) (*LogEntry, string) {
 			continue
 		}
 
-		if file, ok := ParseFile(block.Text); ok {
+		if file, ok := ParseFile(block.Text); ok && file == block.Text {
 			entry.File = file
 			linesToStrip = append(linesToStrip, block.Text)
 			continue
@@ -576,7 +582,7 @@ func ParseLogLine(line string) *LogEntry {
 
 	// Keep original line with ANSI codes for field boundary detection
 	if json.Valid([]byte(line)) {
-		return parseJSONFields(line)
+		return normalizeSQLFields(parseJSONFields(line))
 	}
 
 	entry, line := parseANSIFields(line)
@@ -604,33 +610,31 @@ func ParseLogLine(line string) *LogEntry {
 
 	if entry.Level == "" {
 		match := levelRegex.FindStringIndex(line)
-		if match != nil {
+		if match != nil && strings.TrimSpace(line[:match[0]]) == "" {
 			entry.Level = line[match[0]:match[1]]
 			parsedLevel, ok := ParseLevel(entry.Level)
 			if ok {
 				entry.Level = parsedLevel
 			}
+			line = line[:match[0]] + line[match[1]:]
 		}
 	}
 
 	if entry.File == "" {
-		if matches := fileRegex.FindStringSubmatch(line); len(matches) > 0 {
-			if _, ok := ParseFile(matches[1]); ok {
-				entry.File = matches[1]
-			}
+		if match := fileRegex.FindStringIndex(line); match != nil && strings.TrimSpace(line[:match[0]]) == "" {
+			entry.File = line[match[0]:match[1]]
+			line = line[:match[0]] + line[match[1]:]
 		}
 	}
 
 	line = strings.TrimSpace(line)
-	entry.Message = line
-	// Fall back to regular parsing if ANSI-aware parsing didn't yield results
-	if len(entry.Fields) == 0 {
-		fields, remaining := ParseKeyValues(line)
-		if len(fields) > 0 {
-			entry.Message = strings.TrimSpace(remaining)
-			maps.Copy(entry.Fields, fields)
-		}
+	if entry.File != "" {
+		line = strings.TrimSpace(strings.TrimPrefix(line, ">"))
 	}
+	// ANSI hints may cover only some fields; parse the remaining plain fields too.
+	fields, remaining := ParseKeyValues(line)
+	entry.Message = strings.TrimSpace(remaining)
+	maps.Copy(entry.Fields, fields)
 
 	// Check all fields for double-encoded JSON and normalize them
 	for key, val := range entry.Fields {
@@ -642,6 +646,19 @@ func ParseLogLine(line string) *LogEntry {
 		}
 	}
 
+	return normalizeSQLFields(entry)
+}
+
+// Normalize structured SQL logs to the format consumed by analysis and EXPLAIN.
+func normalizeSQLFields(entry *LogEntry) *LogEntry {
+	if query := entry.Fields["sql.query"]; query != "" {
+		entry.Message = "[sql]: " + query
+		if _, exists := entry.Fields["duration"]; !exists {
+			if duration, ok := entry.Fields["duration_ms"]; ok {
+				entry.Fields["duration"] = duration
+			}
+		}
+	}
 	return entry
 }
 

@@ -259,8 +259,9 @@ Oct  6 19:24:05.450809 TRC pkg/repository/threadparticipant/repository.go:425 > 
 				t.Errorf("Expected duration 0.546712, got %s", msg.Entry.Fields["duration"])
 			}
 			// Verify timestamp is extracted (converted to RFC3339Nano)
-			if msg.Entry.Timestamp != "2025-10-06T18:09:28.984986Z" {
-				t.Errorf("Expected timestamp '2025-10-06T18:09:28.984986Z', got '%s'", msg.Entry.Timestamp)
+			wantTimestamp := time.Date(time.Now().Year(), time.October, 6, 18, 9, 28, 984986000, time.UTC).Format(time.RFC3339Nano)
+			if msg.Entry.Timestamp != wantTimestamp {
+				t.Errorf("Expected timestamp %q, got %q", wantTimestamp, msg.Entry.Timestamp)
 			}
 			break
 		}

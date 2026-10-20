@@ -10,6 +10,8 @@ import (
 // TestTimestampUsageIntegration demonstrates the end-to-end flow
 // This shows how the system now uses parsed timestamps instead of time.Now()
 func TestTimestampUsageIntegration(t *testing.T) {
+	// Yearless log timestamps use the current year.
+	year := time.Now().Year()
 	// Simulate a sequence of log messages with timestamps
 	testLogs := []struct {
 		raw          string
@@ -21,7 +23,7 @@ func TestTimestampUsageIntegration(t *testing.T) {
 	}{
 		{
 			raw:          "Oct  3 19:57:52.076536 INFO Starting service",
-			timestamp:    "2025-10-03T19:57:52.076536Z",
+			timestamp:    time.Date(year, time.October, 3, 19, 57, 52, 76536000, time.UTC).Format(time.RFC3339Nano),
 			expectParsed: true,
 			expectedHour: 19,
 			expectedMin:  57,
@@ -37,7 +39,7 @@ func TestTimestampUsageIntegration(t *testing.T) {
 		},
 		{
 			raw:          "Oct  3 19:58:10.123456 INFO Request received",
-			timestamp:    "2025-10-03T19:58:10.123456Z",
+			timestamp:    time.Date(year, time.October, 3, 19, 58, 10, 123456000, time.UTC).Format(time.RFC3339Nano),
 			expectParsed: true,
 			expectedHour: 19,
 			expectedMin:  58,
