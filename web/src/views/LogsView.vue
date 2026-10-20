@@ -370,12 +370,15 @@
             <!-- Message on its own line -->
             <div v-if="selectedLog.entry?.message" class="parsed-field">
               <div class="parsed-field-key">Message</div>
-              <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
+              <div class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+            </div>
+            <div v-if="getSQLQuery(selectedLog.entry)" class="parsed-field">
+              <div class="parsed-field-key">SQL Query</div>
+              <div class="parsed-field-value">
                 <pre ref="sqlMessageRef" class="sql-query-text" style="white-space: pre-wrap; margin: 0">{{
-                  formatMessage(selectedLog.entry.message)
+                  formatSQL(getSQLQuery(selectedLog.entry))
                 }}</pre>
               </div>
-              <div v-else class="parsed-field-value">{{ selectedLog.entry.message }}</div>
             </div>
             <!-- File -->
             <div v-if="selectedLog.entry?.file" class="parsed-field">
@@ -652,6 +655,7 @@
 </template>
 
 <script lang="ts">
+import { getSQLQuery } from "@/utils/sql-query";
 import { defineComponent } from "vue";
 import { API } from "@/utils/api";
 import {
@@ -1341,41 +1345,37 @@ export default defineComponent({
       const queries = [];
 
       logs.forEach((log) => {
-        const message = log.entry?.message || "";
-        if (message.includes("[sql]")) {
-          const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
-          if (sqlMatch) {
-            const query = sqlMatch[1].trim();
-            const duration = parseFloat(log.entry?.fields?.duration || 0);
-            const table = log.entry?.fields?.["db.table"] || "unknown";
-            const operation = log.entry?.fields?.["db.operation"] || "unknown";
-            const rows = parseInt(log.entry?.fields?.["db.rows"] || 0);
+        const query = getSQLQuery(log.entry);
+        if (query) {
+          const duration = parseFloat(log.entry?.fields?.duration ?? log.entry?.fields?.duration_ms ?? 0);
+          const table = log.entry?.fields?.["db.table"] || "unknown";
+          const operation = log.entry?.fields?.["db.operation"] || "unknown";
+          const rows = parseInt(log.entry?.fields?.["db.rows"] ?? log.entry?.fields?.rows ?? 0);
 
-            let variables = {};
-            const dbVars = log.entry?.fields?.["db.vars"];
-            if (dbVars) {
-              try {
-                const varsArray = typeof dbVars === "string" ? JSON.parse(dbVars) : dbVars;
-                if (Array.isArray(varsArray)) {
-                  varsArray.forEach((val, idx) => {
-                    variables[String(idx + 1)] = String(val);
-                  });
-                }
-              } catch (e) {
-                console.warn("Failed to parse db.vars:", dbVars, e);
+          let variables = {};
+          const dbVars = log.entry?.fields?.["db.vars"];
+          if (dbVars) {
+            try {
+              const varsArray = typeof dbVars === "string" ? JSON.parse(dbVars) : dbVars;
+              if (Array.isArray(varsArray)) {
+                varsArray.forEach((val, idx) => {
+                  variables[String(idx + 1)] = String(val);
+                });
               }
+            } catch (e) {
+              console.warn("Failed to parse db.vars:", dbVars, e);
             }
-
-            queries.push({
-              query,
-              duration,
-              table,
-              operation,
-              rows,
-              variables,
-              normalized: this.normalizeQuery(query),
-            });
           }
+
+          queries.push({
+            query,
+            duration,
+            table,
+            operation,
+            rows,
+            variables,
+            normalized: this.normalizeQuery(query),
+          });
         }
       });
 
@@ -1474,41 +1474,8 @@ export default defineComponent({
     // Wrapper method for template usage (templates can't call imported functions directly)
     convertAnsiToHtml: convertAnsiToHtmlUtil,
 
-    formatMessage(message) {
-      if (!message) return message;
-      const sqlIndex = message.indexOf("[sql]:");
-      if (sqlIndex >= 0) {
-        return formatSQLUtil(message.substring(sqlIndex + 6));
-      }
-      return message;
-    },
-
-    formatAndHighlightSQL(message) {
-      if (!message) return message;
-      if (message.includes("[sql]")) {
-        const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
-        if (sqlMatch) {
-          const sql = sqlMatch[1].trim();
-          const formatted = formatSQLUtil(sql);
-          // Apply syntax highlighting if hljs is available
-          if (typeof hljs !== "undefined") {
-            try {
-              const highlighted = hljs.highlight(formatted, { language: "sql" });
-              return highlighted.value;
-            } catch (e) {
-              console.error("Error highlighting SQL:", e);
-              return formatted;
-            }
-          }
-          return formatted;
-        }
-      }
-      return message;
-    },
-
-    isSQLMessage(message: string) {
-      return message && message.includes("[sql]");
-    },
+    getSQLQuery,
+    formatSQL: formatSQLUtil,
 
     getRemainingFields(fields) {
       if (!fields) return [];

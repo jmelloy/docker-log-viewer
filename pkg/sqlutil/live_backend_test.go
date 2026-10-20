@@ -62,7 +62,7 @@ func checkBackendSQLLine(t *testing.T, line string) {
 		}
 	}
 	entry := logs.ParseLogLine(line)
-	if entry.Fields["sql.query"] != want || entry.Message != "[sql]: "+want {
+	if entry.Fields["sql.query"] != want || entry.Message != "sql query done" {
 		t.Fatal("backend parser left SQL quoted/escaped instead of canonical SQL")
 	}
 	queries := ExtractSQLQueries([]logs.ContainerMessage{{ContainerID: "dnsid-backend", Entry: entry}})

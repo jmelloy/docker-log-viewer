@@ -23,56 +23,36 @@ func ExtractSQLQueries(logMessages []logs.ContainerMessage) []store.SQLQuery {
 	queries := []store.SQLQuery{}
 
 	for _, msg := range logMessages {
-		if msg.Entry == nil || msg.Entry.Message == "" {
+		if msg.Entry == nil {
 			continue
 		}
 
 		message := msg.Entry.Message
-		// Check for [sql] or [query] format
-		if strings.Contains(message, "[sql]") || (msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query") {
-			var sqlText string
-			var normalizedQuery string
-			var query store.SQLQuery
-
-			// Handle [sql] format
-			index := strings.Index(message, "[sql]:")
-			if index != -1 {
-				message = message[index+6:]
-				normalizedQuery = utils.NormalizeQuery(message)
-				query = store.SQLQuery{
-					Query:           message,
-					NormalizedQuery: normalizedQuery,
-					QueryHash:       store.ComputeQueryHash(normalizedQuery),
-					ContainerID:     msg.ContainerID,
-				}
-			} else if msg.Entry.Fields != nil && msg.Entry.Fields["type"] == "query" {
-				// Handle [query] format - message is the SQL query
+		sqlText := msg.Entry.Fields["sql.query"]
+		if sqlText == "" {
+			if index := strings.Index(message, "[sql]:"); index != -1 {
+				sqlText = message[index+6:]
+			} else if msg.Entry.Fields["type"] == "query" {
 				sqlText = message
-				normalizedQuery = utils.NormalizeQuery(sqlText)
-				query = store.SQLQuery{
-					Query:           sqlText,
-					NormalizedQuery: normalizedQuery,
-					QueryHash:       store.ComputeQueryHash(normalizedQuery),
-					ContainerID:     msg.ContainerID,
-				}
-
-				// Extract duration and rows from fields
-				if duration, ok := msg.Entry.Fields["duration_ms"]; ok {
-					if durationVal, err := strconv.ParseFloat(duration, 64); err == nil {
-						query.DurationMS = durationVal
-					}
-				}
-				if rows, ok := msg.Entry.Fields["rows"]; ok {
-					if rowsVal, err := strconv.Atoi(rows); err == nil {
-						query.Rows = rowsVal
-					}
-				}
-			} else {
-				continue
+			}
+		}
+		if sqlText != "" {
+			normalizedQuery := utils.NormalizeQuery(sqlText)
+			query := store.SQLQuery{
+				Query:           sqlText,
+				NormalizedQuery: normalizedQuery,
+				QueryHash:       store.ComputeQueryHash(normalizedQuery),
+				ContainerID:     msg.ContainerID,
+			}
+			if duration, err := strconv.ParseFloat(msg.Entry.Fields["duration_ms"], 64); err == nil {
+				query.DurationMS = duration
+			}
+			if rows, err := strconv.Atoi(msg.Entry.Fields["rows"]); err == nil {
+				query.Rows = rows
 			}
 
 			if msg.Entry.Fields != nil {
-				// These apply to both [sql] and [query] formats
+				// Metadata applies to structured and legacy SQL formats.
 				excludedFields := map[string]bool{}
 
 				if duration, ok := msg.Entry.Fields["duration"]; ok {
