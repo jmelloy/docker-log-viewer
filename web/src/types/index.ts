@@ -153,6 +153,7 @@ export interface RetentionResponse {
 }
 
 export interface SampleQuery {
+  urlOverride?: string;
   id: number;
   name: string;
   serverId?: number | null;
@@ -164,6 +165,7 @@ export interface SampleQuery {
 }
 
 export interface ExecutedRequest {
+  url?: string;
   id: number;
   sampleId?: number | null;
   serverId?: number | null;

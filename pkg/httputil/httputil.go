@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -21,6 +22,23 @@ func GenerateRequestID() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// ResolveRequestURL resolves an optional endpoint against the configured server URL.
+func ResolveRequestURL(serverURL, endpoint string) (string, error) {
+	base, err := url.Parse(strings.TrimSpace(serverURL))
+	if err != nil {
+		return "", fmt.Errorf("invalid server URL: %w", err)
+	}
+	ref, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil {
+		return "", fmt.Errorf("invalid request URL: %w", err)
+	}
+	resolved := base.ResolveReference(ref)
+	if (resolved.Scheme != "http" && resolved.Scheme != "https") || resolved.Hostname() == "" || resolved.User != nil {
+		return "", fmt.Errorf("request URL must use HTTP or HTTPS with a host and no embedded credentials")
+	}
+	return resolved.String(), nil
 }
 
 // MakeHTTPRequest executes an HTTP POST request with the given parameters
