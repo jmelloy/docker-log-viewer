@@ -140,10 +140,16 @@
               placeholder="your-token-here"
             />
           </div>
-          <div class="form-group">
-            <label for="newSampleQueryDevID">Dev ID (optional):</label>
-            <input type="text" id="newSampleQueryDevID" v-model="newQueryForm.devId" placeholder="dev-user-id" />
-          </div>
+        </div>
+        <div class="form-group">
+          <label for="sampleHeaders">Custom Headers (JSON):</label>
+          <textarea
+            id="sampleHeaders"
+            v-model="newQueryForm.headers"
+            rows="5"
+            placeholder='{"X-Custom-Header": "value"}'
+          ></textarea>
+          <small>Overrides server headers for this sample query.</small>
         </div>
         <div class="form-group">
           <label for="newSampleQueryEndpoint">Request URL (optional):</label>
@@ -217,8 +223,17 @@
           </select>
         </div>
         <div class="form-group">
-          <label for="executeUserID">User ID (optional):</label>
-          <input type="text" id="executeUserID" v-model="executeForm.devIdOverride" placeholder="Override user ID" />
+          <label for="executeHeaders">Custom Headers (JSON):</label>
+          <textarea
+            id="executeHeaders"
+            v-model="executeForm.headers"
+            rows="5"
+            placeholder='{"X-Custom-Header": "value"}'
+          ></textarea>
+          <small
+            >Overrides server and sample query headers. Header names are case-insensitive. X-Request-Id is managed
+            automatically.</small
+          >
         </div>
         <div class="form-group">
           <details style="cursor: pointer">
@@ -227,15 +242,6 @@
               <div class="form-group">
                 <label for="executeToken">Bearer Token Override (optional):</label>
                 <input type="text" id="executeToken" v-model="executeForm.tokenOverride" placeholder="Override token" />
-              </div>
-              <div class="form-group">
-                <label for="executeExperimentHeader">Experiment Header (optional):</label>
-                <input
-                  type="text"
-                  id="executeExperimentHeader"
-                  v-model="executeForm.experimentHeaderOverride"
-                  placeholder="Override experiment header"
-                />
               </div>
             </div>
           </details>
@@ -397,6 +403,7 @@
 </template>
 
 <script lang="ts">
+import { parseHeaders } from "@/utils/headers";
 import { defineComponent } from "vue";
 import { API } from "@/utils/api";
 import { formatSQL as formatSQLUtil } from "@/utils/ui-utils";
@@ -438,15 +445,14 @@ export default defineComponent(
           createNewServer: false,
           url: "",
           bearerToken: "",
-          devId: "",
+          headers: "{}",
         },
         executeForm: {
           urlOverride: "",
           serverId: "",
           requestDataOverride: "",
           tokenOverride: "",
-          devIdOverride: "",
-          experimentHeaderOverride: "",
+          headers: "{}",
           graphqlVariables: {},
         },
         // Selected data
@@ -689,7 +695,7 @@ export default defineComponent(
           createNewServer: false,
           url: "",
           bearerToken: "",
-          devId: "",
+          headers: "{}",
         };
         this.showNewSampleQueryModal = true;
       },
@@ -702,8 +708,7 @@ export default defineComponent(
           serverId: "",
           requestDataOverride: "",
           tokenOverride: "",
-          devIdOverride: "",
-          experimentHeaderOverride: "",
+          headers: "{}",
           graphqlVariables: {},
         };
         this.showExecuteNewModal = true;
@@ -711,7 +716,7 @@ export default defineComponent(
 
       openExecuteModalWithSampleQuery(sq) {
         this.selectedSampleQuery = sq;
-        // Find the server to get token and dev ID
+        // Find the server to get the bearer token
         const server = this.servers.find((s) => s.id === sq.serverId);
         // Pre-populate form with sample query data
         this.executeForm = {
@@ -719,8 +724,7 @@ export default defineComponent(
           serverId: sq.serverId ? String(sq.serverId) : "",
           requestDataOverride: sq.requestData || "",
           tokenOverride: server?.bearerToken || "",
-          devIdOverride: server?.devId || "",
-          experimentHeaderOverride: server?.experimentalMode || "",
+          headers: "{}",
           graphqlVariables: {},
         };
         // Parse GraphQL variables
@@ -737,8 +741,9 @@ export default defineComponent(
             url?: string;
             urlOverride?: string;
             bearerToken?: string;
-            devId?: string;
+            headers: Record<string, string>;
           } = {
+            headers: parseHeaders(this.newQueryForm.headers),
             urlOverride: this.newQueryForm.urlOverride,
             name: this.newQueryForm.name,
             requestData: this.newQueryForm.requestData,
@@ -751,7 +756,6 @@ export default defineComponent(
             // Creating new server
             payload.url = this.newQueryForm.url;
             payload.bearerToken = this.newQueryForm.bearerToken;
-            payload.devId = this.newQueryForm.devId;
           }
 
           await API.post<{ id: number }>("/api/samples/", payload);
@@ -771,7 +775,7 @@ export default defineComponent(
             createNewServer: false,
             url: "",
             bearerToken: "",
-            devId: "",
+            headers: "{}",
           };
         } catch (error) {
           console.error("Failed to save sample query:", error);
@@ -788,7 +792,7 @@ export default defineComponent(
           // Pre-populate server if available
           if (this.selectedSampleQuery.serverId) {
             this.executeForm.serverId = String(this.selectedSampleQuery.serverId);
-            // Get token, dev ID, and experiment header from server
+            // Get token from server; headers are inherited during execution.
             this.updateServerDefaults();
           }
           // Parse GraphQL variables
@@ -805,8 +809,6 @@ export default defineComponent(
           if (server) {
             // Always set defaults from server (user can still override)
             this.executeForm.tokenOverride = server.bearerToken || "";
-            this.executeForm.devIdOverride = server.devId || "";
-            this.executeForm.experimentHeaderOverride = server.experimentalMode || "";
           }
         }
       },
@@ -839,8 +841,8 @@ export default defineComponent(
             urlOverride: this.executeForm.urlOverride || undefined,
             requestData: requestData,
             bearerTokenOverride: this.executeForm.tokenOverride || undefined,
-            devIdOverride: this.executeForm.devIdOverride || undefined,
-            experimentalModeOverride: this.executeForm.experimentHeaderOverride || undefined,
+            headers: parseHeaders(this.executeForm.headers),
+            sampleId: this.selectedSampleQuery?.id,
           };
 
           const result = await API.post<ExecuteResponse>("/api/requests", payload);

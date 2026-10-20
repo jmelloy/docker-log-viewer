@@ -43,31 +43,33 @@ func (Database) TableName() string {
 
 // Server represents a server configuration with URL and authentication
 type Server struct {
-	ID                uint           `gorm:"primaryKey" json:"id"`
-	Name              string         `gorm:"not null" json:"name"`
-	URL               string         `gorm:"not null" json:"url"`
-	BearerToken       string         `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
-	DevID             string         `gorm:"column:dev_id" json:"devId,omitempty"`
-	ExperimentalMode  string         `gorm:"column:experimental_mode" json:"experimentalMode,omitempty"`
-	DefaultDatabaseID *uint          `gorm:"column:default_database_id;index" json:"defaultDatabaseId,omitempty"`
-	DefaultDatabase   *Database      `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
-	CreatedAt         time.Time      `json:"createdAt"`
-	UpdatedAt         time.Time      `json:"updatedAt"`
-	DeletedAt         gorm.DeletedAt `gorm:"index" json:"-"`
+	Headers           map[string]string `gorm:"serializer:json;type:text" json:"headers,omitempty"`
+	ID                uint              `gorm:"primaryKey" json:"id"`
+	Name              string            `gorm:"not null" json:"name"`
+	URL               string            `gorm:"not null" json:"url"`
+	BearerToken       string            `gorm:"column:bearer_token" json:"bearerToken,omitempty"`
+	DevID             string            `gorm:"column:dev_id" json:"devId,omitempty"`
+	ExperimentalMode  string            `gorm:"column:experimental_mode" json:"experimentalMode,omitempty"`
+	DefaultDatabaseID *uint             `gorm:"column:default_database_id;index" json:"defaultDatabaseId,omitempty"`
+	DefaultDatabase   *Database         `gorm:"foreignKey:DefaultDatabaseID" json:"defaultDatabase,omitempty"`
+	CreatedAt         time.Time         `json:"createdAt"`
+	UpdatedAt         time.Time         `json:"updatedAt"`
+	DeletedAt         gorm.DeletedAt    `gorm:"index" json:"-"`
 }
 
 // SampleQuery represents a saved GraphQL/API request template (sample query)
 type SampleQuery struct {
-	URLOverride string         `gorm:"column:url_override" json:"urlOverride,omitempty"`
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	Name        string         `gorm:"not null" json:"name"`
-	ServerID    *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
-	Server      *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestData string         `gorm:"not null;column:request_data" json:"requestData"`
-	DisplayName string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
-	CreatedAt   time.Time      `json:"createdAt"`
-	UpdatedAt   time.Time      `json:"updatedAt"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	Headers     map[string]string `gorm:"serializer:json;type:text" json:"headers,omitempty"`
+	URLOverride string            `gorm:"column:url_override" json:"urlOverride,omitempty"`
+	ID          uint              `gorm:"primaryKey" json:"id"`
+	Name        string            `gorm:"not null" json:"name"`
+	ServerID    *uint             `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server      *Server           `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestData string            `gorm:"not null;column:request_data" json:"requestData"`
+	DisplayName string            `gorm:"-" json:"displayName"` // Computed field, not stored in DB
+	CreatedAt   time.Time         `json:"createdAt"`
+	UpdatedAt   time.Time         `json:"updatedAt"`
+	DeletedAt   gorm.DeletedAt    `gorm:"index" json:"-"`
 }
 
 func (SampleQuery) TableName() string {
@@ -76,27 +78,28 @@ func (SampleQuery) TableName() string {
 
 // Request represents a single request execution
 type Request struct {
-	URL                 string         `json:"url,omitempty"`
-	ID                  uint           `gorm:"primaryKey" json:"id"`
-	SampleID            *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
-	ServerID            *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
-	Server              *Server        `gorm:"foreignKey:ServerID" json:"server,omitempty"`
-	RequestIDHeader     string         `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
-	RequestBody         string         `gorm:"column:request_body" json:"requestBody,omitempty"`
-	StatusCode          int            `gorm:"column:status_code" json:"statusCode"`
-	DurationMS          int64          `gorm:"column:duration_ms" json:"durationMs"`
-	ResponseBody        string         `gorm:"column:response_body" json:"responseBody,omitempty"`
-	ResponseHeaders     string         `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
-	Error               string         `json:"error,omitempty"`
-	IsSync              bool           `gorm:"column:is_sync;index;default:false" json:"isSync"`
-	Name                string         `gorm:"column:name" json:"name"`
-	DisplayName         string         `gorm:"-" json:"displayName"` // Computed field, not stored in DB
-	BearerTokenOverride string         `gorm:"column:bearer_token_override" json:"bearerTokenOverride,omitempty"`
-	DevIDOverride       string         `gorm:"column:dev_id_override" json:"devIdOverride,omitempty"`
-	ExecutedAt          time.Time      `gorm:"not null;column:executed_at;index" json:"executedAt"`
-	CreatedAt           time.Time      `json:"createdAt"`
-	UpdatedAt           time.Time      `json:"updatedAt"`
-	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
+	Headers             map[string]string `gorm:"serializer:json;type:text" json:"headers,omitempty"`
+	URL                 string            `json:"url,omitempty"`
+	ID                  uint              `gorm:"primaryKey" json:"id"`
+	SampleID            *uint             `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
+	ServerID            *uint             `gorm:"column:server_id;index" json:"serverId,omitempty"`
+	Server              *Server           `gorm:"foreignKey:ServerID" json:"server,omitempty"`
+	RequestIDHeader     string            `gorm:"not null;column:request_id_header" json:"requestIdHeader"`
+	RequestBody         string            `gorm:"column:request_body" json:"requestBody,omitempty"`
+	StatusCode          int               `gorm:"column:status_code" json:"statusCode"`
+	DurationMS          int64             `gorm:"column:duration_ms" json:"durationMs"`
+	ResponseBody        string            `gorm:"column:response_body" json:"responseBody,omitempty"`
+	ResponseHeaders     string            `gorm:"column:response_headers" json:"responseHeaders,omitempty"`
+	Error               string            `json:"error,omitempty"`
+	IsSync              bool              `gorm:"column:is_sync;index;default:false" json:"isSync"`
+	Name                string            `gorm:"column:name" json:"name"`
+	DisplayName         string            `gorm:"-" json:"displayName"` // Computed field, not stored in DB
+	BearerTokenOverride string            `gorm:"column:bearer_token_override" json:"bearerTokenOverride,omitempty"`
+	DevIDOverride       string            `gorm:"column:dev_id_override" json:"devIdOverride,omitempty"`
+	ExecutedAt          time.Time         `gorm:"not null;column:executed_at;index" json:"executedAt"`
+	CreatedAt           time.Time         `json:"createdAt"`
+	UpdatedAt           time.Time         `json:"updatedAt"`
+	DeletedAt           gorm.DeletedAt    `gorm:"index" json:"-"`
 }
 
 func (Request) TableName() string {

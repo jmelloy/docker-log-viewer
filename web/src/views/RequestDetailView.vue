@@ -980,8 +980,14 @@
           <input type="text" id="executeToken" v-model="executeForm.tokenOverride" placeholder="Override token" />
         </div>
         <div class="form-group">
-          <label for="executeDevID">Dev ID Override (optional):</label>
-          <input type="text" id="executeDevID" v-model="executeForm.devIdOverride" placeholder="Override dev ID" />
+          <label for="executeHeaders">Custom Headers (JSON):</label>
+          <textarea
+            id="executeHeaders"
+            v-model="executeForm.headers"
+            rows="5"
+            placeholder='{"X-Custom-Header": "value"}'
+          ></textarea>
+          <small>Overrides server and sample query headers. X-Request-Id is managed automatically.</small>
         </div>
 
         <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">
@@ -1074,6 +1080,7 @@
 
 <script lang="ts">
 import { getSQLQuery } from "@/utils/sql-query";
+import { parseHeaders } from "@/utils/headers";
 import { defineComponent } from "vue";
 import { useRoute } from "vue-router";
 import { API } from "@/utils/api";
@@ -1114,7 +1121,7 @@ export default defineComponent({
       selectedLog: null, // Currently selected log for details view
       executeForm: {
         tokenOverride: "",
-        devIdOverride: "",
+        headers: "{}",
         requestDataOverride: "",
         graphqlVariables: {} as Record<string, any>,
       },
@@ -1718,11 +1725,11 @@ export default defineComponent({
     },
 
     openExecuteModal() {
-      // Pre-populate with current token and dev ID
+      // Preserve headers from the original execution.
       const server = this.requestDetail?.server || this.requestDetail?.execution?.server;
       this.executeForm = {
         tokenOverride: server?.bearerToken || "",
-        devIdOverride: server?.devId || "",
+        headers: JSON.stringify(this.requestDetail?.execution?.headers || {}, null, 2),
         requestDataOverride: this.requestDetail?.execution?.requestBody || "",
         graphqlVariables: {},
       };
@@ -1867,6 +1874,9 @@ export default defineComponent({
           serverId: serverId,
           requestData: requestBody,
           devIdOverride: devId,
+          headers: this.requestDetail?.execution?.headers,
+          sampleId: this.requestDetail?.execution?.sampleId,
+          urlOverride: this.requestDetail?.execution?.url,
         };
 
         const result = await API.post<ExecuteResponse>("/api/requests", payload);
@@ -1902,7 +1912,9 @@ export default defineComponent({
           serverId: serverId,
           requestData: requestBody,
           bearerTokenOverride: this.executeForm.tokenOverride || undefined,
-          devIdOverride: this.executeForm.devIdOverride || undefined,
+          headers: parseHeaders(this.executeForm.headers),
+          sampleId: this.requestDetail?.execution?.sampleId,
+          urlOverride: this.requestDetail?.execution?.url,
         };
 
         const result = await API.post<ExecuteResponse>("/api/requests", payload);

@@ -117,6 +117,17 @@
               <input v-model="serverForm.bearerToken" type="text" class="form-control" />
             </div>
             <div class="mb-3">
+              <label for="serverHeaders" class="form-label">Custom Headers (JSON)</label>
+              <textarea
+                id="serverHeaders"
+                v-model="serverForm.headers"
+                class="form-control"
+                rows="5"
+                placeholder='{"X-Custom-Header": "value"}'
+              ></textarea>
+              <small>Default headers for requests sent to this server.</small>
+            </div>
+            <div class="mb-3">
               <label class="form-label">Default Database</label>
               <select v-model="serverForm.defaultDatabaseId" class="form-select">
                 <option :value="null">None</option>
@@ -179,6 +190,7 @@
 </template>
 
 <script lang="ts">
+import { parseHeaders, serverHeaders } from "@/utils/headers";
 import { defineComponent } from "vue";
 import { API } from "@/utils/api";
 import type { Server, DatabaseURL, CreateServerResponse, CreateDatabaseURLResponse } from "@/types";
@@ -199,7 +211,7 @@ export default defineComponent(
           name: "",
           url: "",
           bearerToken: "",
-          devId: "",
+          headers: "{}",
           defaultDatabaseId: null as number | null,
         },
         databaseForm: {
@@ -252,7 +264,7 @@ export default defineComponent(
           name: "",
           url: "",
           bearerToken: "",
-          devId: "",
+          headers: "{}",
           defaultDatabaseId: null,
         };
         this.showServerModal = true;
@@ -265,7 +277,7 @@ export default defineComponent(
           name: server.name,
           url: server.url,
           bearerToken: server.bearerToken || "",
-          devId: server.devId || "",
+          headers: JSON.stringify(serverHeaders(server), null, 2),
           defaultDatabaseId: server.defaultDatabaseId || null,
         };
         this.showServerModal = true;
@@ -282,7 +294,9 @@ export default defineComponent(
             name: this.serverForm.name,
             url: this.serverForm.url,
             bearerToken: this.serverForm.bearerToken,
-            devId: this.serverForm.devId,
+            headers: parseHeaders(this.serverForm.headers),
+            devId: "",
+            experimentalMode: "",
             defaultDatabaseId: this.serverForm.defaultDatabaseId || null,
           };
 
@@ -312,7 +326,7 @@ export default defineComponent(
           }
         } catch (error) {
           console.error("Error saving server:", error);
-          alert("Error saving server");
+          alert(`Error saving server: ${error.message}`);
         }
       },
 

@@ -149,6 +149,16 @@ Save and execute GraphQL/API requests with full log capture and SQL analysis.
 
 **Web UI**: [http://localhost:9000/requests.html](http://localhost:9000/requests.html)
 
+Server setup, sample queries, and execution dialogs accept **Custom Headers** as a JSON object of string values:
+
+```json
+{"X-GlueDev-UserID": "user-id", "X-Glue-Experimental-Mode": "enabled"}
+```
+
+Headers inherit from the server, then the sample query, then execution overrides (case-insensitive). An empty object inherits defaults; an empty string value overrides a header with an empty value. Custom `Authorization` overrides the bearer token. `X-Request-Id` and transport headers such as `Host` and `Content-Length` are managed automatically and cannot be overridden. Existing User ID and experiment settings remain compatible and appear as custom headers when editing a server.
+
+Headers are stored in the local database, including execution snapshots for replay; treat database files as sensitive if headers contain credentials. The additive database migration runs on startup.
+
 **CLI**:
 ```bash
 # Save a request

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"docker-log-parser/pkg/httputil"
 	"docker-log-parser/pkg/store"
 
 	"github.com/gorilla/mux"
@@ -35,6 +36,10 @@ func (c *Controller) HandleCreateServer(w http.ResponseWriter, r *http.Request) 
 
 	var server store.Server
 	if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := httputil.ValidateHeaders(server.Headers); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -90,6 +95,10 @@ func (c *Controller) HandleUpdateServer(w http.ResponseWriter, r *http.Request) 
 
 	var server store.Server
 	if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := httputil.ValidateHeaders(server.Headers); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
