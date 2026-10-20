@@ -117,10 +117,6 @@
               <input v-model="serverForm.bearerToken" type="text" class="form-control" />
             </div>
             <div class="mb-3">
-              <label class="form-label">Dev ID</label>
-              <input v-model="serverForm.devId" type="text" class="form-control" />
-            </div>
-            <div class="mb-3">
               <label class="form-label">Default Database</label>
               <select v-model="serverForm.defaultDatabaseId" class="form-select">
                 <option :value="null">None</option>
