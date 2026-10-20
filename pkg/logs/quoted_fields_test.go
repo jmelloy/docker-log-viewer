@@ -40,7 +40,7 @@ func TestNormalizeStructuredSQLLogs(t *testing.T) {
 	} {
 		t.Run(line, func(t *testing.T) {
 			entry := ParseLogLine(line)
-			if entry.Message != "[sql]: "+query || entry.Fields["duration"] != "0" {
+			if entry.Message != "sql query done" || entry.Fields["duration"] != "0" {
 				t.Fatalf("SQL not normalized: %+v", entry)
 			}
 			if entry.Raw != line || entry.Fields["db.vars"] != `["active"]` || entry.Fields["request_id"] != "request-1" {

@@ -649,10 +649,9 @@ func ParseLogLine(line string) *LogEntry {
 	return normalizeSQLFields(entry)
 }
 
-// Normalize structured SQL logs to the format consumed by analysis and EXPLAIN.
+// Normalize structured SQL duration without changing the original message.
 func normalizeSQLFields(entry *LogEntry) *LogEntry {
-	if query := entry.Fields["sql.query"]; query != "" {
-		entry.Message = "[sql]: " + query
+	if entry.Fields["sql.query"] != "" {
 		if _, exists := entry.Fields["duration"]; !exists {
 			if duration, ok := entry.Fields["duration_ms"]; ok {
 				entry.Fields["duration"] = duration

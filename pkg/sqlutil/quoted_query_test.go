@@ -14,8 +14,8 @@ func TestExtractQuotedSQLQuery(t *testing.T) {
 	if entry.Fields["sql.query"] != want {
 		t.Errorf("sql.query = %q, want %q", entry.Fields["sql.query"], want)
 	}
-	if entry.Message != "[sql]: "+want || entry.Fields["duration"] != "1.25" {
-		t.Errorf("SQL log was not normalized for existing consumers: %+v", entry)
+	if entry.Message != "sql query done" || entry.Fields["duration"] != "1.25" {
+		t.Errorf("SQL message or normalized duration changed: %+v", entry)
 	}
 	if entry.Raw != line || entry.Fields["error"] != "<nil>" {
 		t.Fatal("raw log or trailing fields were changed")

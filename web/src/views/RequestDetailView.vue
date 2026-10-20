@@ -938,14 +938,17 @@
             </div>
             <div v-if="selectedLog.entry?.message" class="parsed-field">
               <div class="parsed-field-key">Message</div>
-              <div v-if="isSQLMessage(selectedLog.entry.message)" class="parsed-field-value">
+              <div class="parsed-field-value">{{ selectedLog.entry.message }}</div>
+            </div>
+            <div v-if="getSQLQuery(selectedLog.entry)" class="parsed-field">
+              <div class="parsed-field-key">SQL Query</div>
+              <div class="parsed-field-value">
                 <pre
                   class="sql-query-text"
                   style="white-space: pre-wrap; margin: 0"
-                  v-html="formatAndHighlightSQL(selectedLog.entry.message)"
+                  v-html="formatAndHighlightSQL(getSQLQuery(selectedLog.entry))"
                 ></pre>
               </div>
-              <div v-else class="parsed-field-value">{{ selectedLog.entry.message }}</div>
             </div>
             <div
               v-for="([key, value], idx) in Object.entries(selectedLog.entry?.fields || {})"
@@ -1070,6 +1073,7 @@
 </template>
 
 <script lang="ts">
+import { getSQLQuery } from "@/utils/sql-query";
 import { defineComponent } from "vue";
 import { useRoute } from "vue-router";
 import { API } from "@/utils/api";
@@ -1079,6 +1083,7 @@ import {
   copyToClipboard,
   normalizeQuery as normalizeQueryUtil,
   applySyntaxHighlighting,
+  escapeHtml,
 } from "@/utils/ui-utils";
 import type { Server, ExecutionDetail, ExplainResponse, ExplainData, ExecuteResponse, SQLQuery } from "@/types";
 import ExplainPlanFormatter from "@/components/ExplainPlanFormatter.vue";
@@ -2105,31 +2110,18 @@ export default defineComponent({
     copyToClipboard,
     convertAnsiToHtml: convertAnsiToHtmlUtil,
 
-    isSQLMessage(message) {
-      return message && message.includes("[sql]");
-    },
+    getSQLQuery,
 
-    formatAndHighlightSQL(message) {
-      if (!message) return message;
-      if (message.includes("[sql]")) {
-        const sqlMatch = message.match(/\[sql\]:\s*(.+)/i);
-        if (sqlMatch) {
-          const sql = sqlMatch[1].trim();
-          const formatted = formatSQLUtil(sql);
-          // Apply syntax highlighting if hljs is available
-          if (typeof hljs !== "undefined") {
-            try {
-              const highlighted = hljs.highlight(formatted, { language: "sql" });
-              return highlighted.value;
-            } catch (e) {
-              console.error("Error highlighting SQL:", e);
-              return formatted;
-            }
-          }
-          return formatted;
+    formatAndHighlightSQL(sql) {
+      const formatted = formatSQLUtil(sql);
+      if (typeof hljs !== "undefined") {
+        try {
+          return hljs.highlight(formatted, { language: "sql" }).value;
+        } catch (e) {
+          console.error("Error highlighting SQL:", e);
         }
       }
-      return message;
+      return escapeHtml(formatted);
     },
 
     exportSQLQueriesAsMarkdown() {
