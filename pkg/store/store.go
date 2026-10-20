@@ -58,6 +58,7 @@ type Server struct {
 
 // SampleQuery represents a saved GraphQL/API request template (sample query)
 type SampleQuery struct {
+	URLOverride string         `gorm:"column:url_override" json:"urlOverride,omitempty"`
 	ID          uint           `gorm:"primaryKey" json:"id"`
 	Name        string         `gorm:"not null" json:"name"`
 	ServerID    *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`
@@ -75,6 +76,7 @@ func (SampleQuery) TableName() string {
 
 // Request represents a single request execution
 type Request struct {
+	URL                 string         `json:"url,omitempty"`
 	ID                  uint           `gorm:"primaryKey" json:"id"`
 	SampleID            *uint          `gorm:"column:sample_id;index" json:"sampleId,omitempty"`
 	ServerID            *uint          `gorm:"column:server_id;index" json:"serverId,omitempty"`

@@ -63,14 +63,28 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	url := server.URL
+	endpoint := input.URLOverride
+	if endpoint == "" && input.SampleID != nil {
+		sample, err := c.store.GetSampleQuery(int64(*input.SampleID))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if sample == nil {
+			http.Error(w, "Sample query not found", http.StatusNotFound)
+			return
+		}
+		endpoint = sample.URLOverride
+	}
+	url, err := httputil.ResolveRequestURL(server.URL, endpoint)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	bearerToken := server.BearerToken
 	devID := server.DevID
 	experimentalMode := server.ExperimentalMode
 
-	if input.URLOverride != "" {
-		url = input.URLOverride
-	}
 	if input.BearerTokenOverride != "" {
 		bearerToken = input.BearerTokenOverride
 	}
@@ -84,6 +98,7 @@ func (c *Controller) HandleCreateRequest(w http.ResponseWriter, r *http.Request)
 	requestIDHeader := httputil.GenerateRequestID()
 
 	execution := &store.Request{
+		URL:                 url,
 		ServerID:            input.ServerID,
 		RequestIDHeader:     requestIDHeader,
 		RequestBody:         input.RequestData,

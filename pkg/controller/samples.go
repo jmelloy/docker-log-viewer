@@ -39,6 +39,7 @@ func (c *Controller) HandleCreateSampleQuery(w http.ResponseWriter, r *http.Requ
 		Name        string `json:"name"`
 		ServerID    *uint  `json:"serverId,omitempty"`
 		URL         string `json:"url,omitempty"`
+		URLOverride string `json:"urlOverride,omitempty"`
 		BearerToken string `json:"bearerToken,omitempty"`
 		DevID       string `json:"devId,omitempty"`
 		RequestData string `json:"requestData"`
@@ -71,6 +72,7 @@ func (c *Controller) HandleCreateSampleQuery(w http.ResponseWriter, r *http.Requ
 
 	req := &store.SampleQuery{
 		Name:        input.Name,
+		URLOverride: input.URLOverride,
 		ServerID:    serverID,
 		RequestData: input.RequestData,
 	}

@@ -465,6 +465,11 @@
           </div>
         </div>
 
+        <div class="form-group">
+          <label for="graphqlRequestURL">Request URL:</label>
+          <input id="graphqlRequestURL" type="text" v-model="requestURL" placeholder="/graphql" />
+        </div>
+
         <!-- Two-column layout for request and response -->
         <div style="display: grid; grid-template-columns: 50% 50%; gap: 1rem; margin-bottom: 1rem">
           <!-- Left Column: Request -->
@@ -634,6 +639,7 @@ export default defineComponent(
       return {
         servers: [] as Server[],
         selectedServerId: "",
+        requestURL: "/graphql",
         query: "",
         operationName: "",
         variables: "{}",
@@ -834,6 +840,7 @@ export default defineComponent(
           // Execute via API with async flag
           const payload = {
             serverId: parseInt(this.selectedServerId),
+            urlOverride: this.requestURL.trim() || "/graphql",
             requestData: JSON.stringify(requestData),
             sync: false,
           };
@@ -893,6 +900,7 @@ export default defineComponent(
       async loadSampleQuery(sampleQuery) {
         try {
           const data = JSON.parse(sampleQuery.requestData);
+          this.requestURL = sampleQuery.urlOverride || "/graphql";
           this.query = data.query || "";
           this.operationName = data.operationName || "";
           this.variables = data.variables ? JSON.stringify(data.variables, null, 2) : "{}";
@@ -1041,6 +1049,7 @@ export default defineComponent(
           // Execute via API with sync flag
           const payload = {
             serverId: parseInt(this.selectedServerId),
+            urlOverride: this.requestURL.trim() || "/graphql",
             requestData: JSON.stringify(introspectionQuery),
             sync: true,
           };

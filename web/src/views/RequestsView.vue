@@ -20,7 +20,7 @@
             >
               <div class="request-item-name">{{ getSampleQueryDisplayName(sq) }}</div>
               <div class="request-item-meta">
-                <span>{{ sq.server?.url || "No server" }}</span>
+                <span>{{ sq.urlOverride || sq.server?.url || "No server" }}</span>
               </div>
             </div>
           </div>
@@ -146,6 +146,16 @@
           </div>
         </div>
         <div class="form-group">
+          <label for="newSampleQueryEndpoint">Request URL (optional):</label>
+          <input
+            id="newSampleQueryEndpoint"
+            type="text"
+            v-model="newQueryForm.urlOverride"
+            placeholder="/api/search or https://api.example.com/api/search"
+          />
+          <small>Leave blank to use the server URL.</small>
+        </div>
+        <div class="form-group">
           <label for="newSampleQueryData">Query Data (JSON):</label>
           <textarea
             id="newSampleQueryData"
@@ -176,6 +186,16 @@
             <option :value="null">-- Select Sample Query --</option>
             <option v-for="sq in sampleQueries" :key="sq.id" :value="sq">{{ getSampleQueryDisplayName(sq) }}</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label for="executeURL">Request URL (optional):</label>
+          <input
+            id="executeURL"
+            type="text"
+            v-model="executeForm.urlOverride"
+            placeholder="/api/search or https://api.example.com/api/search"
+          />
+          <small>Leave blank to use the server URL.</small>
         </div>
         <div class="form-group">
           <label for="executeRequestData">Request Data:</label>
@@ -411,6 +431,7 @@ export default defineComponent(
         showComparisonModal: false,
         // Form data
         newQueryForm: {
+          urlOverride: "",
           name: "",
           requestData: "",
           serverId: "",
@@ -420,6 +441,7 @@ export default defineComponent(
           devId: "",
         },
         executeForm: {
+          urlOverride: "",
           serverId: "",
           requestDataOverride: "",
           tokenOverride: "",
@@ -599,7 +621,7 @@ export default defineComponent(
       },
 
       getExecutionServerUrl(req) {
-        return req.server ? req.server.name || req.server.url : "N/A";
+        return req.url || (req.server ? req.server.name || req.server.url : "N/A");
       },
 
       handleExecutionClick(req, event) {
@@ -660,6 +682,7 @@ export default defineComponent(
       openNewSampleQueryModal() {
         // Reset form
         this.newQueryForm = {
+          urlOverride: "",
           name: "",
           requestData: "",
           serverId: "",
@@ -675,6 +698,7 @@ export default defineComponent(
         // Reset form
         this.selectedSampleQuery = null;
         this.executeForm = {
+          urlOverride: "",
           serverId: "",
           requestDataOverride: "",
           tokenOverride: "",
@@ -691,6 +715,7 @@ export default defineComponent(
         const server = this.servers.find((s) => s.id === sq.serverId);
         // Pre-populate form with sample query data
         this.executeForm = {
+          urlOverride: sq.urlOverride || "",
           serverId: sq.serverId ? String(sq.serverId) : "",
           requestDataOverride: sq.requestData || "",
           tokenOverride: server?.bearerToken || "",
@@ -710,9 +735,11 @@ export default defineComponent(
             requestData: string;
             serverId?: number;
             url?: string;
+            urlOverride?: string;
             bearerToken?: string;
             devId?: string;
           } = {
+            urlOverride: this.newQueryForm.urlOverride,
             name: this.newQueryForm.name,
             requestData: this.newQueryForm.requestData,
           };
@@ -737,6 +764,7 @@ export default defineComponent(
 
           // Reset form
           this.newQueryForm = {
+            urlOverride: "",
             name: "",
             requestData: "",
             serverId: "",
@@ -755,6 +783,7 @@ export default defineComponent(
         if (this.selectedSampleQuery) {
           // Pre-populate request data from selected sample query
           this.executeForm.requestDataOverride = this.selectedSampleQuery.requestData || "";
+          this.executeForm.urlOverride = this.selectedSampleQuery.urlOverride || "";
 
           // Pre-populate server if available
           if (this.selectedSampleQuery.serverId) {
@@ -807,6 +836,7 @@ export default defineComponent(
           // No sample query - execute directly using /api/requests endpoint
           const payload = {
             serverId: serverId,
+            urlOverride: this.executeForm.urlOverride || undefined,
             requestData: requestData,
             bearerTokenOverride: this.executeForm.tokenOverride || undefined,
             devIdOverride: this.executeForm.devIdOverride || undefined,

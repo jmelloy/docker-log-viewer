@@ -333,10 +333,16 @@ func executeRequest(db *store.Store, requestID int64, config Config) error {
 		serverIDForExec = &req.Server.ID
 	}
 
+	url, err = httputil.ResolveRequestURL(url, req.URLOverride)
+	if err != nil {
+		return err
+	}
+
 	// Execute request
 	sampleID := uint(requestID)
 	execution := &store.Request{
 		SampleID:    &sampleID,
+		URL:         url,
 		ServerID:    serverIDForExec,
 		RequestBody: req.RequestData,
 		ExecutedAt:  time.Now(),
