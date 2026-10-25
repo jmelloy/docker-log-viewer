@@ -10,7 +10,7 @@ COPY web/ ./
 RUN npm run build
 
 # Build backend
-FROM golang:1.27.2-alpine AS backend-builder
+FROM golang:1.27.3-alpine AS backend-builder
 
 WORKDIR /app
 
