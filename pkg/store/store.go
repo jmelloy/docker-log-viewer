@@ -327,6 +327,16 @@ func (s *Store) ListSampleQueries() ([]SampleQuery, error) {
 	return sampleQueries, nil
 }
 
+// UpdateSampleQuery replaces editable fields without changing execution history.
+func (s *Store) UpdateSampleQuery(req *SampleQuery) error {
+	result := s.db.Model(&SampleQuery{}).Where("id = ?", req.ID).
+		Select("Name", "ServerID", "URLOverride", "RequestData", "Headers").Updates(req)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update saved request: %w", result.Error)
+	}
+	return nil
+}
+
 // DeleteSampleQuery deletes a sample query
 func (s *Store) DeleteSampleQuery(id int64) error {
 	result := s.db.Delete(&SampleQuery{}, id)

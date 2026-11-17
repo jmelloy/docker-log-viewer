@@ -5,11 +5,11 @@
     <div class="main-layout">
       <aside class="sidebar">
         <div class="section">
-          <h3>Sample Queries</h3>
-          <button @click="openNewSampleQueryModal" class="btn-primary">+ New Sample Query</button>
+          <h3>Saved Requests</h3>
+          <button @click="openNewSampleQueryModal" class="btn-primary">+ New Saved Request</button>
           <div class="requests-list">
             <p v-if="sampleQueries.length === 0" style="padding: 1rem; color: #6c757d; text-align: center">
-              No sample queries yet
+              No saved requests yet
             </p>
             <div
               v-for="sq in sampleQueries"
@@ -21,6 +21,10 @@
               <div class="request-item-name">{{ getSampleQueryDisplayName(sq) }}</div>
               <div class="request-item-meta">
                 <span>{{ sq.urlOverride || sq.server?.url || "No server" }}</span>
+              </div>
+              <div class="saved-request-actions">
+                <button class="btn-secondary btn-sm" @click.stop="openEditSavedRequest(sq)">Edit</button>
+                <button class="btn-danger btn-sm" @click.stop="deleteSavedRequest(sq)">Delete</button>
               </div>
             </div>
           </div>
@@ -84,99 +88,13 @@
     </div>
   </div>
 
-  <!-- New Sample Query Modal -->
-  <div v-if="showNewSampleQueryModal" class="modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>New Sample Query</h3>
-        <button @click="showNewSampleQueryModal = false">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="newSampleQueryName">Name:</label>
-          <input
-            type="text"
-            id="newSampleQueryName"
-            v-model="newQueryForm.name"
-            placeholder="e.g., FetchUsers"
-            required
-          />
-        </div>
-        <div class="form-group">
-          <label for="newSampleQueryServer">Server (optional):</label>
-          <select id="newSampleQueryServer" v-model="newQueryForm.serverId" :disabled="newQueryForm.createNewServer">
-            <option value="">-- No Server --</option>
-            <option v-for="server in servers" :key="server.id" :value="server.id">
-              {{ server.name }} ({{ server.url }})
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label style="display: flex; align-items: center; gap: 0.5rem">
-            <input
-              type="checkbox"
-              v-model="newQueryForm.createNewServer"
-              @change="newQueryForm.createNewServer && (newQueryForm.serverId = '')"
-            />
-            <span>Create New Server</span>
-          </label>
-        </div>
-        <div v-if="showNewServerFields">
-          <div class="form-group">
-            <label for="newSampleQueryURL">URL (optional):</label>
-            <input
-              type="text"
-              id="newSampleQueryURL"
-              v-model="newQueryForm.url"
-              placeholder="https://api.example.com/graphql"
-            />
-          </div>
-          <div class="form-group">
-            <label for="newSampleQueryToken">Bearer Token (optional):</label>
-            <input
-              type="text"
-              id="newSampleQueryToken"
-              v-model="newQueryForm.bearerToken"
-              placeholder="your-token-here"
-            />
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="sampleHeaders">Custom Headers (JSON):</label>
-          <textarea
-            id="sampleHeaders"
-            v-model="newQueryForm.headers"
-            rows="5"
-            placeholder='{"X-Custom-Header": "value"}'
-          ></textarea>
-          <small>Overrides server headers for this sample query.</small>
-        </div>
-        <div class="form-group">
-          <label for="newSampleQueryEndpoint">Request URL (optional):</label>
-          <input
-            id="newSampleQueryEndpoint"
-            type="text"
-            v-model="newQueryForm.urlOverride"
-            placeholder="/api/search or https://api.example.com/api/search"
-          />
-          <small>Leave blank to use the server URL.</small>
-        </div>
-        <div class="form-group">
-          <label for="newSampleQueryData">Query Data (JSON):</label>
-          <textarea
-            id="newSampleQueryData"
-            v-model="newQueryForm.requestData"
-            rows="15"
-            placeholder='{"query": "{ users { id name } }"}'
-          ></textarea>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button @click="saveNewSampleQuery" class="btn-primary">Save Sample Query</button>
-        <button @click="showNewSampleQueryModal = false" class="btn-secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
+  <SavedRequestModal
+    v-if="showNewSampleQueryModal"
+    :request="editingSavedRequest"
+    :servers="servers"
+    @close="showNewSampleQueryModal = false"
+    @saved="savedRequestUpdated"
+  />
 
   <!-- Execute New Request Modal -->
   <div v-if="showExecuteNewModal" class="modal">
@@ -187,9 +105,9 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="executeNewQuery">Sample Query:</label>
+          <label for="executeNewQuery">Saved Request:</label>
           <select id="executeNewQuery" v-model="selectedSampleQuery" @change="selectSampleQueryForExecution">
-            <option :value="null">-- Select Sample Query --</option>
+            <option :value="null">-- Select Saved Request --</option>
             <option v-for="sq in sampleQueries" :key="sq.id" :value="sq">{{ getSampleQueryDisplayName(sq) }}</option>
           </select>
         </div>
@@ -231,7 +149,7 @@
             placeholder='{"X-Custom-Header": "value"}'
           ></textarea>
           <small
-            >Overrides server and sample query headers. Header names are case-insensitive. X-Request-Id is managed
+            >Overrides server and saved request headers. Header names are case-insensitive. X-Request-Id is managed
             automatically.</small
           >
         </div>
@@ -405,6 +323,7 @@
 <script lang="ts">
 import { parseHeaders } from "@/utils/headers";
 import { defineComponent } from "vue";
+import SavedRequestModal from "@/components/SavedRequestModal.vue";
 import { API } from "@/utils/api";
 import { formatSQL as formatSQLUtil } from "@/utils/ui-utils";
 import type {
@@ -419,6 +338,7 @@ import type {
 export default defineComponent(
   // Export component definition (template will be provided by SPA loader)
   {
+    components: { SavedRequestModal },
     data() {
       return {
         sampleQueries: [] as SampleQuery[],
@@ -437,16 +357,7 @@ export default defineComponent(
         showExecuteNewModal: false,
         showComparisonModal: false,
         // Form data
-        newQueryForm: {
-          urlOverride: "",
-          name: "",
-          requestData: "",
-          serverId: "",
-          createNewServer: false,
-          url: "",
-          bearerToken: "",
-          headers: "{}",
-        },
+        editingSavedRequest: null as SampleQuery | null,
         executeForm: {
           urlOverride: "",
           serverId: "",
@@ -468,10 +379,6 @@ export default defineComponent(
 
       showSampleQueryDetail() {
         return this.selectedSampleQuery !== null;
-      },
-
-      showNewServerFields() {
-        return this.newQueryForm.createNewServer;
       },
 
       compareButtonVisible() {
@@ -686,18 +593,33 @@ export default defineComponent(
       formatSQL: formatSQLUtil,
 
       openNewSampleQueryModal() {
-        // Reset form
-        this.newQueryForm = {
-          urlOverride: "",
-          name: "",
-          requestData: "",
-          serverId: "",
-          createNewServer: false,
-          url: "",
-          bearerToken: "",
-          headers: "{}",
-        };
+        this.editingSavedRequest = null;
         this.showNewSampleQueryModal = true;
+      },
+
+      openEditSavedRequest(request: SampleQuery) {
+        this.editingSavedRequest = request;
+        this.showNewSampleQueryModal = true;
+      },
+
+      async savedRequestUpdated() {
+        this.showNewSampleQueryModal = false;
+        await this.loadSampleQueries();
+        await this.loadServers();
+      },
+
+      async deleteSavedRequest(request: SampleQuery) {
+        if (
+          !confirm(`Delete saved request "${this.getSampleQueryDisplayName(request)}"? Execution history will be kept.`)
+        )
+          return;
+        try {
+          await API.delete(`/api/samples/${request.id}`);
+          if (this.selectedSampleQuery?.id === request.id) this.selectedSampleQuery = null;
+          await this.loadSampleQueries();
+        } catch (error) {
+          alert(`Failed to delete saved request: ${(error as Error).message}`);
+        }
       },
 
       openExecuteNewModal() {
@@ -730,57 +652,6 @@ export default defineComponent(
         // Parse GraphQL variables
         this.parseGraphQLVariables();
         this.showExecuteNewModal = true;
-      },
-
-      async saveNewSampleQuery() {
-        try {
-          const payload: {
-            name: string;
-            requestData: string;
-            serverId?: number;
-            url?: string;
-            urlOverride?: string;
-            bearerToken?: string;
-            headers: Record<string, string>;
-          } = {
-            headers: parseHeaders(this.newQueryForm.headers),
-            urlOverride: this.newQueryForm.urlOverride,
-            name: this.newQueryForm.name,
-            requestData: this.newQueryForm.requestData,
-          };
-
-          // If using existing server
-          if (this.newQueryForm.serverId && !this.newQueryForm.createNewServer) {
-            payload.serverId = parseInt(this.newQueryForm.serverId);
-          } else if (this.newQueryForm.createNewServer && this.newQueryForm.url) {
-            // Creating new server
-            payload.url = this.newQueryForm.url;
-            payload.bearerToken = this.newQueryForm.bearerToken;
-          }
-
-          await API.post<{ id: number }>("/api/samples/", payload);
-
-          // Reload sample queries
-          await this.loadSampleQueries();
-
-          // Close modal
-          this.showNewSampleQueryModal = false;
-
-          // Reset form
-          this.newQueryForm = {
-            urlOverride: "",
-            name: "",
-            requestData: "",
-            serverId: "",
-            createNewServer: false,
-            url: "",
-            bearerToken: "",
-            headers: "{}",
-          };
-        } catch (error) {
-          console.error("Failed to save sample query:", error);
-          alert(`Failed to save sample query: ${error.message}`);
-        }
       },
 
       selectSampleQueryForExecution() {
@@ -977,3 +848,11 @@ export default defineComponent(
   }
 );
 </script>
+
+<style scoped>
+.saved-request-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+</style>

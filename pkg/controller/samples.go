@@ -31,9 +31,37 @@ func (c *Controller) HandleListSampleQueries(w http.ResponseWriter, r *http.Requ
 
 // HandleCreateSampleQuery creates a new request
 func (c *Controller) HandleCreateSampleQuery(w http.ResponseWriter, r *http.Request) {
+	c.saveSampleQuery(w, r, false)
+}
+
+// HandleUpdateSampleQuery replaces a saved request while preserving its ID.
+func (c *Controller) HandleUpdateSampleQuery(w http.ResponseWriter, r *http.Request) {
+	c.saveSampleQuery(w, r, true)
+}
+
+func (c *Controller) saveSampleQuery(w http.ResponseWriter, r *http.Request, updating bool) {
 	if c.store == nil {
 		http.Error(w, "Database not available", http.StatusServiceUnavailable)
 		return
+	}
+
+	var id int64
+	if updating {
+		var err error
+		id, err = strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+		if err != nil || id <= 0 {
+			http.Error(w, "Invalid request ID", http.StatusBadRequest)
+			return
+		}
+		existing, err := c.store.GetSampleQuery(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if existing == nil {
+			http.Error(w, "Saved request not found", http.StatusNotFound)
+			return
+		}
 	}
 
 	var input struct {
@@ -85,7 +113,13 @@ func (c *Controller) HandleCreateSampleQuery(w http.ResponseWriter, r *http.Requ
 		RequestData: input.RequestData,
 	}
 
-	id, err := c.store.CreateSampleQuery(req)
+	var err error
+	if updating {
+		req.ID = uint(id)
+		err = c.store.UpdateSampleQuery(req)
+	} else {
+		id, err = c.store.CreateSampleQuery(req)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

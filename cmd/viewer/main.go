@@ -883,6 +883,7 @@ func (wa *WebApp) Run(addr string) error {
 	r.HandleFunc("/api/samples/", ctrl.HandleListSampleQueries).Methods("GET")
 	r.HandleFunc("/api/samples/", ctrl.HandleCreateSampleQuery).Methods("POST")
 	r.HandleFunc("/api/samples/{id}", ctrl.HandleGetSampleQuery).Methods("GET")
+	r.HandleFunc("/api/samples/{id}", ctrl.HandleUpdateSampleQuery).Methods("PUT")
 	r.HandleFunc("/api/samples/{id}", ctrl.HandleDeleteSampleQuery).Methods("DELETE")
 
 	// Execution endpoints

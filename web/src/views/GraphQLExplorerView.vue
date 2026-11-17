@@ -297,7 +297,7 @@
           <h2 style="margin: 0">GraphQL Explorer</h2>
           <div style="display: flex; gap: 0.5rem">
             <button @click="showSampleQueries = !showSampleQueries" class="btn-secondary">
-              {{ showSampleQueries ? "Hide" : "Load" }} Sample Queries
+              {{ showSampleQueries ? "Hide" : "Load" }} Saved Requests
             </button>
             <button
               @click="loadGraphQLSchema"
@@ -319,16 +319,22 @@
           </div>
         </div>
 
-        <!-- Sample Queries Panel -->
+        <!-- Saved Requests Panel -->
         <div v-if="showSampleQueries" class="modal-section" style="margin-bottom: 1rem">
-          <h4>Sample Queries</h4>
+          <h4>Saved Requests</h4>
           <div v-if="sampleQueries.length === 0" style="color: #8b949e">
-            No sample queries available. Create one from the Requests page.
+            No saved requests available. Create one from the Requests page.
           </div>
           <div v-else style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.75rem">
             <div v-for="sq in sampleQueries" :key="sq.id" @click="loadSampleQuery(sq)" class="sample-query-card">
               <div style="font-weight: 500; margin-bottom: 0.25rem">{{ sq.name }}</div>
-              <div style="font-size: 0.75rem; color: #8b949e">{{ sq.server?.url || "No server" }}</div>
+              <div style="font-size: 0.75rem; color: #8b949e">
+                {{ sq.urlOverride || sq.server?.url || "No server" }}
+              </div>
+              <div class="saved-request-actions">
+                <button class="btn-secondary btn-sm" @click.stop="editingSavedRequest = sq">Edit</button>
+                <button class="btn-danger btn-sm" @click.stop="deleteSavedRequest(sq)">Delete</button>
+              </div>
             </div>
           </div>
         </div>
@@ -510,6 +516,13 @@
       </main>
     </div>
   </div>
+  <SavedRequestModal
+    v-if="editingSavedRequest"
+    :request="editingSavedRequest"
+    :servers="servers"
+    @close="editingSavedRequest = null"
+    @saved="savedRequestUpdated"
+  />
 </template>
 
 <script lang="ts">
@@ -518,6 +531,7 @@ import { API } from "@/utils/api";
 import type { Server, SampleQuery, ExecuteResponse, ExecutionDetail } from "@/types";
 
 import LogStream from "../components/LogStream.vue";
+import SavedRequestModal from "@/components/SavedRequestModal.vue";
 import { GraphQLEditorManager } from "@/utils/graphql-editor-manager";
 import { copyToClipboard, applySyntaxHighlighting } from "@/utils/ui-utils";
 
@@ -526,6 +540,7 @@ export default defineComponent(
   {
     components: {
       LogStream,
+      SavedRequestModal,
     },
     data() {
       return {
@@ -542,6 +557,7 @@ export default defineComponent(
         requestIdHeader: null as string | null, // Request ID for log filtering
         showSampleQueries: false,
         sampleQueries: [] as SampleQuery[],
+        editingSavedRequest: null as SampleQuery | null,
         schema: null,
         loadingSchema: false,
         schemaError: null,
@@ -791,6 +807,27 @@ export default defineComponent(
         this.error = "Timeout waiting for execution result";
       },
 
+      async savedRequestUpdated() {
+        this.editingSavedRequest = null;
+        await this.loadSampleQueries();
+        await this.loadServers();
+      },
+
+      async deleteSavedRequest(request: SampleQuery) {
+        if (
+          !confirm(
+            `Delete saved request "${request.name || request.displayName || "Untitled"}"? Execution history will be kept.`
+          )
+        )
+          return;
+        try {
+          await API.delete(`/api/samples/${request.id}`);
+          await this.loadSampleQueries();
+        } catch (error) {
+          alert(`Failed to delete saved request: ${(error as Error).message}`);
+        }
+      },
+
       async loadSampleQuery(sampleQuery) {
         try {
           const data = JSON.parse(sampleQuery.requestData);
@@ -812,7 +849,7 @@ export default defineComponent(
           this.showSampleQueries = false;
         } catch (e) {
           console.error("Failed to load sample query:", e);
-          alert("Failed to load sample query: " + e.message);
+          alert("Failed to load saved request: " + e.message);
         }
       },
 
@@ -1376,6 +1413,12 @@ export default defineComponent(
 
 .schema-insert-mutation:hover {
   background: var(--color-red);
+}
+
+.saved-request-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 .sample-query-card {

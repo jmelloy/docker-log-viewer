@@ -987,7 +987,7 @@
             rows="5"
             placeholder='{"X-Custom-Header": "value"}'
           ></textarea>
-          <small>Overrides server and sample query headers. X-Request-Id is managed automatically.</small>
+          <small>Overrides server and saved request headers. X-Request-Id is managed automatically.</small>
         </div>
 
         <div v-if="Object.keys(executeForm.graphqlVariables).length > 0" class="form-group" style="margin-top: 1.5rem">

@@ -948,7 +948,7 @@ button:disabled {
   color: var(--text-secondary);
 }
 
-.form-group input,
+.form-group input:not([type="checkbox"]),
 .form-group textarea,
 .form-group select {
   width: 100%;
