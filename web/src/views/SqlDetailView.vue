@@ -24,9 +24,6 @@
               <button @click="exportAsMarkdown" class="btn-secondary" title="Export as Markdown">
                 📄 Export Markdown
               </button>
-              <button @click="exportToNotion" class="btn-secondary" title="Export to Notion">
-                📘 Export to Notion
-              </button>
             </div>
           </div>
 

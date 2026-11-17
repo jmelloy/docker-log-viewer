@@ -40,14 +40,6 @@
                 📄 Export Markdown
               </button>
               <button
-                @click="exportToNotion"
-                class="btn-secondary"
-                style="padding: 0.5rem 1rem; font-size: 0.875rem"
-                title="Export execution details to Notion"
-              >
-                📘 Export to Notion
-              </button>
-              <button
                 @click="exportSQLFilesPerExperiment"
                 class="btn-secondary"
                 style="padding: 0.5rem 1rem; font-size: 0.875rem"
