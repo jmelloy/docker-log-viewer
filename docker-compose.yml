@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "9000:9000"
+      - "9023:9000"
     volumes:
       - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -31,7 +31,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev.frontend
     ports:
-      - "5173:5173"
+      - "5123:5173"
     volumes:
       - ./web:/app/web
       - /app/web/node_modules
