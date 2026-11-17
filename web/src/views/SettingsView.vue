@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container settings-page">
     <app-header activePage="settings"></app-header>
 
     <div class="settings-container">
@@ -186,26 +186,22 @@
     </div>
 
     <!-- Server Modal -->
-    <div
-      v-if="showServerModal"
-      class="modal"
-      style="display: block; background: rgba(0, 0, 0, 0.5)"
-      @click.self="closeServerModal"
-    >
+    <div v-if="showServerModal" class="modal" @click.self="closeServerModal">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">{{ serverModalTitle }}</h5>
-            <button type="button" class="btn-close" @click="closeServerModal"></button>
+            <button type="button" aria-label="Close" @click="closeServerModal">×</button>
           </div>
           <div class="modal-body">
-            <div class="mb-3">
-              <label class="form-label">Name *</label>
-              <input v-model="serverForm.name" type="text" class="form-control" required />
+            <div class="form-group">
+              <label for="serverName">Name *</label>
+              <input id="serverName" v-model="serverForm.name" type="text" class="form-control" required />
             </div>
-            <div class="mb-3">
-              <label class="form-label">URL *</label>
+            <div class="form-group">
+              <label for="serverURL">URL *</label>
               <input
+                id="serverURL"
                 v-model="serverForm.url"
                 type="text"
                 class="form-control"
@@ -213,11 +209,11 @@
                 required
               />
             </div>
-            <div class="mb-3">
-              <label class="form-label">Bearer Token</label>
-              <input v-model="serverForm.bearerToken" type="text" class="form-control" />
+            <div class="form-group">
+              <label for="serverToken">Bearer Token</label>
+              <input id="serverToken" v-model="serverForm.bearerToken" type="text" class="form-control" />
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="serverHeaders" class="form-label">Custom Headers (JSON)</label>
               <textarea
                 id="serverHeaders"
@@ -228,9 +224,9 @@
               ></textarea>
               <small>Default headers for requests sent to this server.</small>
             </div>
-            <div class="mb-3">
-              <label class="form-label">Default Database</label>
-              <select v-model="serverForm.defaultDatabaseId" class="form-select">
+            <div class="form-group">
+              <label for="serverDatabase">Default Database</label>
+              <select id="serverDatabase" v-model="serverForm.defaultDatabaseId" class="form-select">
                 <option :value="null">None</option>
                 <option v-for="db in databaseURLs" :key="db.id" :value="db.id">{{ db.name }}</option>
               </select>
@@ -245,33 +241,29 @@
     </div>
 
     <!-- Database URL Modal -->
-    <div
-      v-if="showDatabaseModal"
-      class="modal"
-      style="display: block; background: rgba(0, 0, 0, 0.5)"
-      @click.self="closeDatabaseModal"
-    >
+    <div v-if="showDatabaseModal" class="modal" @click.self="closeDatabaseModal">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">{{ databaseModalTitle }}</h5>
-            <button type="button" class="btn-close" @click="closeDatabaseModal"></button>
+            <button type="button" aria-label="Close" @click="closeDatabaseModal">×</button>
           </div>
           <div class="modal-body">
-            <div class="mb-3">
-              <label class="form-label">Name *</label>
-              <input v-model="databaseForm.name" type="text" class="form-control" required />
+            <div class="form-group">
+              <label for="databaseName">Name *</label>
+              <input id="databaseName" v-model="databaseForm.name" type="text" class="form-control" required />
             </div>
-            <div class="mb-3">
-              <label class="form-label">Database Type *</label>
-              <select v-model="databaseForm.databaseType" class="form-select">
+            <div class="form-group">
+              <label for="databaseType">Database Type *</label>
+              <select id="databaseType" v-model="databaseForm.databaseType" class="form-select">
                 <option value="postgresql">PostgreSQL</option>
                 <option value="mysql">MySQL</option>
               </select>
             </div>
-            <div class="mb-3">
-              <label class="form-label">Connection String *</label>
+            <div class="form-group">
+              <label for="databaseConnection">Connection String *</label>
               <input
+                id="databaseConnection"
                 v-model="databaseForm.connectionString"
                 type="text"
                 class="form-control"
@@ -289,29 +281,24 @@
     </div>
 
     <!-- EKS Cluster Modal -->
-    <div
-      v-if="showEKSModal"
-      class="modal"
-      style="display: block; background: rgba(0, 0, 0, 0.5)"
-      @click.self="showEKSModal = false"
-    >
+    <div v-if="showEKSModal" class="modal" @click.self="showEKSModal = false">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">{{ eksForm.id ? "Edit EKS Cluster" : "Add EKS Cluster" }}</h5>
-            <button type="button" class="btn-close" @click="showEKSModal = false"></button>
+            <button type="button" aria-label="Close" @click="showEKSModal = false">×</button>
           </div>
           <div class="modal-body">
-            <div class="mb-3">
+            <div class="form-group">
               <label for="eksProfile" class="form-label">AWS Profile</label>
               <input id="eksProfile" v-model="eksForm.profile" type="text" class="form-control" placeholder="default" />
               <small>From ~/.aws/config. Leave empty for env vars / default credential chain.</small>
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="eksRegion" class="form-label">Region *</label>
               <input id="eksRegion" v-model="eksForm.region" type="text" class="form-control" placeholder="us-east-1" />
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <button type="button" class="btn btn-sm btn-outline-secondary" @click="reauthenticate(eksForm.profile)">
                 Re-authenticate
               </button>
@@ -329,7 +316,7 @@
               </div>
               <pre v-if="eksAuthMessage" style="white-space: pre-wrap; font-size: 0.8em">{{ eksAuthMessage }}</pre>
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="eksClusterName" class="form-label">EKS Cluster Name *</label>
               <input
                 id="eksClusterName"
@@ -343,14 +330,14 @@
                 <option v-for="name in eksDiscovered" :key="name" :value="name"></option>
               </datalist>
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="eksName" class="form-label">Label *</label>
               <input id="eksName" v-model="eksForm.name" type="text" class="form-control" />
               <small
                 >Unique name shown in the Logs page (distinguishes same-named clusters in different accounts).</small
               >
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="eksNamespace" class="form-label">Namespace</label>
               <input
                 id="eksNamespace"
@@ -360,7 +347,7 @@
                 placeholder="all namespaces"
               />
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="eksSelector" class="form-label">Label Selector</label>
               <input
                 id="eksSelector"
@@ -370,7 +357,7 @@
                 placeholder="app=api,tier!=batch"
               />
             </div>
-            <div class="mb-3">
+            <div class="form-group">
               <label for="eksSince" class="form-label">Initial history (minutes)</label>
               <input id="eksSince" v-model.number="eksForm.sinceMinutes" type="number" min="0" class="form-control" />
             </div>
@@ -867,3 +854,164 @@ export default defineComponent(
   }
 );
 </script>
+
+<style scoped>
+.settings-page {
+  overflow-y: auto;
+}
+
+.settings-container {
+  width: 100%;
+  min-width: 0;
+}
+
+.settings-section {
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+
+.section-header {
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.section-header h2 {
+  font-size: 1.125rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.table th,
+.table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-primary);
+  overflow-wrap: anywhere;
+}
+
+.table th {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.table td:last-child {
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.btn-sm {
+  padding: 0.375rem 0.625rem;
+}
+
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-danger {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.btn-outline-primary {
+  color: var(--color-blue);
+}
+
+.btn-outline-danger {
+  color: var(--color-red);
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 2px;
+}
+
+.modal {
+  padding: 1rem;
+}
+
+.modal-dialog {
+  width: 100%;
+  max-width: 560px;
+  min-width: 0;
+}
+
+.modal-content {
+  width: 100%;
+  max-height: min(85vh, calc(100dvh - 2rem));
+}
+
+.modal-title {
+  font-size: 1.125rem;
+  color: var(--text-primary);
+}
+
+.modal-header,
+.modal-footer {
+  flex-shrink: 0;
+}
+
+.modal-body {
+  min-height: 0;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.form-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 600px) {
+  .settings-container {
+    margin: 1rem auto;
+    padding: 0 1rem;
+  }
+
+  .settings-section,
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 1rem;
+  }
+}
+</style>
