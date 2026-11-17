@@ -16,42 +16,13 @@
           <div v-if="schemaError" class="alert alert-danger mb-1">{{ schemaError }}</div>
 
           <div v-if="schema && !loadingSchema" class="mb-1">
-            <input
-              v-model="schemaFilter"
-              type="text"
-              placeholder="Filter schema..."
-              style="
-                width: 100%;
-                padding: 0.5rem;
-                background: #0d1117;
-                border: 1px solid #30363d;
-                border-radius: 4px;
-                color: #c9d1d9;
-                font-size: 0.875rem;
-              "
-              @focus="$event.target.style.borderColor = '#58a6ff'"
-              @blur="$event.target.style.borderColor = '#30363d'"
-            />
+            <input v-model="schemaFilter" type="text" placeholder="Filter schema..." class="schema-filter" />
           </div>
 
           <div v-if="schema && !loadingSchema">
             <!-- Query Type -->
             <div v-if="queryType" class="schema-section" style="margin-bottom: 1rem">
-              <div
-                @click="toggleSection('queries')"
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 0.5rem;
-                  cursor: pointer;
-                  padding: 0.5rem;
-                  background: #161b22;
-                  border-radius: 4px;
-                  margin-bottom: 0.5rem;
-                "
-                @mouseover="$event.currentTarget.style.background = '#21262d'"
-                @mouseout="$event.currentTarget.style.background = '#161b22'"
-              >
+              <div @click="toggleSection('queries')" class="schema-section-toggle">
                 <span
                   :style="{
                     transform: expandedSections.queries ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -67,18 +38,7 @@
               </div>
               <div v-if="expandedSections.queries" style="font-size: 0.8rem; margin-left: 0.5rem">
                 <div v-for="field in filteredQueryFields" :key="field.name" style="margin-bottom: 0.5rem">
-                  <div
-                    @click="toggleField('query-' + field.name)"
-                    style="
-                      padding: 0.5rem;
-                      background: #0d1117;
-                      border-radius: 4px;
-                      border: 1px solid #30363d;
-                      cursor: pointer;
-                    "
-                    @mouseover="$event.currentTarget.style.borderColor = '#58a6ff'"
-                    @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
-                  >
+                  <div @click="toggleField('query-' + field.name)" class="schema-field">
                     <div style="display: flex; align-items: center; gap: 0.5rem">
                       <span
                         :style="{
@@ -98,7 +58,6 @@
                       <button
                         @click.stop="insertFieldIntoQuery(field.name, field.args, 'Query', field.type)"
                         style="
-                          background: #238636;
                           color: white;
                           border: none;
                           padding: 0.15rem 0.4rem;
@@ -106,8 +65,7 @@
                           font-size: 0.65rem;
                           cursor: pointer;
                         "
-                        @mouseover="$event.currentTarget.style.background = '#2ea043'"
-                        @mouseout="$event.currentTarget.style.background = '#238636'"
+                        class="schema-insert-query"
                         title="Insert into query"
                       >
                         +
@@ -166,21 +124,7 @@
 
               <!-- Mutation Type -->
               <div v-if="mutationType" class="schema-section" style="margin-bottom: 1rem">
-                <div
-                  @click="toggleSection('mutations')"
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 0.5rem;
-                    cursor: pointer;
-                    padding: 0.5rem;
-                    background: #161b22;
-                    border-radius: 4px;
-                    margin-bottom: 0.5rem;
-                  "
-                  @mouseover="$event.currentTarget.style.background = '#21262d'"
-                  @mouseout="$event.currentTarget.style.background = '#161b22'"
-                >
+                <div @click="toggleSection('mutations')" class="schema-section-toggle">
                   <span
                     :style="{
                       transform: expandedSections.mutations ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -196,18 +140,7 @@
                 </div>
                 <div v-if="expandedSections.mutations" style="font-size: 0.8rem; margin-left: 0.5rem">
                   <div v-for="field in filteredMutationFields" :key="field.name" style="margin-bottom: 0.5rem">
-                    <div
-                      @click="toggleField('mutation-' + field.name)"
-                      style="
-                        padding: 0.5rem;
-                        background: #0d1117;
-                        border-radius: 4px;
-                        border: 1px solid #30363d;
-                        cursor: pointer;
-                      "
-                      @mouseover="$event.currentTarget.style.borderColor = '#f0883e'"
-                      @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
-                    >
+                    <div @click="toggleField('mutation-' + field.name)" class="schema-field schema-mutation-field">
                       <div style="display: flex; align-items: center; gap: 0.5rem">
                         <span
                           :style="{
@@ -227,7 +160,6 @@
                         <button
                           @click.stop="insertFieldIntoQuery(field.name, field.args, 'Mutation', field.type)"
                           style="
-                            background: #da3633;
                             color: white;
                             border: none;
                             padding: 0.15rem 0.4rem;
@@ -235,8 +167,7 @@
                             font-size: 0.65rem;
                             cursor: pointer;
                           "
-                          @mouseover="$event.currentTarget.style.background = '#f85149'"
-                          @mouseout="$event.currentTarget.style.background = '#da3633'"
+                          class="schema-insert-mutation"
                           title="Insert into query"
                         >
                           +
@@ -300,21 +231,7 @@
 
             <!-- Types -->
             <div class="schema-section">
-              <div
-                @click="toggleSection('types')"
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 0.5rem;
-                  cursor: pointer;
-                  padding: 0.5rem;
-                  background: #161b22;
-                  border-radius: 4px;
-                  margin-bottom: 0.5rem;
-                "
-                @mouseover="$event.currentTarget.style.background = '#21262d'"
-                @mouseout="$event.currentTarget.style.background = '#161b22'"
-              >
+              <div @click="toggleSection('types')" class="schema-section-toggle">
                 <span
                   :style="{
                     transform: expandedSections.types ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -330,18 +247,7 @@
               </div>
               <div v-if="expandedSections.types" style="max-height: 400px; overflow-y: auto; margin-left: 0.5rem">
                 <div v-for="type in filteredObjectTypes" :key="type.name" style="margin-bottom: 0.5rem">
-                  <div
-                    @click="toggleType(type.name)"
-                    style="
-                      padding: 0.5rem;
-                      background: #0d1117;
-                      border-radius: 4px;
-                      border: 1px solid #30363d;
-                      cursor: pointer;
-                    "
-                    @mouseover="$event.currentTarget.style.borderColor = '#8b949e'"
-                    @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
-                  >
+                  <div @click="toggleType(type.name)" class="schema-field schema-type-field">
                     <div style="display: flex; align-items: center; gap: 0.5rem">
                       <span
                         v-if="type.fields && type.fields.length > 0"
@@ -420,21 +326,7 @@
             No sample queries available. Create one from the Requests page.
           </div>
           <div v-else style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.75rem">
-            <div
-              v-for="sq in sampleQueries"
-              :key="sq.id"
-              @click="loadSampleQuery(sq)"
-              style="
-                background: #161b22;
-                border: 1px solid #30363d;
-                border-radius: 4px;
-                padding: 0.75rem;
-                cursor: pointer;
-                transition: border-color 0.2s;
-              "
-              @mouseover="$event.currentTarget.style.borderColor = '#58a6ff'"
-              @mouseout="$event.currentTarget.style.borderColor = '#30363d'"
-            >
+            <div v-for="sq in sampleQueries" :key="sq.id" @click="loadSampleQuery(sq)" class="sample-query-card">
               <div style="font-weight: 500; margin-bottom: 0.25rem">{{ sq.name }}</div>
               <div style="font-size: 0.75rem; color: #8b949e">{{ sq.server?.url || "No server" }}</div>
             </div>
@@ -779,6 +671,8 @@ export default defineComponent(
     },
 
     methods: {
+      copyToClipboard,
+
       async loadServers() {
         try {
           this.servers = await API.get<Server[]>("/api/servers");
@@ -1426,3 +1320,70 @@ export default defineComponent(
   }
 );
 </script>
+
+<style scoped>
+.schema-filter {
+  font-size: 0.875rem;
+}
+
+.schema-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.schema-section-toggle:hover {
+  background: var(--bg-tertiary);
+}
+
+.schema-field {
+  padding: 0.5rem;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  border: 1px solid var(--border-primary);
+  cursor: pointer;
+}
+
+.schema-field:hover,
+.sample-query-card:hover {
+  border-color: var(--color-blue);
+}
+
+.schema-mutation-field:hover {
+  border-color: var(--color-orange);
+}
+
+.schema-type-field:hover {
+  border-color: var(--text-secondary);
+}
+
+.schema-insert-query {
+  background: var(--color-green);
+}
+
+.schema-insert-query:hover {
+  background: var(--color-green-hover);
+}
+
+.schema-insert-mutation {
+  background: var(--color-red-dark);
+}
+
+.schema-insert-mutation:hover {
+  background: var(--color-red);
+}
+
+.sample-query-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+</style>

@@ -9,7 +9,7 @@ import { lintKeymap } from "@codemirror/lint";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { graphql, updateSchema } from "cm6-graphql";
-import { buildSchema, buildClientSchema } from "graphql";
+import { buildSchema, buildClientSchema, type GraphQLSchema, type IntrospectionQuery } from "graphql";
 
 // GitHub Dark theme highlighting (matching highlight.js)
 const githubDarkHighlight = HighlightStyle.define([
@@ -40,7 +40,15 @@ const githubDarkHighlight = HighlightStyle.define([
  * @param {Object} options.schema - GraphQL schema object
  * @returns {EditorView} The CodeMirror editor view
  */
-export function createGraphQLEditor(parent, options = {}) {
+export function createGraphQLEditor(
+  parent: HTMLElement,
+  options: {
+    value?: string;
+    onChange?: (value: string) => void;
+    placeholder?: string;
+    schema?: GraphQLSchema | IntrospectionQuery | IntrospectionQuery["__schema"] | string | null;
+  } = {}
+) {
   const { value = "", onChange = () => {}, placeholder: placeholderText = "", schema = null } = options;
 
   // Create extensions array
