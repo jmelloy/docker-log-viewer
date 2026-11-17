@@ -491,6 +491,14 @@ func (wa *WebApp) streamLogs(id string, onStreamEnd func(), since time.Time) err
 }
 
 func (wa *WebApp) loadContainers() error {
+	// First run: pre-populate EKS clusters from kubeconfig (added disabled).
+	if saved, err := wa.store.ListEKSClusters(); err == nil && len(saved) == 0 {
+		if added, err := controller.ImportKubeconfigEKS(wa.store); err != nil {
+			slog.Warn("kubeconfig import skipped", "error", err)
+		} else if added > 0 {
+			slog.Info("imported EKS clusters from kubeconfig (disabled; enable in Settings)", "count", added)
+		}
+	}
 	if cfgs, err := controller.LoadEKSConfigs(wa.store); err != nil {
 		slog.Error("failed to load EKS clusters", "error", err)
 	} else {
@@ -838,6 +846,10 @@ func (wa *WebApp) Run(addr string) error {
 	r.HandleFunc("/api/eks/clusters/{id}", ctrl.HandleDeleteEKSCluster).Methods("DELETE")
 	r.HandleFunc("/api/eks/discover", ctrl.HandleDiscoverEKSClusters).Methods("GET")
 	r.HandleFunc("/api/eks/login", ctrl.HandleEKSLogin).Methods("POST")
+	r.HandleFunc("/api/eks/auth-status", ctrl.HandleEKSAuthStatus).Methods("GET")
+	r.HandleFunc("/api/eks/reconnect/{name}", ctrl.HandleEKSReconnect).Methods("POST")
+	r.HandleFunc("/api/eks/kubeconfig", ctrl.HandleListKubeconfigEKS).Methods("GET")
+	r.HandleFunc("/api/eks/kubeconfig/import", ctrl.HandleImportKubeconfigEKS).Methods("POST")
 
 	// SQL and trace endpoints
 	r.HandleFunc("/api/explain", ctrl.HandleExplain).Methods("POST")

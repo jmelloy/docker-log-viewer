@@ -1025,7 +1025,7 @@ async function loadStats(containerId: string) {
 
 **EKS / Kubernetes Logs** (pods appear as containers with IDs `eks:<cluster>/<ns>/<pod>/<container>`):
 - AWS credentials, SSO login, EKS tokens: `pkg/logs/aws_auth.go`
-- Cluster discovery / client config: `pkg/logs/eks_discovery.go`
+- Cluster discovery / client config: `pkg/logs/eks_discovery.go`; kubeconfig import: `pkg/logs/kubeconfig.go`
 - Pod listing & log streaming (`EKSManager`): `pkg/logs/k8s_logs.go`
 - Cluster CRUD API: `pkg/controller/eks.go`; UI in `web/src/views/SettingsView.vue`
 

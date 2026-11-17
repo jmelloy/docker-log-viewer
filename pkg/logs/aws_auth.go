@@ -6,7 +6,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,13 +49,80 @@ func AWSIdentity(ctx context.Context, cfg aws.Config) (string, error) {
 	return aws.ToString(out.Arn), nil
 }
 
-// SSOLogin starts `aws sso login` for the profile. The CLI opens a browser
-// where it can and always prints the verification URL/code. We return the
-// output from the first few seconds so the UI can show that URL; the CLI
-// keeps waiting for approval in the background (up to 5 minutes) and writes
-// the token to ~/.aws/sso/cache, where LoadAWSConfig picks it up.
-func SSOLogin(profile string) (string, error) {
-	args := []string{"sso", "login"}
+// AWS profile kinds, which decide how the user re-authenticates.
+const (
+	ProfileKindSSO   = "sso"   // IAM Identity Center: `aws sso login`
+	ProfileKindOther = "other" // credentials file (e.g. written by an Okta tool), credential_process, env
+)
+
+// AWSProfileKind reports whether a profile signs in through AWS SSO.
+func AWSProfileKind(ctx context.Context, profile string) string {
+	if profile == "" {
+		profile = os.Getenv("AWS_PROFILE")
+	}
+	if profile == "" {
+		profile = "default"
+	}
+	sc, err := config.LoadSharedConfigProfile(ctx, profile, func(o *config.LoadSharedConfigOptions) {
+		if f := os.Getenv("AWS_CONFIG_FILE"); f != "" {
+			o.ConfigFiles = []string{f}
+		}
+		if f := os.Getenv("AWS_SHARED_CREDENTIALS_FILE"); f != "" {
+			o.CredentialsFiles = []string{f}
+		}
+	})
+	if err == nil && (sc.SSOSessionName != "" || sc.SSOStartURL != "") {
+		return ProfileKindSSO
+	}
+	return ProfileKindOther
+}
+
+// ReauthHint is the user-facing message for expired/invalid credentials.
+func ReauthHint(ctx context.Context, profile string) string {
+	shown := profile
+	if shown == "" {
+		shown = "default"
+	}
+	if AWSProfileKind(ctx, profile) == ProfileKindSSO {
+		login := "aws sso login"
+		if profile != "" {
+			login += " --profile " + profile
+		}
+		return fmt.Sprintf("AWS SSO session expired. Run '%s' or click Re-authenticate.", login)
+	}
+	return fmt.Sprintf("AWS credentials for profile '%s' are expired or invalid. Sign in again with your Okta/AWS "+
+		"login tool (it refreshes ~/.aws/credentials); the cluster reconnects automatically once they're valid.", shown)
+}
+
+// awsCredsModTime returns the newest modification time of the places
+// credentials appear after a sign-in: the shared credentials file (Okta
+// tools, `aws configure`) and the SSO token cache directory.
+func awsCredsModTime() time.Time {
+	var newest time.Time
+	paths := []string{config.DefaultSharedCredentialsFilename()}
+	if f := os.Getenv("AWS_SHARED_CREDENTIALS_FILE"); f != "" {
+		paths = []string{f}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(home, ".aws", "sso", "cache"))
+	}
+	for _, p := range paths {
+		if fi, err := os.Stat(p); err == nil && fi.ModTime().After(newest) {
+			newest = fi.ModTime()
+		}
+	}
+	return newest
+}
+
+var ssoURLRe = regexp.MustCompile(`https://\S+`)
+
+// SSOLogin starts `aws sso login` with the device-code flow and no browser:
+// the CLI prints a verification URL (with the code pre-filled) that the UI
+// opens in the user's own browser, where they complete the Okta/IdP sign-in.
+// We don't automate that browser step. The CLI keeps polling in the
+// background (up to 5 minutes) and writes the token to ~/.aws/sso/cache.
+func SSOLogin(profile string) (verifyURL, output string, err error) {
+	args := []string{"sso", "login", "--no-browser", "--use-device-code"}
 	if profile != "" {
 		args = append(args, "--profile", profile)
 	}
@@ -61,19 +132,42 @@ func SSOLogin(profile string) (string, error) {
 	cmd.Stdout, cmd.Stderr = &out, &out
 	if err := cmd.Start(); err != nil {
 		cancel()
-		return "", fmt.Errorf("aws sso login (is the AWS CLI installed?): %w", err)
+		return "", "", fmt.Errorf("aws sso login (is the AWS CLI installed?): %w", err)
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait(); cancel() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			return out.String(), fmt.Errorf("aws sso login: %w", err)
+
+	// Wait for the URL to be printed (or the CLI to exit).
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case err := <-done:
+			if err != nil {
+				return "", out.String(), fmt.Errorf("aws sso login: %w", err)
+			}
+			return "", out.String(), nil // already signed in
+		case <-deadline:
+			return "", out.String(), nil
+		case <-time.After(200 * time.Millisecond):
+			if u := verificationURL(out.String()); u != "" && strings.Contains(u, "user_code=") {
+				return u, out.String(), nil
+			}
 		}
-		return out.String(), nil
-	case <-time.After(5 * time.Second):
-		return out.String(), nil
 	}
+}
+
+// verificationURL picks the URL with the code pre-filled, else the first one.
+func verificationURL(output string) string {
+	urls := ssoURLRe.FindAllString(output, -1)
+	for _, u := range urls {
+		if strings.Contains(u, "user_code=") {
+			return u
+		}
+	}
+	if len(urls) > 0 {
+		return urls[0]
+	}
+	return ""
 }
 
 type lockedBuffer struct {

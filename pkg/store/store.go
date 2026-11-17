@@ -142,7 +142,8 @@ func (ContainerRetention) TableName() string {
 // EKSCluster is a saved EKS cluster whose pod logs are streamed.
 type EKSCluster struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
-	Name          string    `gorm:"not null;uniqueIndex" json:"name"`
+	Name          string    `gorm:"not null;uniqueIndex" json:"name"` // unique label
+	ClusterName   string    `json:"clusterName"`                      // EKS cluster name; empty = Name
 	Region        string    `gorm:"not null" json:"region"`
 	Profile       string    `json:"profile"`
 	Namespace     string    `json:"namespace"`

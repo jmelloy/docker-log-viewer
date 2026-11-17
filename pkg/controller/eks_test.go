@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -95,3 +96,67 @@ func TestEKSClusterCRUD(t *testing.T) {
 }
 
 func itoa(id uint) string { return strconv.FormatUint(uint64(id), 10) }
+
+func TestImportKubeconfigEKS(t *testing.T) {
+	dir := t.TempDir()
+	kubeconfig := filepath.Join(dir, "config")
+	os.WriteFile(kubeconfig, []byte(`apiVersion: v1
+kind: Config
+clusters:
+- name: arn:aws:eks:us-east-1:111111111111:cluster/dnsid-dev
+  cluster: {server: "https://A.gr7.us-east-1.eks.amazonaws.com"}
+- name: arn:aws:eks:us-east-1:222222222222:cluster/dnsid-dev
+  cluster: {server: "https://B.gr7.us-east-1.eks.amazonaws.com"}
+users:
+- name: a
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      command: aws
+      args: [--region, us-east-1, eks, get-token, --cluster-name, dnsid-dev]
+      env: [{name: AWS_PROFILE, value: dnsid-development}]
+- name: b
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1beta1
+      command: aws
+      args: [--region, us-east-1, eks, get-token, --cluster-name, dnsid-dev]
+      env: [{name: AWS_PROFILE, value: idil-dev}]
+contexts:
+- name: dnsid-dev
+  context: {cluster: "arn:aws:eks:us-east-1:111111111111:cluster/dnsid-dev", user: a}
+- name: arn:aws:eks:us-east-1:222222222222:cluster/dnsid-dev
+  context: {cluster: "arn:aws:eks:us-east-1:222222222222:cluster/dnsid-dev", user: b}
+`), 0o600)
+	t.Setenv("KUBECONFIG", kubeconfig)
+
+	db, err := store.NewStore(filepath.Join(dir, "eks.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	added, err := ImportKubeconfigEKS(db)
+	if err != nil || added != 2 {
+		t.Fatalf("first import: added=%d err=%v", added, err)
+	}
+	if added, _ := ImportKubeconfigEKS(db); added != 0 {
+		t.Fatalf("re-import should add nothing, added %d", added)
+	}
+	list, _ := db.ListEKSClusters()
+	labels := map[string]store.EKSCluster{}
+	for _, c := range list {
+		if c.Enabled {
+			t.Errorf("imported cluster %q should be disabled", c.Name)
+		}
+		labels[c.Name] = c
+	}
+	// Same EKS name in two accounts: distinct labels, same ClusterName.
+	a, b := labels["dnsid-dev"], labels["dnsid-dev-idil-dev"]
+	if a.ClusterName != "dnsid-dev" || a.Profile != "dnsid-development" || b.ClusterName != "dnsid-dev" || b.Profile != "idil-dev" {
+		t.Fatalf("unexpected import: %+v", list)
+	}
+	if cfgs, _ := LoadEKSConfigs(db); len(cfgs) != 0 {
+		t.Fatalf("disabled imports must not stream, got %+v", cfgs)
+	}
+}

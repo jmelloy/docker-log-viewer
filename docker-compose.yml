@@ -9,6 +9,7 @@ services:
       - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
       - ~/.aws:/root/.aws # AWS credentials/SSO cache for EKS logs
+      - ~/.kube:/root/.kube:ro # kubeconfig, for importing EKS contexts
       - /app/tmp
       - /app/bin
       - go-modules:/go/pkg/mod

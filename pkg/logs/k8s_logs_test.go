@@ -72,7 +72,7 @@ func TestEKSManagerListContainers(t *testing.T) {
 		got[0].Project != "eks:prod" || got[0].Service != "api" || got[0].Image != "app:latest" {
 		t.Fatalf("unexpected container %+v", got[0])
 	}
-	if st := m.Status(); len(st) != 1 || !st[0].Connected || st[0].Containers != 2 {
+	if st := m.Status(); len(st) != 1 || st[0].State != EKSStateConnected || st[0].Containers != 2 {
 		t.Fatalf("unexpected status %+v", st)
 	}
 }
@@ -92,7 +92,7 @@ func TestEKSManagerKeepsLastContainersOnError(t *testing.T) {
 	if got := m.ListContainers(t.Context()); len(got) != 1 {
 		t.Fatalf("expected cached container on error, got %+v", got)
 	}
-	if st := m.Status(); st[0].Connected || st[0].Error == "" {
+	if st := m.Status(); st[0].State != EKSStateAuthExpired || st[0].Error == "" {
 		t.Fatalf("expected error status, got %+v", st)
 	}
 }

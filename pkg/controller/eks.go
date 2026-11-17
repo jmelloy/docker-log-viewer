@@ -37,6 +37,7 @@ func LoadEKSConfigs(s *store.Store) ([]logs.EKSClusterConfig, error) {
 		}
 		cfgs = append(cfgs, logs.EKSClusterConfig{
 			Name:          c.Name,
+			ClusterName:   c.ClusterName,
 			Region:        c.Region,
 			Profile:       c.Profile,
 			Namespace:     c.Namespace,
@@ -51,6 +52,8 @@ func validateEKSCluster(c *store.EKSCluster) error {
 	switch {
 	case !eksNameRe.MatchString(c.Name):
 		return fmt.Errorf("invalid cluster name %q", c.Name)
+	case c.ClusterName != "" && !eksNameRe.MatchString(c.ClusterName):
+		return fmt.Errorf("invalid EKS cluster name %q", c.ClusterName)
 	case !awsRegionRe.MatchString(c.Region):
 		return fmt.Errorf("invalid region %q", c.Region)
 	case !awsProfileRe.MatchString(c.Profile):
@@ -165,8 +168,12 @@ func (c *Controller) HandleDiscoverEKSClusters(w http.ResponseWriter, r *http.Re
 	writeJSON(w, map[string]any{"identity": identity, "clusters": names})
 }
 
-// HandleEKSLogin starts `aws sso login` for {"profile": "..."} and returns
-// the CLI output (verification URL/code). Clusters reconnect on the next poll.
+// HandleEKSLogin starts re-authentication for {"profile": "..."}. SSO
+// profiles get a device-code `aws sso login` whose verification URL the UI
+// opens in the user's browser. Other profiles (credentials written by an
+// Okta tool, credential_process, ...) can't be refreshed from here, so the
+// response carries a hint instead. Either way the UI then polls
+// /api/eks/auth-status and reconnects once credentials are valid.
 func (c *Controller) HandleEKSLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Profile string `json:"profile"`
@@ -175,12 +182,156 @@ func (c *Controller) HandleEKSLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid profile", http.StatusBadRequest)
 		return
 	}
-	out, err := logs.SSOLogin(req.Profile)
-	if err != nil {
-		http.Error(w, err.Error()+"\n"+out, http.StatusBadGateway)
+	resp := map[string]string{"kind": logs.AWSProfileKind(r.Context(), req.Profile), "hint": logs.ReauthHint(r.Context(), req.Profile)}
+	if resp["kind"] == logs.ProfileKindSSO {
+		url, out, err := logs.SSOLogin(req.Profile)
+		resp["url"], resp["output"] = url, out
+		if err != nil {
+			resp["error"] = err.Error()
+		}
+	}
+	writeJSON(w, resp)
+}
+
+// HandleEKSAuthStatus checks ?profile= credentials with a fresh credential
+// load (re-reading ~/.aws/credentials and the SSO cache).
+func (c *Controller) HandleEKSAuthStatus(w http.ResponseWriter, r *http.Request) {
+	profile := r.URL.Query().Get("profile")
+	if !awsProfileRe.MatchString(profile) {
+		http.Error(w, "invalid profile", http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, map[string]string{"output": out})
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	cfg, err := logs.LoadAWSConfig(ctx, profile, "us-east-1") // STS answers in any region
+	identity := ""
+	if err == nil {
+		identity, err = logs.AWSIdentity(ctx, cfg)
+	}
+	if err != nil {
+		writeJSON(w, map[string]any{"valid": false, "error": err.Error(), "hint": logs.ReauthHint(ctx, profile)})
+		return
+	}
+	writeJSON(w, map[string]any{"valid": true, "identity": identity})
+}
+
+// HandleEKSReconnect forces a fresh credential load, token and Kubernetes
+// client for a cluster and verifies access before reporting success.
+func (c *Controller) HandleEKSReconnect(w http.ResponseWriter, r *http.Request) {
+	if c.EKS == nil {
+		http.Error(w, "EKS not available", http.StatusServiceUnavailable)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if err := c.EKS.Reconnect(ctx, mux.Vars(r)["name"]); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// HandleListKubeconfigEKS lists EKS clusters found in kubeconfig, flagging
+// ones already saved.
+func (c *Controller) HandleListKubeconfigEKS(w http.ResponseWriter, r *http.Request) {
+	found, err := logs.LoadKubeconfigEKSClusters()
+	if err != nil {
+		http.Error(w, "read kubeconfig: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	saved, err := c.store.ListEKSClusters()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	type candidate struct {
+		logs.KubeconfigEKSCluster
+		Added bool `json:"added"`
+	}
+	out := make([]candidate, 0, len(found))
+	for _, k := range found {
+		out = append(out, candidate{k, findSaved(saved, k) != nil})
+	}
+	writeJSON(w, out)
+}
+
+// HandleImportKubeconfigEKS saves kubeconfig clusters not yet configured.
+func (c *Controller) HandleImportKubeconfigEKS(w http.ResponseWriter, r *http.Request) {
+	added, err := ImportKubeconfigEKS(c.store)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]int{"added": added})
+}
+
+// ImportKubeconfigEKS saves kubeconfig EKS clusters that aren't configured
+// yet. They're added disabled so a kubeconfig full of prod contexts doesn't
+// start streaming everything; the user enables the ones they want.
+func ImportKubeconfigEKS(s *store.Store) (int, error) {
+	found, err := logs.LoadKubeconfigEKSClusters()
+	if err != nil {
+		return 0, fmt.Errorf("read kubeconfig: %w", err)
+	}
+	saved, err := s.ListEKSClusters()
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for _, k := range found {
+		if findSaved(saved, k) != nil {
+			continue
+		}
+		cluster := store.EKSCluster{
+			Name:         uniqueLabel(saved, k),
+			ClusterName:  k.ClusterName,
+			Region:       k.Region,
+			Profile:      k.Profile,
+			Namespace:    k.Namespace,
+			SinceMinutes: 15,
+		}
+		if err := validateEKSCluster(&cluster); err != nil {
+			slog.Warn("skipping kubeconfig cluster", "contexts", k.Contexts, "error", err)
+			continue
+		}
+		if err := s.SaveEKSCluster(&cluster); err != nil {
+			return added, err
+		}
+		saved = append(saved, cluster)
+		added++
+	}
+	return added, nil
+}
+
+func effectiveName(c store.EKSCluster) string {
+	if c.ClusterName != "" {
+		return c.ClusterName
+	}
+	return c.Name
+}
+
+func findSaved(saved []store.EKSCluster, k logs.KubeconfigEKSCluster) *store.EKSCluster {
+	for i, c := range saved {
+		if effectiveName(c) == k.ClusterName && c.Region == k.Region && c.Profile == k.Profile {
+			return &saved[i]
+		}
+	}
+	return nil
+}
+
+func uniqueLabel(saved []store.EKSCluster, k logs.KubeconfigEKSCluster) string {
+	taken := map[string]bool{}
+	for _, c := range saved {
+		taken[c.Name] = true
+	}
+	label := k.Label
+	if taken[label] && k.Profile != "" {
+		label = k.Label + "-" + k.Profile
+	}
+	for i := 2; taken[label]; i++ {
+		label = fmt.Sprintf("%s-%d", k.Label, i)
+	}
+	return label
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

@@ -13,12 +13,21 @@ import (
 
 // EKSClusterConfig identifies a cluster and which pods to follow in it.
 type EKSClusterConfig struct {
-	Name          string // EKS cluster name
+	Name          string // unique label; used in container IDs
+	ClusterName   string // EKS cluster name; empty = Name
 	Region        string
 	Profile       string // AWS profile; empty = default credential chain
 	Namespace     string // empty = all namespaces
 	LabelSelector string // e.g. "app=api,tier!=batch"
 	SinceMinutes  int    // initial history to load; 0 = 15
+}
+
+// EKSName is the cluster name to use with the EKS API.
+func (c EKSClusterConfig) EKSName() string {
+	if c.ClusterName != "" {
+		return c.ClusterName
+	}
+	return c.Name
 }
 
 // ListEKSClusters returns the cluster names visible to the credentials in cfg.

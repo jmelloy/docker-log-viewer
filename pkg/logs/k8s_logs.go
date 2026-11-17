@@ -2,6 +2,7 @@ package logs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -33,12 +35,61 @@ func parseEKSContainerID(id string) (cluster, namespace, pod, container string, 
 	return parts[0], parts[1], parts[2], parts[3], nil
 }
 
+// Cluster connection states reported to the UI.
+const (
+	EKSStateConnecting  = "connecting"
+	EKSStateConnected   = "connected"
+	EKSStateAuthExpired = "auth_expired" // AWS credentials/SSO session expired: user must sign in again
+	EKSStateNeedsReauth = "needs_reauth" // AWS creds OK but the cluster rejected the token: Reconnect
+	EKSStateError       = "error"
+)
+
+// While auth is expired, retry this rarely instead of every poll. A change to
+// ~/.aws/credentials or ~/.aws/sso/cache (i.e. the user signed in again)
+// triggers an immediate retry, as does Reconnect.
+const authExpiredRetry = time.Minute
+
 // EKSClusterStatus is the connection state shown in the settings UI.
 type EKSClusterStatus struct {
 	Name       string `json:"name"`
-	Connected  bool   `json:"connected"`
+	State      string `json:"state"`
 	Error      string `json:"error,omitempty"`
 	Containers int    `json:"containers"`
+}
+
+// ClassifyEKSError maps an error to a cluster state and a user-facing message
+// with a recovery hint.
+func ClassifyEKSError(ctx context.Context, err error, profile string) (state, message string) {
+	if apierrors.IsUnauthorized(err) {
+		return EKSStateNeedsReauth, "Cluster rejected the auth token (401). Click Reconnect to refresh credentials; " +
+			"if it persists, check the IAM identity has an EKS access entry."
+	}
+	if apierrors.IsForbidden(err) {
+		return EKSStateError, "Access denied listing pods (403): grant get/list on pods and pods/log. " + err.Error()
+	}
+	if IsAWSAuthError(err) {
+		return EKSStateAuthExpired, ReauthHint(ctx, profile)
+	}
+	return EKSStateError, err.Error()
+}
+
+// IsAWSAuthError reports whether err means AWS credentials are missing,
+// expired or invalid (expired SSO session, stale session token, ...).
+// ponytail: substring match on SDK messages; these errors arrive wrapped in
+// url.Error by client-go's transport, so typed matching wouldn't see them all.
+func IsAWSAuthError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{
+		"sso session", "sso token", "token has expired", "expiredtoken", "refresh cached credentials",
+		"invalidgrant", "no valid credential", "failed to retrieve credentials", "unrecognizedclient",
+		"invalidclienttokenid", "security token included in the request is", "unauthorizedexception",
+		"session token not found",
+	} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 type eksCluster struct {
@@ -46,7 +97,10 @@ type eksCluster struct {
 	client  kubernetes.Interface
 	ctx     context.Context // cancelled when the cluster is removed/changed
 	cancel  context.CancelFunc
+	state   string
 	lastErr string
+	retryAt time.Time   // don't auto-retry before this (auth expired)...
+	credsAt time.Time   // ...unless AWS credentials changed after this
 	last    []Container // last successful listing
 }
 
@@ -70,7 +124,7 @@ func newEKSClient(ctx context.Context, cfg EKSClusterConfig) (kubernetes.Interfa
 	if err != nil {
 		return nil, err
 	}
-	restCfg, err := EKSRestConfig(ctx, awsCfg, cfg.Name)
+	restCfg, err := EKSRestConfig(ctx, awsCfg, cfg.EKSName())
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +149,7 @@ func (m *EKSManager) SetClusters(cfgs []EKSClusterConfig) {
 	for name, cfg := range want {
 		if _, ok := m.clusters[name]; !ok {
 			ctx, cancel := context.WithCancel(m.parent)
-			m.clusters[name] = &eksCluster{cfg: cfg, ctx: ctx, cancel: cancel}
+			m.clusters[name] = &eksCluster{cfg: cfg, ctx: ctx, cancel: cancel, state: EKSStateConnecting}
 		}
 	}
 }
@@ -113,23 +167,68 @@ func (m *EKSManager) ListContainers(ctx context.Context) []Container {
 
 	var result []Container
 	for _, c := range clusters {
-		containers, err := m.listCluster(ctx, c)
 		m.mu.Lock()
-		if err != nil {
-			if err.Error() != c.lastErr {
-				slog.Warn("EKS cluster unavailable", "cluster", c.cfg.Name, "error", err)
-			}
-			c.lastErr = err.Error()
-			c.client = nil // rebuild client (re-describe, reload creds) next time
-			containers = c.last
-		} else {
-			c.lastErr = ""
-			c.last = containers
-		}
+		waiting := time.Now().Before(c.retryAt)
+		credsAt := c.credsAt
+		containers := c.last
 		m.mu.Unlock()
+		if waiting && awsCredsModTime().After(credsAt) {
+			slog.Info("AWS credentials changed, retrying EKS cluster", "cluster", c.cfg.Name)
+			waiting = false
+		}
+		if !waiting {
+			var err error
+			if containers, err = m.listCluster(ctx, c); err != nil {
+				containers = m.recordError(c, err)
+			}
+		}
 		result = append(result, containers...)
 	}
 	return result
+}
+
+// recordError marks the cluster failed and drops its client so the next
+// attempt reloads AWS credentials and mints a fresh token. Returns the last
+// known containers.
+func (m *EKSManager) recordError(c *eksCluster, err error) []Container {
+	state, msg := ClassifyEKSError(m.parent, err, c.cfg.Profile)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if msg != c.lastErr {
+		slog.Warn("EKS cluster unavailable", "cluster", c.cfg.Name, "state", state, "error", err)
+	}
+	c.state, c.lastErr, c.client = state, msg, nil
+	c.retryAt = time.Time{}
+	if state == EKSStateAuthExpired {
+		c.retryAt, c.credsAt = time.Now().Add(authExpiredRetry), awsCredsModTime()
+	}
+	return c.last
+}
+
+// Reconnect discards the cluster's client and cached token, reloads AWS
+// credentials (picking up a fresh SSO login), re-describes the cluster and
+// verifies access by listing pods before marking it connected.
+func (m *EKSManager) Reconnect(ctx context.Context, name string) error {
+	m.mu.Lock()
+	c := m.clusters[name]
+	m.mu.Unlock()
+	if c == nil {
+		return fmt.Errorf("EKS cluster %q is not enabled", name)
+	}
+	client, err := m.NewClient(ctx, c.cfg)
+	if err == nil {
+		_, err = client.CoreV1().Pods(c.cfg.Namespace).List(ctx, metav1.ListOptions{LabelSelector: c.cfg.LabelSelector, Limit: 1})
+	}
+	if err != nil {
+		m.recordError(c, err)
+		_, msg := ClassifyEKSError(ctx, err, c.cfg.Profile)
+		return errors.New(msg)
+	}
+	m.mu.Lock()
+	c.client, c.state, c.lastErr, c.retryAt = client, EKSStateConnected, "", time.Time{}
+	m.mu.Unlock()
+	slog.Info("EKS cluster reconnected", "cluster", name)
+	return nil
 }
 
 func (m *EKSManager) listCluster(ctx context.Context, c *eksCluster) ([]Container, error) {
@@ -153,7 +252,11 @@ func (m *EKSManager) listCluster(ctx context.Context, c *eksCluster) ([]Containe
 	if err != nil {
 		return nil, fmt.Errorf("list pods: %w", err)
 	}
-	return podContainers(c.cfg.Name, pods.Items), nil
+	containers := podContainers(c.cfg.Name, pods.Items)
+	m.mu.Lock()
+	c.state, c.lastErr, c.last = EKSStateConnected, "", containers
+	m.mu.Unlock()
+	return containers, nil
 }
 
 func podContainers(cluster string, pods []corev1.Pod) []Container {
@@ -233,7 +336,7 @@ func (m *EKSManager) Status() []EKSClusterStatus {
 	defer m.mu.Unlock()
 	out := make([]EKSClusterStatus, 0, len(m.clusters))
 	for name, c := range m.clusters {
-		out = append(out, EKSClusterStatus{Name: name, Connected: c.client != nil && c.lastErr == "", Error: c.lastErr, Containers: len(c.last)})
+		out = append(out, EKSClusterStatus{Name: name, State: c.state, Error: c.lastErr, Containers: len(c.last)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

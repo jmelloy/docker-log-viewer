@@ -123,7 +123,8 @@ export interface Server {
 
 export interface EKSCluster {
   id: number;
-  name: string;
+  name: string; // unique label
+  clusterName: string; // EKS cluster name; empty = name
   region: string;
   profile: string;
   namespace: string;
@@ -134,7 +135,7 @@ export interface EKSCluster {
 
 export interface EKSClusterStatus {
   name: string;
-  connected: boolean;
+  state: "connecting" | "connected" | "auth_expired" | "needs_reauth" | "error";
   error?: string;
   containers: number;
 }
@@ -142,6 +143,21 @@ export interface EKSClusterStatus {
 export interface EKSClustersResponse {
   clusters: EKSCluster[];
   status: EKSClusterStatus[];
+}
+
+export interface EKSLoginResponse {
+  kind: "sso" | "other";
+  hint: string;
+  url?: string;
+  output?: string;
+  error?: string;
+}
+
+export interface EKSAuthStatus {
+  valid: boolean;
+  identity?: string;
+  error?: string;
+  hint?: string;
 }
 
 export interface DatabaseURL {

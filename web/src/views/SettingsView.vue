@@ -86,16 +86,32 @@
       <section class="settings-section">
         <div class="section-header">
           <h2>EKS Clusters</h2>
-          <button @click="openEKSModal(null)" class="btn btn-primary">+ Add EKS Cluster</button>
+          <div>
+            <button @click="importKubeconfig" class="btn btn-outline-secondary" :disabled="eksImporting">
+              {{ eksImporting ? "Reading kubeconfig…" : "Refresh from kubeconfig" }}
+            </button>
+            <button @click="openEKSModal(null)" class="btn btn-primary" style="margin-left: 0.5rem">
+              + Add EKS Cluster
+            </button>
+          </div>
+        </div>
+
+        <div v-if="eksAuthMessage" class="empty-state-box" style="white-space: pre-wrap; text-align: left">
+          {{ eksAuthMessage }}
+          <div v-if="eksAuthURL">
+            <a :href="eksAuthURL" target="_blank" rel="noopener">Open the AWS sign-in page</a>
+          </div>
         </div>
 
         <div v-if="eksClusters.length === 0" class="empty-state-box">
-          No EKS clusters configured. Pod logs from added clusters appear on the Logs page under "eks:&lt;cluster&gt;".
+          No EKS clusters configured. Use "Refresh from kubeconfig" to import contexts from ~/.kube/config, or add one
+          manually. Pod logs appear on the Logs page under "eks:&lt;cluster&gt;".
         </div>
 
         <table v-else class="table table-striped">
           <thead>
             <tr>
+              <th>On</th>
               <th>Cluster</th>
               <th>Profile / Region</th>
               <th>Namespace</th>
@@ -106,32 +122,54 @@
           </thead>
           <tbody>
             <tr v-for="cluster in eksClusters" :key="cluster.id">
-              <td>{{ cluster.name }}</td>
+              <td>
+                <input
+                  type="checkbox"
+                  :checked="cluster.enabled"
+                  :aria-label="`Stream logs from ${cluster.name}`"
+                  @change="toggleEKSCluster(cluster)"
+                />
+              </td>
+              <td>
+                {{ cluster.name }}
+                <small v-if="cluster.clusterName && cluster.clusterName !== cluster.name">
+                  ({{ cluster.clusterName }})
+                </small>
+              </td>
               <td>{{ cluster.profile || "(default)" }} / {{ cluster.region }}</td>
               <td>{{ cluster.namespace || "(all)" }}</td>
               <td>{{ cluster.labelSelector || "(all pods)" }}</td>
               <td>
                 <span v-if="!cluster.enabled">Disabled</span>
-                <span
-                  v-else-if="eksStatus(cluster.name)?.error"
-                  class="text-danger"
-                  :title="eksStatus(cluster.name)?.error"
-                >
-                  Error: {{ eksStatus(cluster.name)?.error }}
-                </span>
-                <span v-else-if="eksStatus(cluster.name)?.connected" class="text-success">
-                  Connected ({{ eksStatus(cluster.name)?.containers }} containers)
-                </span>
-                <span v-else>Connecting…</span>
+                <template v-else>
+                  <span :class="eksStateClass(cluster.name)">{{ eksStateLabel(cluster.name) }}</span>
+                  <div v-if="eksStatus(cluster.name)?.error">
+                    <small>{{ eksStatus(cluster.name)?.error }}</small>
+                  </div>
+                </template>
               </td>
-              <td>
+              <td style="white-space: nowrap">
                 <button @click="openEKSModal(cluster)" class="btn btn-sm btn-outline-primary">Edit</button>
                 <button
-                  @click="eksLogin(cluster.profile)"
+                  v-if="cluster.enabled"
+                  @click="reconnectEKS(cluster.name)"
                   class="btn btn-sm btn-outline-secondary"
                   style="margin-left: 0.5rem"
+                  :disabled="eksReconnecting === cluster.name"
                 >
-                  SSO Login
+                  {{ eksReconnecting === cluster.name ? "Reconnecting…" : "Reconnect" }}
+                </button>
+                <button
+                  v-if="cluster.enabled"
+                  @click="reauthenticate(cluster.profile)"
+                  :class="[
+                    'btn',
+                    'btn-sm',
+                    eksStatus(cluster.name)?.state === 'auth_expired' ? 'btn-warning' : 'btn-outline-secondary',
+                  ]"
+                  style="margin-left: 0.5rem"
+                >
+                  Re-authenticate
                 </button>
                 <button
                   @click="deleteEKSCluster(cluster.id)"
@@ -144,7 +182,6 @@
             </tr>
           </tbody>
         </table>
-        <pre v-if="eksLoginOutput" class="empty-state-box" style="white-space: pre-wrap">{{ eksLoginOutput }}</pre>
       </section>
     </div>
 
@@ -275,8 +312,8 @@
               <input id="eksRegion" v-model="eksForm.region" type="text" class="form-control" placeholder="us-east-1" />
             </div>
             <div class="mb-3">
-              <button type="button" class="btn btn-sm btn-outline-secondary" @click="eksLogin(eksForm.profile)">
-                SSO Login
+              <button type="button" class="btn btn-sm btn-outline-secondary" @click="reauthenticate(eksForm.profile)">
+                Re-authenticate
               </button>
               <button
                 type="button"
@@ -290,14 +327,28 @@
               <div v-if="eksIdentity">
                 <small>Signed in as {{ eksIdentity }}</small>
               </div>
-              <pre v-if="eksLoginOutput" style="white-space: pre-wrap; font-size: 0.8em">{{ eksLoginOutput }}</pre>
+              <pre v-if="eksAuthMessage" style="white-space: pre-wrap; font-size: 0.8em">{{ eksAuthMessage }}</pre>
             </div>
             <div class="mb-3">
-              <label for="eksName" class="form-label">Cluster Name *</label>
-              <input id="eksName" v-model="eksForm.name" type="text" class="form-control" list="eksDiscovered" />
+              <label for="eksClusterName" class="form-label">EKS Cluster Name *</label>
+              <input
+                id="eksClusterName"
+                v-model="eksForm.clusterName"
+                type="text"
+                class="form-control"
+                list="eksDiscovered"
+                @change="eksForm.name = eksForm.name || eksForm.clusterName"
+              />
               <datalist id="eksDiscovered">
                 <option v-for="name in eksDiscovered" :key="name" :value="name"></option>
               </datalist>
+            </div>
+            <div class="mb-3">
+              <label for="eksName" class="form-label">Label *</label>
+              <input id="eksName" v-model="eksForm.name" type="text" class="form-control" />
+              <small
+                >Unique name shown in the Logs page (distinguishes same-named clusters in different accounts).</small
+              >
             </div>
             <div class="mb-3">
               <label for="eksNamespace" class="form-label">Namespace</label>
@@ -350,11 +401,22 @@ import type {
   EKSCluster,
   EKSClusterStatus,
   EKSClustersResponse,
+  EKSLoginResponse,
+  EKSAuthStatus,
 } from "@/types";
+
+const EKS_STATE_LABELS: Record<EKSClusterStatus["state"], string> = {
+  connecting: "Connecting…",
+  connected: "Connected",
+  auth_expired: "Auth expired",
+  needs_reauth: "Needs re-auth",
+  error: "Error",
+};
 
 const emptyEKSForm = (): EKSCluster => ({
   id: 0,
   name: "",
+  clusterName: "",
   region: "us-east-1",
   profile: "",
   namespace: "",
@@ -399,7 +461,11 @@ export default defineComponent(
         eksDiscovered: [] as string[],
         eksDiscovering: false,
         eksIdentity: "",
-        eksLoginOutput: "",
+        eksAuthMessage: "",
+        eksAuthURL: "",
+        eksAuthPoll: undefined as ReturnType<typeof setInterval> | undefined,
+        eksReconnecting: "",
+        eksImporting: false,
         eksPollTimer: undefined as ReturnType<typeof setInterval> | undefined,
       };
     },
@@ -423,6 +489,7 @@ export default defineComponent(
 
     unmounted() {
       clearInterval(this.eksPollTimer);
+      clearInterval(this.eksAuthPoll);
     },
 
     methods: {
@@ -626,7 +693,6 @@ export default defineComponent(
         this.eksForm = cluster ? { ...cluster } : emptyEKSForm();
         this.eksDiscovered = [];
         this.eksIdentity = "";
-        this.eksLoginOutput = "";
         this.showEKSModal = true;
       },
 
@@ -639,8 +705,9 @@ export default defineComponent(
           this.eksDiscovered = resp.clusters;
           if (resp.clusters.length === 0) {
             alert("No EKS clusters found for this profile/region.");
-          } else if (!this.eksForm.name) {
-            this.eksForm.name = resp.clusters[0];
+          } else if (!this.eksForm.clusterName) {
+            this.eksForm.clusterName = resp.clusters[0];
+            this.eksForm.name = this.eksForm.name || resp.clusters[0];
           }
         } catch (error) {
           alert(`Discovery failed: ${(error as Error).message}`);
@@ -649,15 +716,120 @@ export default defineComponent(
         }
       },
 
-      async eksLogin(profile: string) {
-        this.eksLoginOutput = "Starting aws sso login…";
+      eksStateLabel(name: string): string {
+        const st = this.eksStatus(name);
+        if (!st) return "Connecting…";
+        return st.state === "connected" ? `Connected (${st.containers} containers)` : EKS_STATE_LABELS[st.state];
+      },
+
+      eksStateClass(name: string): string {
+        const state = this.eksStatus(name)?.state;
+        if (state === "connected") return "text-success";
+        if (state === "auth_expired" || state === "needs_reauth") return "text-warning";
+        if (state === "error") return "text-danger";
+        return "";
+      },
+
+      // Re-authenticate: for SSO profiles, start the device-code login and open the AWS
+      // verification page in the user's browser (the Okta/IdP sign-in happens there; we
+      // don't automate it). For other profiles (credentials written by an Okta tool), show
+      // what to run. Then poll until the credentials are valid and reconnect the clusters.
+      async reauthenticate(profile: string) {
+        // Open the tab synchronously in the click handler so popup blockers allow it.
+        const tab = window.open("", "_blank");
+        this.eksAuthURL = "";
+        this.eksAuthMessage = "Starting sign-in…";
         try {
-          const resp = await API.post<{ output: string }>("/api/eks/login", { profile });
-          this.eksLoginOutput =
-            resp.output + "\nComplete the sign-in in your browser; clusters reconnect automatically.";
+          const resp = await API.post<EKSLoginResponse>("/api/eks/login", { profile });
+          if (resp.url) {
+            this.eksAuthURL = resp.url;
+            if (tab) tab.location.href = resp.url;
+            this.eksAuthMessage = "Complete the sign-in in the opened browser tab. Waiting for new credentials…";
+          } else {
+            tab?.close();
+            this.eksAuthMessage = resp.error
+              ? `${resp.error}\n${resp.output || ""}\n${resp.hint}`
+              : `${resp.hint}\nWaiting for new credentials…`;
+          }
         } catch (error) {
-          this.eksLoginOutput = `SSO login failed: ${(error as Error).message}`;
+          tab?.close();
+          this.eksAuthMessage = `Sign-in failed: ${(error as Error).message}`;
+          return;
         }
+        this.pollAuth(profile);
+      },
+
+      pollAuth(profile: string) {
+        clearInterval(this.eksAuthPoll);
+        const started = Date.now();
+        this.eksAuthPoll = setInterval(async () => {
+          if (Date.now() - started > 5 * 60 * 1000) {
+            clearInterval(this.eksAuthPoll);
+            this.eksAuthMessage += "\nStopped waiting after 5 minutes. Click Reconnect once you've signed in.";
+            return;
+          }
+          try {
+            const params = new URLSearchParams({ profile });
+            const st = await API.get<EKSAuthStatus>(`/api/eks/auth-status?${params}`);
+            if (!st.valid) return;
+            clearInterval(this.eksAuthPoll);
+            this.eksAuthURL = "";
+            this.eksAuthMessage = `Signed in as ${st.identity}. Reconnecting clusters…`;
+            const clusters = this.eksClusters.filter((c) => c.enabled && c.profile === profile);
+            const failures: string[] = [];
+            for (const c of clusters) {
+              try {
+                await API.post(`/api/eks/reconnect/${encodeURIComponent(c.name)}`, {});
+              } catch (error) {
+                failures.push(`${c.name}: ${(error as Error).message}`);
+              }
+            }
+            this.eksAuthMessage = failures.length
+              ? `Signed in as ${st.identity}, but some clusters failed:\n${failures.join("\n")}`
+              : `Signed in as ${st.identity}. ${clusters.length} cluster(s) reconnected.`;
+            await this.loadEKSClusters();
+          } catch (error) {
+            console.error("auth status check failed:", error);
+          }
+        }, 3000);
+      },
+
+      async reconnectEKS(name: string) {
+        this.eksReconnecting = name;
+        try {
+          await API.post(`/api/eks/reconnect/${encodeURIComponent(name)}`, {});
+        } catch (error) {
+          alert(`Reconnect failed: ${(error as Error).message}`);
+        } finally {
+          this.eksReconnecting = "";
+          await this.loadEKSClusters();
+        }
+      },
+
+      async importKubeconfig() {
+        this.eksImporting = true;
+        try {
+          const resp = await API.post<{ added: number }>("/api/eks/kubeconfig/import", {});
+          await this.loadEKSClusters();
+          alert(
+            resp.added
+              ? `Imported ${resp.added} cluster(s) from kubeconfig. They're disabled; tick "On" to stream logs.`
+              : "No new EKS clusters found in kubeconfig."
+          );
+        } catch (error) {
+          alert(`Kubeconfig import failed: ${(error as Error).message}`);
+        } finally {
+          this.eksImporting = false;
+        }
+      },
+
+      async toggleEKSCluster(cluster: EKSCluster) {
+        try {
+          await API.put(`/api/eks/clusters/${cluster.id}`, { ...cluster, enabled: !cluster.enabled });
+        } catch (error) {
+          alert(`Failed to update cluster: ${(error as Error).message}`);
+        }
+        await this.loadEKSClusters();
       },
 
       async saveEKSCluster() {
