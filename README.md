@@ -119,6 +119,7 @@ export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 ## Features
 
 - **Real-time streaming** - Monitor all Docker containers simultaneously
+- **EKS pod logs** - Stream Kubernetes pod logs from AWS EKS clusters alongside Docker (see [EKS Kubernetes Logs](#eks-kubernetes-logs))
 - **Smart parsing** - Structured logs (key=value), JSON, timestamps, log levels
 - **Interactive filtering** - Container selection, log level, live search, trace filtering
 - **SQL analysis** - Query statistics, N+1 detection, slowest queries
@@ -208,8 +209,104 @@ See [cmd/analyze/README.md](cmd/analyze/README.md) for full documentation.
 ## Requirements
 
 - Go 1.21+
-- Docker daemon running
+- Docker daemon running (optional when only EKS clusters are configured)
 - PostgreSQL (optional, for EXPLAIN feature)
+- AWS CLI v2 + credentials (optional, for EKS logs)
+
+## EKS Kubernetes Logs
+
+Pod logs from EKS clusters flow through the same pipeline as Docker logs: same parser,
+filters, trace IDs, and SQL analysis. Each pod container shows up on the Logs page grouped
+under `eks:<cluster>` and named `<namespace>/<pod>/<container>`.
+
+### Setup
+
+1. **Sign in to AWS** with any method the AWS CLI supports. The viewer uses the standard
+   credential chain (env vars, `~/.aws/config` profiles, SSO cache, instance roles):
+
+   ```bash
+   aws configure sso --profile dev      # one-time SSO profile setup
+   aws sso login --profile dev          # or use "SSO Login" in Settings
+   # or: export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=...
+   ```
+
+2. **Add a cluster** in **Settings → EKS Clusters → + Add EKS Cluster**:
+   - **AWS Profile** – profile from `~/.aws/config` (empty = default chain / env vars)
+   - **Region** – e.g. `us-east-1`; click **Discover Clusters** to list clusters and verify credentials
+   - **Namespace** – limit to one namespace (empty = all)
+   - **Label Selector** – standard Kubernetes selector, e.g. `app=api,tier!=batch`
+   - **Initial history** – minutes of logs to load when a stream starts (like `kubectl logs --since`)
+
+   Example configuration (`POST /api/eks/clusters`):
+
+   ```json
+   {
+     "name": "staging",
+     "region": "us-east-1",
+     "profile": "dev",
+     "namespace": "api",
+     "labelSelector": "app.kubernetes.io/name=api",
+     "sinceMinutes": 15,
+     "enabled": true
+   }
+   ```
+
+Running pods are re-discovered every 5 seconds; each running container is followed like
+`kubectl logs -f --timestamps`. If credentials expire, the cluster shows an error in Settings
+and reconnects automatically after you sign in again.
+
+Credentials are never stored by the viewer: AWS SDK credentials are cached in memory, and
+EKS bearer tokens (presigned STS `GetCallerIdentity`, equivalent to `aws eks get-token`) are
+generated in-process and refreshed every 14 minutes.
+
+### Docker Compose
+
+`docker-compose.yml` mounts `~/.aws` into the container. Run `aws sso login` on the host; the
+container picks up the shared SSO token cache. (The "SSO Login" button needs the AWS CLI on
+the machine running the viewer.)
+
+### Required permissions
+
+IAM policy for the identity used by the viewer:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["eks:ListClusters", "eks:DescribeCluster"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+`sts:GetCallerIdentity` needs no permission. The identity must also be authorized **inside**
+the cluster to read pods and logs, via an EKS access entry or the `aws-auth` ConfigMap,
+bound to a role like:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: log-viewer
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+```
+
+With access entries, the managed `AmazonEKSViewPolicy` covers this.
+
+### API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/eks/clusters` | Saved clusters + live connection status |
+| POST / PUT / DELETE | `/api/eks/clusters[/{id}]` | Manage clusters |
+| GET | `/api/eks/discover?profile=&region=` | Verify credentials, list clusters |
+| POST | `/api/eks/login` | Start `aws sso login` for `{"profile": "..."}` |
 
 ## Development
 

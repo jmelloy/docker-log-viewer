@@ -984,7 +984,11 @@ func main() {
 		slog.Info("cleanup complete")
 	}()
 
-	if err := app.Run(":9000"); err != nil {
+	addr := ":9000"
+	if port := os.Getenv("PORT"); port != "" {
+		addr = ":" + port
+	}
+	if err := app.Run(addr); err != nil {
 		slog.Error("failed to run server", "error", err)
 		os.Exit(1)
 	}

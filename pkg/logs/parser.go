@@ -409,7 +409,13 @@ func extractRequestFields(line string) (map[string]string, string) {
 					}
 
 					for k, data := range jsonFields {
-						fields[k] = data.(string)
+						if str, ok := data.(string); ok {
+							fields[k] = str
+						} else if _, exists := fields[k]; !exists {
+							// Non-string values (numbers, objects) used to panic and kill the stream.
+							encoded, _ := json.Marshal(data)
+							fields[k] = string(encoded)
+						}
 					}
 
 					return fields, jsonPart

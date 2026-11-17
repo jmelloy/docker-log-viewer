@@ -570,3 +570,14 @@ func TestANSIAwareFieldParsing(t *testing.T) {
 		})
 	}
 }
+
+func TestParseLogLineTrailingJSONWithNonStringValues(t *testing.T) {
+	line := `2025-11-17T20:04:14Z info exporter metrics {"kind": "exporter", "count": 3, "resource": {"service.name": "api"}}`
+	entry := ParseLogLine(line) // used to panic: interface {} is float64, not string
+	if entry == nil {
+		t.Fatal("expected entry")
+	}
+	if entry.Fields["kind"] != "exporter" || entry.Fields["count"] != "3" || entry.Fields["resource"] != `{"service.name":"api"}` {
+		t.Fatalf("unexpected fields: %#v", entry.Fields)
+	}
+}

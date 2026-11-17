@@ -121,6 +121,29 @@ export interface Server {
   updatedAt: string;
 }
 
+export interface EKSCluster {
+  id: number;
+  name: string;
+  region: string;
+  profile: string;
+  namespace: string;
+  labelSelector: string;
+  sinceMinutes: number;
+  enabled: boolean;
+}
+
+export interface EKSClusterStatus {
+  name: string;
+  connected: boolean;
+  error?: string;
+  containers: number;
+}
+
+export interface EKSClustersResponse {
+  clusters: EKSCluster[];
+  status: EKSClusterStatus[];
+}
+
 export interface DatabaseURL {
   id: number;
   name: string;

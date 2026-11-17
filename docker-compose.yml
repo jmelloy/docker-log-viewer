@@ -8,6 +8,7 @@ services:
     volumes:
       - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
+      - ~/.aws:/root/.aws # AWS credentials/SSO cache for EKS logs
       - /app/tmp
       - /app/bin
       - go-modules:/go/pkg/mod

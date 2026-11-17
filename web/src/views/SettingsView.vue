@@ -82,6 +82,70 @@
           </tbody>
         </table>
       </section>
+
+      <section class="settings-section">
+        <div class="section-header">
+          <h2>EKS Clusters</h2>
+          <button @click="openEKSModal(null)" class="btn btn-primary">+ Add EKS Cluster</button>
+        </div>
+
+        <div v-if="eksClusters.length === 0" class="empty-state-box">
+          No EKS clusters configured. Pod logs from added clusters appear on the Logs page under "eks:&lt;cluster&gt;".
+        </div>
+
+        <table v-else class="table table-striped">
+          <thead>
+            <tr>
+              <th>Cluster</th>
+              <th>Profile / Region</th>
+              <th>Namespace</th>
+              <th>Label Selector</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="cluster in eksClusters" :key="cluster.id">
+              <td>{{ cluster.name }}</td>
+              <td>{{ cluster.profile || "(default)" }} / {{ cluster.region }}</td>
+              <td>{{ cluster.namespace || "(all)" }}</td>
+              <td>{{ cluster.labelSelector || "(all pods)" }}</td>
+              <td>
+                <span v-if="!cluster.enabled">Disabled</span>
+                <span
+                  v-else-if="eksStatus(cluster.name)?.error"
+                  class="text-danger"
+                  :title="eksStatus(cluster.name)?.error"
+                >
+                  Error: {{ eksStatus(cluster.name)?.error }}
+                </span>
+                <span v-else-if="eksStatus(cluster.name)?.connected" class="text-success">
+                  Connected ({{ eksStatus(cluster.name)?.containers }} containers)
+                </span>
+                <span v-else>Connecting…</span>
+              </td>
+              <td>
+                <button @click="openEKSModal(cluster)" class="btn btn-sm btn-outline-primary">Edit</button>
+                <button
+                  @click="eksLogin(cluster.profile)"
+                  class="btn btn-sm btn-outline-secondary"
+                  style="margin-left: 0.5rem"
+                >
+                  SSO Login
+                </button>
+                <button
+                  @click="deleteEKSCluster(cluster.id)"
+                  class="btn btn-sm btn-outline-danger"
+                  style="margin-left: 0.5rem"
+                >
+                  Delete
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <pre v-if="eksLoginOutput" class="empty-state-box" style="white-space: pre-wrap">{{ eksLoginOutput }}</pre>
+      </section>
     </div>
 
     <!-- Server Modal -->
@@ -186,6 +250,91 @@
         </div>
       </div>
     </div>
+
+    <!-- EKS Cluster Modal -->
+    <div
+      v-if="showEKSModal"
+      class="modal"
+      style="display: block; background: rgba(0, 0, 0, 0.5)"
+      @click.self="showEKSModal = false"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">{{ eksForm.id ? "Edit EKS Cluster" : "Add EKS Cluster" }}</h5>
+            <button type="button" class="btn-close" @click="showEKSModal = false"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="eksProfile" class="form-label">AWS Profile</label>
+              <input id="eksProfile" v-model="eksForm.profile" type="text" class="form-control" placeholder="default" />
+              <small>From ~/.aws/config. Leave empty for env vars / default credential chain.</small>
+            </div>
+            <div class="mb-3">
+              <label for="eksRegion" class="form-label">Region *</label>
+              <input id="eksRegion" v-model="eksForm.region" type="text" class="form-control" placeholder="us-east-1" />
+            </div>
+            <div class="mb-3">
+              <button type="button" class="btn btn-sm btn-outline-secondary" @click="eksLogin(eksForm.profile)">
+                SSO Login
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-primary"
+                style="margin-left: 0.5rem"
+                :disabled="eksDiscovering"
+                @click="discoverEKSClusters"
+              >
+                {{ eksDiscovering ? "Discovering…" : "Discover Clusters" }}
+              </button>
+              <div v-if="eksIdentity">
+                <small>Signed in as {{ eksIdentity }}</small>
+              </div>
+              <pre v-if="eksLoginOutput" style="white-space: pre-wrap; font-size: 0.8em">{{ eksLoginOutput }}</pre>
+            </div>
+            <div class="mb-3">
+              <label for="eksName" class="form-label">Cluster Name *</label>
+              <input id="eksName" v-model="eksForm.name" type="text" class="form-control" list="eksDiscovered" />
+              <datalist id="eksDiscovered">
+                <option v-for="name in eksDiscovered" :key="name" :value="name"></option>
+              </datalist>
+            </div>
+            <div class="mb-3">
+              <label for="eksNamespace" class="form-label">Namespace</label>
+              <input
+                id="eksNamespace"
+                v-model="eksForm.namespace"
+                type="text"
+                class="form-control"
+                placeholder="all namespaces"
+              />
+            </div>
+            <div class="mb-3">
+              <label for="eksSelector" class="form-label">Label Selector</label>
+              <input
+                id="eksSelector"
+                v-model="eksForm.labelSelector"
+                type="text"
+                class="form-control"
+                placeholder="app=api,tier!=batch"
+              />
+            </div>
+            <div class="mb-3">
+              <label for="eksSince" class="form-label">Initial history (minutes)</label>
+              <input id="eksSince" v-model.number="eksForm.sinceMinutes" type="number" min="0" class="form-control" />
+            </div>
+            <div class="form-check">
+              <input id="eksEnabled" v-model="eksForm.enabled" type="checkbox" class="form-check-input" />
+              <label for="eksEnabled" class="form-check-label">Stream logs from this cluster</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="showEKSModal = false">Cancel</button>
+            <button type="button" class="btn btn-primary" @click="saveEKSCluster">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -193,7 +342,26 @@
 import { parseHeaders, serverHeaders } from "@/utils/headers";
 import { defineComponent } from "vue";
 import { API } from "@/utils/api";
-import type { Server, DatabaseURL, CreateServerResponse, CreateDatabaseURLResponse } from "@/types";
+import type {
+  Server,
+  DatabaseURL,
+  CreateServerResponse,
+  CreateDatabaseURLResponse,
+  EKSCluster,
+  EKSClusterStatus,
+  EKSClustersResponse,
+} from "@/types";
+
+const emptyEKSForm = (): EKSCluster => ({
+  id: 0,
+  name: "",
+  region: "us-east-1",
+  profile: "",
+  namespace: "",
+  labelSelector: "",
+  sinceMinutes: 15,
+  enabled: true,
+});
 
 export default defineComponent(
   // Export component definition (template will be provided by SPA loader)
@@ -223,6 +391,16 @@ export default defineComponent(
         // Editing state
         editingServer: null as Server | null,
         editingDatabase: null as DatabaseURL | null,
+        // EKS
+        eksClusters: [] as EKSCluster[],
+        eksStatuses: [] as EKSClusterStatus[],
+        showEKSModal: false,
+        eksForm: emptyEKSForm(),
+        eksDiscovered: [] as string[],
+        eksDiscovering: false,
+        eksIdentity: "",
+        eksLoginOutput: "",
+        eksPollTimer: undefined as ReturnType<typeof setInterval> | undefined,
       };
     },
 
@@ -238,6 +416,13 @@ export default defineComponent(
     async mounted() {
       await this.loadServers();
       await this.loadDatabaseURLs();
+      await this.loadEKSClusters();
+      // Connection status changes as the backend polls clusters.
+      this.eksPollTimer = setInterval(() => this.loadEKSClusters(), 5000);
+    },
+
+    unmounted() {
+      clearInterval(this.eksPollTimer);
     },
 
     methods: {
@@ -420,6 +605,84 @@ export default defineComponent(
         } catch (error) {
           console.error("Error deleting database URL:", error);
           alert("Error deleting database URL");
+        }
+      },
+
+      async loadEKSClusters() {
+        try {
+          const resp = await API.get<EKSClustersResponse>("/api/eks/clusters");
+          this.eksClusters = resp.clusters || [];
+          this.eksStatuses = resp.status || [];
+        } catch (error) {
+          console.error("Error loading EKS clusters:", error);
+        }
+      },
+
+      eksStatus(name: string): EKSClusterStatus | undefined {
+        return this.eksStatuses.find((s) => s.name === name);
+      },
+
+      openEKSModal(cluster: EKSCluster | null) {
+        this.eksForm = cluster ? { ...cluster } : emptyEKSForm();
+        this.eksDiscovered = [];
+        this.eksIdentity = "";
+        this.eksLoginOutput = "";
+        this.showEKSModal = true;
+      },
+
+      async discoverEKSClusters() {
+        this.eksDiscovering = true;
+        try {
+          const params = new URLSearchParams({ profile: this.eksForm.profile, region: this.eksForm.region });
+          const resp = await API.get<{ identity: string; clusters: string[] }>(`/api/eks/discover?${params}`);
+          this.eksIdentity = resp.identity;
+          this.eksDiscovered = resp.clusters;
+          if (resp.clusters.length === 0) {
+            alert("No EKS clusters found for this profile/region.");
+          } else if (!this.eksForm.name) {
+            this.eksForm.name = resp.clusters[0];
+          }
+        } catch (error) {
+          alert(`Discovery failed: ${(error as Error).message}`);
+        } finally {
+          this.eksDiscovering = false;
+        }
+      },
+
+      async eksLogin(profile: string) {
+        this.eksLoginOutput = "Starting aws sso login…";
+        try {
+          const resp = await API.post<{ output: string }>("/api/eks/login", { profile });
+          this.eksLoginOutput =
+            resp.output + "\nComplete the sign-in in your browser; clusters reconnect automatically.";
+        } catch (error) {
+          this.eksLoginOutput = `SSO login failed: ${(error as Error).message}`;
+        }
+      },
+
+      async saveEKSCluster() {
+        try {
+          if (this.eksForm.id) {
+            await API.put(`/api/eks/clusters/${this.eksForm.id}`, this.eksForm);
+          } else {
+            await API.post("/api/eks/clusters", this.eksForm);
+          }
+          this.showEKSModal = false;
+          await this.loadEKSClusters();
+        } catch (error) {
+          alert(`Failed to save EKS cluster: ${(error as Error).message}`);
+        }
+      },
+
+      async deleteEKSCluster(id: number) {
+        if (!confirm("Delete this EKS cluster? Its log streams will stop.")) {
+          return;
+        }
+        try {
+          await API.delete(`/api/eks/clusters/${id}`);
+          await this.loadEKSClusters();
+        } catch (error) {
+          alert(`Error deleting EKS cluster: ${(error as Error).message}`);
         }
       },
 
