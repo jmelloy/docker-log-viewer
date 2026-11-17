@@ -129,13 +129,32 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 		return fmt.Errorf("failed to get container logs: %w", err)
 	}
 
-	go func() {
+	go streamLines(ctx, containerID, reader, true, logChan, onStreamEnd)
+	return nil
+}
+
+// shortID truncates Docker IDs for logging; other source IDs pass through.
+func shortID(id string) string {
+	if len(id) == 64 {
+		return id[:12]
+	}
+	return id
+}
+
+// streamLines reads timestamp-prefixed log lines from reader, groups multi-line
+// entries, parses them, and sends them to logChan until EOF or ctx cancellation.
+// demux strips Docker's 8-byte stream multiplexing headers.
+func streamLines(ctx context.Context, containerID string, reader io.ReadCloser, demux bool, logChan chan<- ContainerMessage, onStreamEnd func()) {
+	logID := shortID(containerID)
+	// Trailing newline flushes a final unterminated line at EOF.
+	src := io.MultiReader(reader, strings.NewReader("\n"))
+	{
 		channelClosed := false
 		defer func() {
 			if r := recover(); r != nil {
 				// Channel was closed, this is expected during shutdown
 				channelClosed = true
-				slog.Debug("Recovered from panic in log stream (likely channel closed)", "container_id", containerID[:12], "panic", r)
+				slog.Debug("Recovered from panic in log stream (likely channel closed)", "container_id", logID, "panic", r)
 			}
 		}()
 		defer reader.Close()
@@ -200,32 +219,35 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 
 		for {
 			if channelClosed {
-				slog.Info("Container log channel closed, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+				slog.Info("Container log channel closed, stopping stream", "container_id", logID, "linesProcessed", lineCount)
 				return
 			}
 			select {
 			case <-ctx.Done():
 				flushBuffered()
 				if channelClosed {
-					slog.Info("Container log channel closed during flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+					slog.Info("Container log channel closed during flush, stopping stream", "container_id", logID, "linesProcessed", lineCount)
 				} else {
-					slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+					slog.Info("Container context cancelled, stopping stream", "container_id", logID, "linesProcessed", lineCount)
 				}
 				return
 			default:
-				n, err := reader.Read(buf)
+				n, err := src.Read(buf)
 				if n > 0 {
-					// slog.Debug("Container read bytes from Docker", "container_id", containerID[:12], "bytes", n)
+					// slog.Debug("Container read bytes from Docker", "container_id", logID, "bytes", n)
 					data := buf[:n]
 
-					cleanedData := make([]byte, 0, len(data))
-					i := 0
-					for i < len(data) {
-						if i+8 <= len(data) && (data[i] == 0 || data[i] == 1 || data[i] == 2) {
-							i += 8
-						} else {
-							cleanedData = append(cleanedData, data[i])
-							i++
+					cleanedData := data
+					if demux {
+						cleanedData = make([]byte, 0, len(data))
+						i := 0
+						for i < len(data) {
+							if i+8 <= len(data) && (data[i] == 0 || data[i] == 1 || data[i] == 2) {
+								i += 8
+							} else {
+								cleanedData = append(cleanedData, data[i])
+								i++
+							}
 						}
 					}
 
@@ -233,7 +255,7 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 					leftover = nil
 
 					lines := strings.Split(string(allData), "\n")
-					// slog.Debug("Container split into lines", "container_id", containerID[:12], "lines", len(lines))
+					// slog.Debug("Container split into lines", "container_id", logID, "lines", len(lines))
 
 					emptyCount := 0
 					sentCount := 0
@@ -305,39 +327,37 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 						}
 					}
 					// if sentCount > 0 {
-					// 	slog.Debug("Container sent messages to logChan", "container_id", containerID[:12], "messages", sentCount)
+					// 	slog.Debug("Container sent messages to logChan", "container_id", logID, "messages", sentCount)
 					// }
 					// if emptyCount > 0 {
-					// 	slog.Debug("Container skipped empty lines", "container_id", containerID[:12], "lines", emptyCount)
+					// 	slog.Debug("Container skipped empty lines", "container_id", logID, "lines", emptyCount)
 					// }
 					if lineCount > 0 && lineCount%100 == 0 {
-						slog.Info("Container processed log lines", "container_id", containerID[:12], "lines", lineCount)
+						slog.Info("Container processed log lines", "container_id", logID, "lines", lineCount)
 					}
 				}
 
 				if err == io.EOF {
 					flushBuffered()
 					if channelClosed {
-						slog.Info("Container log channel closed during EOF flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+						slog.Info("Container log channel closed during EOF flush, stopping stream", "container_id", logID, "linesProcessed", lineCount)
 					} else {
-						slog.Info("Container reached EOF, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+						slog.Info("Container reached EOF, stopping stream", "container_id", logID, "linesProcessed", lineCount)
 					}
 					return
 				}
 				if err != nil {
 					flushBuffered()
 					if channelClosed {
-						slog.Info("Container log channel closed during error flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
+						slog.Info("Container log channel closed during error flush, stopping stream", "container_id", logID, "linesProcessed", lineCount)
 					} else {
-						slog.Error("Container log stream error, stopping", "container_id", containerID[:12], "error", err, "linesProcessed", lineCount)
+						slog.Error("Container log stream error, stopping", "container_id", logID, "error", err, "linesProcessed", lineCount)
 					}
 					return
 				}
 			}
 		}
-	}()
-
-	return nil
+	}
 }
 
 func (dc *DockerClient) Close() error {

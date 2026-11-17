@@ -37,6 +37,12 @@ type Controller struct {
 	activeStreams       map[string]bool
 	activeStreamsMutex  sync.RWMutex
 	decoder             *schema.Decoder
+
+	// EKS manages EKS cluster log sources; nil disables EKS endpoints' live status.
+	EKS *logs.EKSManager
+	// ListContainers lists containers across all sources (Docker + EKS).
+	// Defaults to Docker only when nil.
+	ListContainers func(ctx context.Context) ([]logs.Container, error)
 }
 
 // Client represents a WebSocket client connection
