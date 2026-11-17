@@ -2,6 +2,7 @@ package logs
 
 import (
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -89,7 +90,19 @@ func kubeconfigEKSClusters(cfg *clientcmdapi.Config) []KubeconfigEKSCluster {
 		c.Label = preferredLabel(c.ClusterName, c.Contexts)
 		out = append(out, *c)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Label < out[j].Label })
+	// Ties on Label (same cluster name in two accounts) must be deterministic:
+	// a cluster with a context literally named Label wins the bare label,
+	// then profile breaks any remaining tie. Map iteration order is random.
+	named := func(c KubeconfigEKSCluster) bool { return slices.Contains(c.Contexts, c.Label) }
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Label != out[j].Label {
+			return out[i].Label < out[j].Label
+		}
+		if ni, nj := named(out[i]), named(out[j]); ni != nj {
+			return ni
+		}
+		return out[i].Profile < out[j].Profile
+	})
 	return out
 }
 
