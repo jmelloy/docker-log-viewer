@@ -30,7 +30,11 @@ type ContainersUpdateMessage struct {
 
 // HandleContainers lists all running containers with associated metadata
 func (c *Controller) HandleContainers(w http.ResponseWriter, r *http.Request) {
-	containers, err := c.docker.ListRunningContainers(c.ctx)
+	list := c.docker.ListRunningContainers
+	if c.ListContainers != nil {
+		list = c.ListContainers
+	}
+	containers, err := list(c.ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

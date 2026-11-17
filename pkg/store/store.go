@@ -139,6 +139,25 @@ func (ContainerRetention) TableName() string {
 	return "container_retention"
 }
 
+// EKSCluster is a saved EKS cluster whose pod logs are streamed.
+type EKSCluster struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	Name          string    `gorm:"not null;uniqueIndex" json:"name"` // unique label
+	ClusterName   string    `json:"clusterName"`                      // EKS cluster name; empty = Name
+	Region        string    `gorm:"not null" json:"region"`
+	Profile       string    `json:"profile"`
+	Namespace     string    `json:"namespace"`
+	LabelSelector string    `json:"labelSelector"`
+	SinceMinutes  int       `json:"sinceMinutes"`
+	Enabled       bool      `json:"enabled"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+func (EKSCluster) TableName() string {
+	return "eks_clusters"
+}
+
 // SQLQuery represents a SQL query extracted from logs
 type SQLQuery struct {
 	ID               uint           `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -974,4 +993,29 @@ func (s *Store) GetSQLQueryDetailByHash(queryHash string) (*SQLQueryDetail, erro
 	}
 
 	return detail, nil
+}
+
+// ListEKSClusters returns all saved EKS clusters ordered by name.
+func (s *Store) ListEKSClusters() ([]EKSCluster, error) {
+	var clusters []EKSCluster
+	if err := s.db.Order("name").Find(&clusters).Error; err != nil {
+		return nil, fmt.Errorf("failed to list EKS clusters: %w", err)
+	}
+	return clusters, nil
+}
+
+// SaveEKSCluster creates (ID == 0) or updates an EKS cluster.
+func (s *Store) SaveEKSCluster(cluster *EKSCluster) error {
+	if err := s.db.Save(cluster).Error; err != nil {
+		return fmt.Errorf("failed to save EKS cluster: %w", err)
+	}
+	return nil
+}
+
+// DeleteEKSCluster deletes an EKS cluster by ID.
+func (s *Store) DeleteEKSCluster(id uint) error {
+	if err := s.db.Delete(&EKSCluster{}, id).Error; err != nil {
+		return fmt.Errorf("failed to delete EKS cluster: %w", err)
+	}
+	return nil
 }

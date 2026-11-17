@@ -119,6 +119,7 @@ export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 ## Features
 
 - **Real-time streaming** - Monitor all Docker containers simultaneously
+- **EKS pod logs** - Stream Kubernetes pod logs from AWS EKS clusters alongside Docker (see [EKS Kubernetes Logs](#eks-kubernetes-logs))
 - **Smart parsing** - Structured logs (key=value), JSON, timestamps, log levels
 - **Interactive filtering** - Container selection, log level, live search, trace filtering
 - **SQL analysis** - Query statistics, N+1 detection, slowest queries
@@ -208,8 +209,146 @@ See [cmd/analyze/README.md](cmd/analyze/README.md) for full documentation.
 ## Requirements
 
 - Go 1.21+
-- Docker daemon running
+- Docker daemon running (optional when only EKS clusters are configured)
 - PostgreSQL (optional, for EXPLAIN feature)
+- AWS CLI v2 + credentials (optional, for EKS logs)
+
+## EKS Kubernetes Logs
+
+Pod logs from EKS clusters flow through the same pipeline as Docker logs: same parser,
+filters, trace IDs, and SQL analysis. Each pod container shows up on the Logs page grouped
+under `eks:<cluster>` and named `<namespace>/<pod>/<container>`.
+
+### Setup
+
+1. **Sign in to AWS** with any method the AWS CLI supports. The viewer uses the standard
+   credential chain (env vars, `~/.aws/config` profiles, SSO cache, instance roles):
+
+   ```bash
+   aws configure sso --profile dev      # one-time SSO profile setup
+   aws sso login --profile dev          # or use "SSO Login" in Settings
+   # or: export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=...
+   ```
+
+2. **Add clusters.** On first start the viewer imports every EKS context from your kubeconfig
+   (`$KUBECONFIG` or `~/.kube/config`). It takes the cluster name, region and profile from the
+   `aws eks get-token` exec args/env, or from the cluster ARN. Imported clusters are **disabled**,
+   so a kubeconfig full of prod contexts doesn't start streaming everything: tick **On** for the
+   ones you want. Contexts pointing at the same cluster and profile are merged. Same-named clusters
+   in different accounts get distinct labels. **Refresh from kubeconfig** imports contexts added later.
+
+   To add a cluster manually, use **Settings → EKS Clusters → + Add EKS Cluster**:
+   - **AWS Profile** – profile from `~/.aws/config` (empty = default chain / env vars)
+   - **Region** – e.g. `us-east-1`; click **Discover Clusters** to list clusters and verify credentials
+   - **Namespace** – limit to one namespace (empty = all)
+   - **Label Selector** – standard Kubernetes selector, e.g. `app=api,tier!=batch`
+   - **Initial history** – minutes of logs to load when a stream starts (like `kubectl logs --since`)
+
+   Example configuration (`POST /api/eks/clusters`):
+
+   ```json
+   {
+     "name": "staging",
+     "clusterName": "dnsid-staging",
+     "region": "us-east-1",
+     "profile": "dev",
+     "namespace": "api",
+     "labelSelector": "app.kubernetes.io/name=api",
+     "sinceMinutes": 15,
+     "enabled": true
+   }
+   ```
+
+Running pods are re-discovered every 5 seconds; each running container is followed like
+`kubectl logs -f --timestamps`.
+
+### Expired sessions (Okta / SSO, e.g. a 24-hour login cycle)
+
+Each cluster shows its state in Settings:
+
+| Status | Meaning | Recovery |
+|--------|---------|----------|
+| Connected | Streaming | — |
+| Auth expired | AWS credentials for the profile are expired or invalid | Sign in again (below) |
+| Needs re-auth | AWS creds are fine but the cluster rejected the token (401) | **Reconnect** |
+| Error | Anything else (network, RBAC 403, unknown cluster) | Fix the cause, then **Reconnect** |
+
+How you sign in again depends on the profile type:
+
+- **IAM Identity Center (SSO) profiles** (`sso_session` / `sso_start_url` in `~/.aws/config`):
+  **Re-authenticate** runs `aws sso login --use-device-code --no-browser` and opens the AWS
+  verification page in your browser. You complete the Okta/IdP sign-in there; the viewer never
+  automates the browser step. Or run `aws sso login --profile <profile>` yourself.
+- **Credentials-file profiles** (session keys written to `~/.aws/credentials` by an Okta tool):
+  re-run your Okta login tool. The viewer can't do that for you, so **Re-authenticate** just
+  shows the hint and waits.
+
+Either way the viewer notices the new credentials and reconnects. While a cluster is in
+"Auth expired", the viewer watches `~/.aws/credentials` and `~/.aws/sso/cache` and retries as
+soon as they change, and at least once a minute. After **Re-authenticate**, the UI also polls
+`/api/eks/auth-status` and reconnects that profile's clusters once the credentials are valid.
+
+**Reconnect** discards the cluster's client and token, reloads AWS credentials, re-describes the
+cluster, and lists pods to verify access before marking it connected. The viewer doesn't use the
+kubeconfig `exec` token cache. It mints EKS tokens in-process from the current AWS credentials,
+so a stale kubeconfig token can't get stuck after you log in again.
+
+Credentials are never stored by the viewer: AWS SDK credentials are cached in memory, and
+EKS bearer tokens (presigned STS `GetCallerIdentity`, equivalent to `aws eks get-token`) are
+generated in-process and refreshed every 14 minutes.
+
+### Docker Compose
+
+`docker-compose.yml` mounts `~/.aws` and `~/.kube` (read-only) into the container. Sign in on
+the host; the container picks up `~/.aws/credentials` and the shared SSO token cache. (The "SSO Login" button needs the AWS CLI on
+the machine running the viewer.)
+
+### Required permissions
+
+IAM policy for the identity used by the viewer:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["eks:ListClusters", "eks:DescribeCluster"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+`sts:GetCallerIdentity` needs no permission. The identity must also be authorized **inside**
+the cluster to read pods and logs, via an EKS access entry or the `aws-auth` ConfigMap,
+bound to a role like:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: log-viewer
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list"]
+```
+
+With access entries, the managed `AmazonEKSViewPolicy` covers this.
+
+### API
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/eks/clusters` | Saved clusters + live connection status |
+| POST / PUT / DELETE | `/api/eks/clusters[/{id}]` | Manage clusters |
+| GET | `/api/eks/discover?profile=&region=` | Verify credentials, list clusters |
+| POST | `/api/eks/login` | Re-authenticate `{"profile": "..."}`: device-code SSO URL, or a hint for non-SSO profiles |
+| GET | `/api/eks/auth-status?profile=` | Are the profile's credentials currently valid? |
+| POST | `/api/eks/reconnect/{label}` | Rebuild credentials/token/client and verify access |
+| GET | `/api/eks/kubeconfig` | EKS clusters found in kubeconfig (with `added` flag) |
+| POST | `/api/eks/kubeconfig/import` | Import new kubeconfig clusters (disabled) |
 
 ## Development
 

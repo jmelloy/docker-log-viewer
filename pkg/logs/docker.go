@@ -129,96 +129,114 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 		return fmt.Errorf("failed to get container logs: %w", err)
 	}
 
-	go func() {
-		channelClosed := false
-		defer func() {
-			if r := recover(); r != nil {
-				// Channel was closed, this is expected during shutdown
-				channelClosed = true
-				slog.Debug("Recovered from panic in log stream (likely channel closed)", "container_id", containerID[:12], "panic", r)
-			}
-		}()
-		defer reader.Close()
-		if onStreamEnd != nil {
-			defer onStreamEnd()
-		}
-		buf := make([]byte, 8192)
-		var leftover []byte
-		var bufferedEntry *LogEntry
-		var bufferedTimestamp time.Time
-		lineCount := 0
+	go streamLines(ctx, containerID, reader, true, logChan, onStreamEnd)
+	return nil
+}
 
-		// safeSend attempts to send a message to the channel, handling closed channel gracefully
-		// Returns true if sent successfully, false if context cancelled or channel closed
-		safeSend := func(msg ContainerMessage) bool {
-			if channelClosed {
-				return false
-			}
-			// Use a closure with recover to catch panics from closed channel
-			var sent bool
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						// Channel was closed, mark it and return false
-						channelClosed = true
-						sent = false
-					}
-				}()
-				select {
-				case <-ctx.Done():
-					// Context cancelled, don't send
-					sent = false
-				case logChan <- msg:
-					// Successfully sent
-					sent = true
-				default:
-					// Channel is full, don't block
+// shortID truncates Docker IDs for logging; other source IDs pass through.
+func shortID(id string) string {
+	if len(id) == 64 {
+		return id[:12]
+	}
+	return id
+}
+
+// streamLines reads timestamp-prefixed log lines from reader, groups multi-line
+// entries, parses them, and sends them to logChan until EOF or ctx cancellation.
+// demux strips Docker's 8-byte stream multiplexing headers.
+func streamLines(ctx context.Context, containerID string, reader io.ReadCloser, demux bool, logChan chan<- ContainerMessage, onStreamEnd func()) {
+	logID := shortID(containerID)
+	// Trailing newline flushes a final unterminated line at EOF.
+	src := io.MultiReader(reader, strings.NewReader("\n"))
+	channelClosed := false
+	defer func() {
+		if r := recover(); r != nil {
+			// Channel was closed, this is expected during shutdown
+			channelClosed = true
+			slog.Warn("Recovered from panic in log stream", "container_id", logID, "panic", r)
+		}
+	}()
+	defer reader.Close()
+	if onStreamEnd != nil {
+		defer onStreamEnd()
+	}
+	buf := make([]byte, 8192)
+	var leftover []byte
+	var bufferedEntry *LogEntry
+	var bufferedTimestamp time.Time
+	lineCount := 0
+
+	// safeSend sends a message to the channel, handling closed channel gracefully.
+	// Returns true if sent successfully, false if context cancelled or channel closed
+	safeSend := func(msg ContainerMessage) bool {
+		if channelClosed {
+			return false
+		}
+		// Use a closure with recover to catch panics from closed channel
+		var sent bool
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Channel was closed, mark it and return false
+					channelClosed = true
 					sent = false
 				}
 			}()
-			return sent
-		}
-
-		flushBuffered := func() {
-			if bufferedEntry != nil {
-				ts := bufferedTimestamp
-				if ts.IsZero() {
-					ts = time.Now()
-				}
-				// Try to send, but don't block if context is cancelled or channel is closed
-				if safeSend(ContainerMessage{
-					ContainerID: containerID,
-					Timestamp:   ts,
-					Entry:       bufferedEntry,
-				}) {
-					bufferedEntry = nil
-					bufferedTimestamp = time.Time{}
-					lineCount++
-				}
-			}
-		}
-
-		for {
-			if channelClosed {
-				slog.Info("Container log channel closed, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
-				return
-			}
 			select {
 			case <-ctx.Done():
-				flushBuffered()
-				if channelClosed {
-					slog.Info("Container log channel closed during flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
-				} else {
-					slog.Info("Container context cancelled, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
-				}
-				return
-			default:
-				n, err := reader.Read(buf)
-				if n > 0 {
-					// slog.Debug("Container read bytes from Docker", "container_id", containerID[:12], "bytes", n)
-					data := buf[:n]
+				// Context cancelled, don't send
+				sent = false
+			case logChan <- msg:
+				// Successfully sent; blocks (backpressure) while the channel is full
+				// rather than dropping the stream, which caused restart churn.
+				sent = true
+			}
+		}()
+		return sent
+	}
 
-					cleanedData := make([]byte, 0, len(data))
+	flushBuffered := func() {
+		if bufferedEntry != nil {
+			ts := bufferedTimestamp
+			if ts.IsZero() {
+				ts = time.Now()
+			}
+			// Try to send, but don't block if context is cancelled or channel is closed
+			if safeSend(ContainerMessage{
+				ContainerID: containerID,
+				Timestamp:   ts,
+				Entry:       bufferedEntry,
+			}) {
+				bufferedEntry = nil
+				bufferedTimestamp = time.Time{}
+				lineCount++
+			}
+		}
+	}
+
+	for {
+		if channelClosed {
+			slog.Info("Container log channel closed, stopping stream", "container_id", logID, "linesProcessed", lineCount)
+			return
+		}
+		select {
+		case <-ctx.Done():
+			flushBuffered()
+			if channelClosed {
+				slog.Info("Container log channel closed during flush, stopping stream", "container_id", logID, "linesProcessed", lineCount)
+			} else {
+				slog.Info("Container context cancelled, stopping stream", "container_id", logID, "linesProcessed", lineCount)
+			}
+			return
+		default:
+			n, err := src.Read(buf)
+			if n > 0 {
+				// slog.Debug("Container read bytes from Docker", "container_id", logID, "bytes", n)
+				data := buf[:n]
+
+				cleanedData := data
+				if demux {
+					cleanedData = make([]byte, 0, len(data))
 					i := 0
 					for i < len(data) {
 						if i+8 <= len(data) && (data[i] == 0 || data[i] == 1 || data[i] == 2) {
@@ -228,116 +246,114 @@ func (dc *DockerClient) StreamLogsSince(ctx context.Context, containerID string,
 							i++
 						}
 					}
+				}
 
-					allData := append(leftover, cleanedData...)
-					leftover = nil
+				allData := append(leftover, cleanedData...)
+				leftover = nil
 
-					lines := strings.Split(string(allData), "\n")
-					// slog.Debug("Container split into lines", "container_id", containerID[:12], "lines", len(lines))
+				lines := strings.Split(string(allData), "\n")
+				// slog.Debug("Container split into lines", "container_id", logID, "lines", len(lines))
 
-					emptyCount := 0
-					sentCount := 0
-					for i, line := range lines {
-						if i == len(lines)-1 && !strings.HasSuffix(string(allData), "\n") {
-							leftover = []byte(line)
-							continue
-						}
+				emptyCount := 0
+				sentCount := 0
+				for i, line := range lines {
+					if i == len(lines)-1 && !strings.HasSuffix(string(allData), "\n") {
+						leftover = []byte(line)
+						continue
+					}
 
-						trimmed := strings.TrimSpace(line)
-						if trimmed == "" {
-							emptyCount++
-							continue
-						}
+					trimmed := strings.TrimSpace(line)
+					if trimmed == "" {
+						emptyCount++
+						continue
+					}
 
-						// Parse Docker timestamp prefix (format: 2024-12-04T10:30:00.123456789Z <log line>)
-						dockerTs, logContent := parseDockerTimestamp(trimmed)
-						trimmed = logContent
+					// Parse Docker timestamp prefix (format: 2024-12-04T10:30:00.123456789Z <log line>)
+					dockerTs, logContent := parseDockerTimestamp(trimmed)
+					trimmed = logContent
 
-						// Use ANSI codes and other heuristics to detect new log entries
-						isNewEntry := IsLikelyNewLogEntry(trimmed)
+					// Use ANSI codes and other heuristics to detect new log entries
+					isNewEntry := IsLikelyNewLogEntry(trimmed)
 
-						// If this looks like a continuation line and we have a buffered entry, append to it
-						if !isNewEntry && bufferedEntry != nil {
-							// Combine with the buffered entry
-							bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
-							// Re-parse the combined raw text
-							bufferedEntry = ParseLogLine(bufferedEntry.Raw)
-							// Check if the buffered entry now looks complete (has structured fields)
-							// For SQL entries, we need fields. For other entries, we'll flush on next new entry.
-							if strings.Contains(bufferedEntry.Message, "[sql]") && len(bufferedEntry.Fields) > 0 {
-								flushBuffered()
-							}
-						} else {
-							// Flush any buffered entry first
+					// If this looks like a continuation line and we have a buffered entry, append to it
+					if !isNewEntry && bufferedEntry != nil {
+						// Combine with the buffered entry
+						bufferedEntry.Raw = bufferedEntry.Raw + "\n" + trimmed
+						// Re-parse the combined raw text
+						bufferedEntry = ParseLogLine(bufferedEntry.Raw)
+						// Check if the buffered entry now looks complete (has structured fields)
+						// For SQL entries, we need fields. For other entries, we'll flush on next new entry.
+						if strings.Contains(bufferedEntry.Message, "[sql]") && len(bufferedEntry.Fields) > 0 {
 							flushBuffered()
+						}
+					} else {
+						// Flush any buffered entry first
+						flushBuffered()
 
-							entry := ParseLogLine(trimmed)
+						entry := ParseLogLine(trimmed)
 
-							// Use Docker timestamp if available, otherwise fall back to now
-							ts := dockerTs
-							if ts.IsZero() {
-								ts = time.Now()
-							}
+						// Use Docker timestamp if available, otherwise fall back to now
+						ts := dockerTs
+						if ts.IsZero() {
+							ts = time.Now()
+						}
 
-							// Check if this entry might have continuation lines
-							// Only buffer SQL entries without fields (they may have multiline SQL)
-							// Don't buffer entries just because they lack a timestamp - most log formats work fine without
-							shouldBuffer := strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0
+						// Check if this entry might have continuation lines
+						// Only buffer SQL entries without fields (they may have multiline SQL)
+						// Don't buffer entries just because they lack a timestamp - most log formats work fine without
+						shouldBuffer := strings.Contains(entry.Message, "[sql]") && len(entry.Fields) == 0
 
-							if shouldBuffer {
-								// Buffer it, waiting for potential continuation lines
-								bufferedEntry = entry
-								bufferedTimestamp = ts
+						if shouldBuffer {
+							// Buffer it, waiting for potential continuation lines
+							bufferedEntry = entry
+							bufferedTimestamp = ts
+						} else {
+							// Send immediately, but check context first
+							if safeSend(ContainerMessage{
+								ContainerID: containerID,
+								Timestamp:   ts,
+								Entry:       entry,
+							}) {
+								lineCount++
+								sentCount++
 							} else {
-								// Send immediately, but check context first
-								if safeSend(ContainerMessage{
-									ContainerID: containerID,
-									Timestamp:   ts,
-									Entry:       entry,
-								}) {
-									lineCount++
-									sentCount++
-								} else {
-									// Context cancelled or channel closed, exit
-									return
-								}
+								// Context cancelled or channel closed, exit
+								return
 							}
 						}
 					}
-					// if sentCount > 0 {
-					// 	slog.Debug("Container sent messages to logChan", "container_id", containerID[:12], "messages", sentCount)
-					// }
-					// if emptyCount > 0 {
-					// 	slog.Debug("Container skipped empty lines", "container_id", containerID[:12], "lines", emptyCount)
-					// }
-					if lineCount > 0 && lineCount%100 == 0 {
-						slog.Info("Container processed log lines", "container_id", containerID[:12], "lines", lineCount)
-					}
 				}
-
-				if err == io.EOF {
-					flushBuffered()
-					if channelClosed {
-						slog.Info("Container log channel closed during EOF flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
-					} else {
-						slog.Info("Container reached EOF, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
-					}
-					return
-				}
-				if err != nil {
-					flushBuffered()
-					if channelClosed {
-						slog.Info("Container log channel closed during error flush, stopping stream", "container_id", containerID[:12], "linesProcessed", lineCount)
-					} else {
-						slog.Error("Container log stream error, stopping", "container_id", containerID[:12], "error", err, "linesProcessed", lineCount)
-					}
-					return
+				// if sentCount > 0 {
+				// 	slog.Debug("Container sent messages to logChan", "container_id", logID, "messages", sentCount)
+				// }
+				// if emptyCount > 0 {
+				// 	slog.Debug("Container skipped empty lines", "container_id", logID, "lines", emptyCount)
+				// }
+				if lineCount > 0 && lineCount%100 == 0 {
+					slog.Info("Container processed log lines", "container_id", logID, "lines", lineCount)
 				}
 			}
-		}
-	}()
 
-	return nil
+			if err == io.EOF {
+				flushBuffered()
+				if channelClosed {
+					slog.Info("Container log channel closed during EOF flush, stopping stream", "container_id", logID, "linesProcessed", lineCount)
+				} else {
+					slog.Info("Container reached EOF, stopping stream", "container_id", logID, "linesProcessed", lineCount)
+				}
+				return
+			}
+			if err != nil {
+				flushBuffered()
+				if channelClosed {
+					slog.Info("Container log channel closed during error flush, stopping stream", "container_id", logID, "linesProcessed", lineCount)
+				} else {
+					slog.Error("Container log stream error, stopping", "container_id", logID, "error", err, "linesProcessed", lineCount)
+				}
+				return
+			}
+		}
+	}
 }
 
 func (dc *DockerClient) Close() error {

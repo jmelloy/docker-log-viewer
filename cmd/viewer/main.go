@@ -47,6 +47,7 @@ type Client struct {
 
 type WebApp struct {
 	docker              *logs.DockerClient
+	eks                 *logs.EKSManager
 	logStore            *logstore.LogStore // Indexed log storage
 	containers          []logs.Container
 	containerIDNames    map[string]string // Maps container ID to name
@@ -125,6 +126,7 @@ func NewWebApp() (*WebApp, error) {
 
 	app := &WebApp{
 		docker:           docker,
+		eks:              logs.NewEKSManager(ctx),
 		logStore:         logstore.NewLogStore(10000, 2*time.Hour),
 		containerIDNames: make(map[string]string),
 		clients:          make(map[*Client]bool),
@@ -465,8 +467,45 @@ func (wa *WebApp) processLogs() {
 	}
 }
 
+// listContainers returns Docker containers plus EKS pod containers. Docker
+// being unavailable is not fatal when EKS clusters are configured.
+func (wa *WebApp) listContainers(ctx context.Context) ([]logs.Container, error) {
+	containers, err := wa.docker.ListRunningContainers(ctx)
+	if err != nil {
+		if len(wa.eks.Status()) == 0 {
+			return nil, err
+		}
+		slog.Debug("docker unavailable, using EKS only", "error", err)
+		containers = nil
+	}
+	return append(containers, wa.eks.ListContainers(ctx)...), nil
+}
+
+// streamLogs starts a log stream for a Docker or EKS container. A zero since
+// uses the source's default history window.
+func (wa *WebApp) streamLogs(id string, onStreamEnd func(), since time.Time) error {
+	if logs.IsEKSID(id) {
+		return wa.eks.StreamLogsSince(id, wa.logChan, onStreamEnd, since)
+	}
+	return wa.docker.StreamLogsSince(wa.ctx, id, wa.logChan, onStreamEnd, since)
+}
+
 func (wa *WebApp) loadContainers() error {
-	containers, err := wa.docker.ListRunningContainers(wa.ctx)
+	// First run: pre-populate EKS clusters from kubeconfig (added disabled).
+	if saved, err := wa.store.ListEKSClusters(); err == nil && len(saved) == 0 {
+		if added, err := controller.ImportKubeconfigEKS(wa.store); err != nil {
+			slog.Warn("kubeconfig import skipped", "error", err)
+		} else if added > 0 {
+			slog.Info("imported EKS clusters from kubeconfig (disabled; enable in Settings)", "count", added)
+		}
+	}
+	if cfgs, err := controller.LoadEKSConfigs(wa.store); err != nil {
+		slog.Error("failed to load EKS clusters", "error", err)
+	} else {
+		wa.eks.SetClusters(cfgs)
+	}
+
+	containers, err := wa.listContainers(wa.ctx)
 	if err != nil {
 		return err
 	}
@@ -492,7 +531,7 @@ func (wa *WebApp) loadContainers() error {
 		wa.activeStreamsMutex.Lock()
 		wa.activeStreams[c.ID] = true
 		wa.activeStreamsMutex.Unlock()
-		if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan, onStreamEnd); err != nil {
+		if err := wa.streamLogs(c.ID, onStreamEnd, time.Time{}); err != nil {
 			slog.Error("failed to stream logs", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
 			wa.activeStreamsMutex.Lock()
 			delete(wa.activeStreams, c.ID)
@@ -521,7 +560,7 @@ func (wa *WebApp) monitorContainers() {
 			slog.Info("monitorContainers goroutine exiting", "containersTracked", len(previousIDs))
 			return
 		case <-ticker.C:
-			containers, err := wa.docker.ListRunningContainers(wa.ctx)
+			containers, err := wa.listContainers(wa.ctx)
 			if err != nil {
 				slog.Error("failed to list containers", "error", err)
 				continue
@@ -559,7 +598,7 @@ func (wa *WebApp) monitorContainers() {
 					wa.activeStreamsMutex.Lock()
 					wa.activeStreams[c.ID] = true
 					wa.activeStreamsMutex.Unlock()
-					if err := wa.docker.StreamLogs(wa.ctx, c.ID, wa.logChan, onStreamEnd); err != nil {
+					if err := wa.streamLogs(c.ID, onStreamEnd, time.Time{}); err != nil {
 						slog.Error("failed to stream logs for new container", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
 						wa.activeStreamsMutex.Lock()
 						delete(wa.activeStreams, c.ID)
@@ -585,7 +624,7 @@ func (wa *WebApp) monitorContainers() {
 					wa.activeStreamsMutex.Lock()
 					wa.activeStreams[c.ID] = true
 					wa.activeStreamsMutex.Unlock()
-					if err := wa.docker.StreamLogsSince(wa.ctx, c.ID, wa.logChan, onStreamEnd, since); err != nil {
+					if err := wa.streamLogs(c.ID, onStreamEnd, since); err != nil {
 						slog.Error("failed to restart stream for container", "container_id", c.ID[:12], "container_name", c.Name, "error", err)
 						wa.activeStreamsMutex.Lock()
 						delete(wa.activeStreams, c.ID)
@@ -769,6 +808,8 @@ func (wa *WebApp) Run(addr string) error {
 		wa.logChan,
 	)
 	ctrl.SetContainers(wa.containers)
+	ctrl.EKS = wa.eks
+	ctrl.ListContainers = wa.listContainers
 
 	// Store controller reference in WebApp
 	wa.controllerMutex.Lock()
@@ -797,6 +838,18 @@ func (wa *WebApp) Run(addr string) error {
 	r.HandleFunc("/api/logs/clear", ctrl.HandleClearLogs).Methods("POST")
 	r.HandleFunc("/api/ws", ctrl.HandleWebSocket).Methods("GET")
 	r.HandleFunc("/api/debug", ctrl.HandleDebug).Methods("GET")
+
+	// EKS endpoints
+	r.HandleFunc("/api/eks/clusters", ctrl.HandleListEKSClusters).Methods("GET")
+	r.HandleFunc("/api/eks/clusters", ctrl.HandleSaveEKSCluster).Methods("POST")
+	r.HandleFunc("/api/eks/clusters/{id}", ctrl.HandleSaveEKSCluster).Methods("PUT")
+	r.HandleFunc("/api/eks/clusters/{id}", ctrl.HandleDeleteEKSCluster).Methods("DELETE")
+	r.HandleFunc("/api/eks/discover", ctrl.HandleDiscoverEKSClusters).Methods("GET")
+	r.HandleFunc("/api/eks/login", ctrl.HandleEKSLogin).Methods("POST")
+	r.HandleFunc("/api/eks/auth-status", ctrl.HandleEKSAuthStatus).Methods("GET")
+	r.HandleFunc("/api/eks/reconnect/{name}", ctrl.HandleEKSReconnect).Methods("POST")
+	r.HandleFunc("/api/eks/kubeconfig", ctrl.HandleListKubeconfigEKS).Methods("GET")
+	r.HandleFunc("/api/eks/kubeconfig/import", ctrl.HandleImportKubeconfigEKS).Methods("POST")
 
 	// SQL and trace endpoints
 	r.HandleFunc("/api/explain", ctrl.HandleExplain).Methods("POST")
@@ -943,7 +996,11 @@ func main() {
 		slog.Info("cleanup complete")
 	}()
 
-	if err := app.Run(":9000"); err != nil {
+	addr := ":9000"
+	if port := os.Getenv("PORT"); port != "" {
+		addr = ":" + port
+	}
+	if err := app.Run(addr); err != nil {
 		slog.Error("failed to run server", "error", err)
 		os.Exit(1)
 	}
